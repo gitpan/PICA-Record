@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 10;
+use Test::More tests => 13;
 
 use PICA::Field;
 
@@ -25,6 +25,13 @@ ok( $field->normalized() eq $normalized, 'new with plain PICA+');
 $field = PICA::Field->new( $winibw );
 ok( $field->normalized() eq $normalized, 'new with WinIBW PICA+');
 
+my $fcopy = $field->copy(); #PICA::Field->new( $field );
+isa_ok( $fcopy, 'PICA::Field');
+ok( $fcopy->normalized() eq $normalized, 'copy' );
+$field->set_tag('012A');
+$field->update('9'=>'123456789');
+ok( $fcopy->normalized() eq $normalized, 'copy' );
+
 $field = PICA::Field->new("028A","d" => "Karl", "a" => "Marx");
 isa_ok( $field, 'PICA::Field');
 
@@ -37,3 +44,4 @@ ok( join('', $field->empty_subfields() ) eq "da", 'empty_subfields' );
 
 $field->set_tag("028C/01");
 ok( $field->tag eq "028C/01", 'set_tag' );
+

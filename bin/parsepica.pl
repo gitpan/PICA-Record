@@ -2,9 +2,11 @@
 
 =head1 NAME
 
-picadata - parse PICA+ data and print summary information
+parsepica - parse PICA+ data and print summary information
 
 =cut
+
+use strict;
 
 # include PICA packages
 use PICA::Record;
@@ -18,7 +20,10 @@ use Getopt::Long;
 use Pod::Usage;
 
 my ($outfilename, $badfilename, $logfile, $inputlistfile);
-my ($quiet, $help, $man, $select, $selectprint, $xmlmode, $loosemode);
+my ($quiet, $help, $man, $select, $selectprint, $xmlmode, $loosemode, $countmode);
+my %fieldstat_a; # all
+my %fieldstat_e; # exist?
+my %fieldstat_r; # number of records
 
 GetOptions(
     "output:s" => \$outfilename,   # print valid records to a file
@@ -30,6 +35,7 @@ GetOptions(
     "man" => \$man,                # full documentation    
     "select:s" => \$select,        # select a special field/subfield
     "pselect:s" => \$selectprint,
+    "count" => \$countmode,
     #"loose" => \$loosemode,        # loose parsing
     "xml" => \$xmlmode
 ) or pod2usage(2);
@@ -68,8 +74,8 @@ if ($inputlistfile) {
     if ($inputlistfile eq "-") {
         *INFILES = *STDIN;
     } else {
-        print LOG "Reading input files from $inputfilelist\n";
-        open INFILES, $inputfilelist or die("Error opening $inputfilelist");
+        print LOG "Reading input files from $inputlistfile\n";
+        open INFILES, $inputlistfile or die("Error opening $inputlistfile");
     }
 }
 
@@ -107,7 +113,7 @@ my $parser = PICA::Parser->new(
 
 # parse files given at the command line, in the input file list or STDIN
 if (@ARGV > 0) {
-    if ($inputfilelist) {
+    if ($inputlistfile) {
     	print STDERR "You can only specify either an input file or a file list!\n";
     	exit 0;
     }
@@ -115,7 +121,7 @@ if (@ARGV > 0) {
         print LOG "Reading $filename\n" if !$quiet;
         $parser->parsefile($filename);
     }
-} elsif ($inputfilelist) {
+} elsif ($inputlistfile) {
     while(<INFILES>) {
         chomp;
         next if $_ eq "";
@@ -132,11 +138,21 @@ if (@ARGV > 0) {
 $output->end_document() if $xmlmode;
 
 # Print summary
+# TODO: Input fields: ...
 print LOG "Input records:\t" . $parser->counter() .
-      "\nEmpty records:\t" . $parser->empty_counter() .
+      "\nEmpty records:\t" . $parser->empty() .
       "\nOutput records:\t" . $output->counter() .
       "\nOutput fields:\t" . $output->fields() .
       "\n" if !$quiet;
+
+if ($countmode) {
+  print "Frequency of tags in all records:\n";
+  foreach my $tag (sort keys %fieldstat_a) {
+      print "$tag\t" . $fieldstat_a{$tag} . "\t";
+      print $fieldstat_r{$tag};
+      print "\n";
+  }
+}
 
 
 #### handler methods ####
@@ -144,6 +160,17 @@ print LOG "Input records:\t" . $parser->counter() .
 # default field handler
 sub field_handler {
     my $field = shift;
+
+    if ($countmode) {
+        my $tag = $field->tag;
+        if (defined $fieldstat_a{$tag}) {
+          $fieldstat_a{$tag}++;
+        } else {
+          $fieldstat_a{$tag} = 1;
+        }
+        $fieldstat_e{$tag} = 1;
+    }
+
     return $field;
 }
 
@@ -155,6 +182,8 @@ sub field_handler {
 
 # selecting field handler
 sub select_field_handler {
+    # TODO: Combine with count/default handler
+
     my $field = shift;
 	return unless $field->tag() =~ $field_regex;
 	if (defined $subfield_select) {
@@ -168,6 +197,18 @@ sub select_field_handler {
 # default record handler
 sub record_handler {
     my $record = shift;
+
+    if ($countmode) {
+        foreach my $tag (keys %fieldstat_e) {
+            if (defined $fieldstat_r{$tag}) {
+                $fieldstat_r{$tag}++;
+            } else {
+                $fieldstat_r{$tag} = 1;
+            }
+        }
+        %fieldstat_e = ();
+    }
+
     $output->write( "Record " . $parser->counter(), $record);
 }
 
@@ -199,6 +240,7 @@ parsepica.pl [options] [files...]
 
 Not fully implemented yet:
  -bad FILE      print invalid records to a given file ('-': STDOUT)
+ -sru SRU       fetch records via SRU. command line arguments are cql statements instead of files
 
 =head1 DESCRIPTION
 

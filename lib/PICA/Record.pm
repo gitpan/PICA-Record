@@ -15,7 +15,7 @@ use vars qw($VERSION @ISA @EXPORT);
 require Exporter;
 @ISA = qw(Exporter);
 
-$VERSION = "0.3";
+$VERSION = "0.3.2";
 
 use POSIX qw(strftime);
 use PICA::Field;
@@ -23,12 +23,12 @@ use Carp qw(croak);
 
 =head1 DESCRIPTION
 
-Module for handling PICA records as objects. See
-L<PICA::Tutorial> for an introduction.
+Module for handling PICA records as objects.
+See L<PICA::Tutorial> for an introduction.
 
 =head1 METHODS
 
-=head2 new( [data] )
+=head2 new ( [ ...data... ] )
 
 Base constructor for the class. A single string will be parsed line by 
 line into L<PICA::Field> objects, empty lines and start record markers will 
@@ -64,11 +64,6 @@ sub new() {
                 my $field = PICA::Field->parse($line);
                 push (@{$self->{_fields}}, $field) if $field;
             }
-        } elsif( $#_ == 0 and ref($first) eq 'PICA::Record') {
-
-            # TODO: this should better be a clone instead of a copy with the identical field objects!
-            push (@{$self->{_fields}}, $first->fields());
-
         } else {
             $self->append(@_);
         }
@@ -77,24 +72,36 @@ sub new() {
     return $self;
 } # new()
 
-=head2 fields()
+=head2 copy
+
+Creates a clone of this record by copying all fields.
+
+=cut
+
+sub copy {
+    my $self = shift;
+    return PICA::Record->new( $self );
+} # copy()
+
+=head2 all_fields()
 
 Returns an array of all the fields in the record. The array contains 
-a PICA::Field object for each field in the record. An empty array 
+a C<PICA::Field> object for each field in the record. An empty array 
 is returns if the record is empty.
 
 =cut
 
-sub fields() {
+sub all_fields() {
     my $self = shift;
-
+    croak("You called all_fields() but you probably want field()") if @_;
     return @{$self->{_fields}};
 }
 
 =head2 field( $tagspec(s) )
 
-Returns a list of tags that match the field specifier, 
-or in scalar context, just the first matching tag. 
+Returns a list of C<PICA::Field> objects with tags that
+match the field specifier, or in scalar context, just
+the first matching Field.
 
 You may specify multiple tags and use regular expressions.
 
@@ -117,17 +124,17 @@ sub field {
     for my $tag ( @specs ) {
         my $regex = _get_regex($tag);
 
-        for my $maybe ( $self->fields() ) {
+        for my $maybe ( $self->all_fields ) {
             if ( $maybe->tag() =~ $regex ) {
                 return $maybe unless wantarray;
 
                 push( @list, $maybe );
-            } # if
-        } # for $maybe
-    } # for $tag
+            }
+        }
+    }
 
     return @list;
-}
+} # field()
 
 =head2 subfield
 
@@ -153,7 +160,7 @@ You may also use wildcards like in C<field()> and the C<subfield()> method of L<
 
   my @values = $pica->subfield('005A', '0a');    # 005A$0 and 005A$a
   my @values = $pica->subfield('005[AIJ]', '0'); # 005A$0, 005I$0, and 005J$0
-  
+
 =cut
 
 sub subfield {
@@ -203,41 +210,41 @@ sub values {
     }
 
     return @list;
-}
+} # values()
 
-=head2 main
+=head2 main_record  
 
 Get the main record (all tags starting with '0').
 
 =cut
 
-sub main {
+sub main_record {
   my ($self) = @_;
   my @fields = $self->field("0...(/..)?");
 
   my $record = PICA::Record->new(@fields);
 }
 
-=head2 local
+=head2 local_record
 
 Get the local record (all tags starting with '1').
 
 =cut
 
-sub local {
+sub local_record {
   my ($self) = @_;
   my @fields = $self->field("1...(/..)?");
 
   my $record = PICA::Record->new(@fields);
 }
 
-=head2 copy
+=head2 copy_record
 
 Get the copy record (all tags starting with '2').
 
 =cut
 
-sub copy {
+sub copy_record {
   my ($self) = @_;
   my @fields = $self->field("2...(/..)?");
 
@@ -274,9 +281,9 @@ sub delete_fields {
 
     for my $tag ( @specs ) {
         my $regex = _get_regex($tag);
-        
+
         my $i=0;
-        for my $maybe ( $self->fields ) {
+        for my $maybe ( $self->all_fields ) {
             if ( $maybe->tag() =~ $regex ) {
                 splice( @{$self->{_fields}}, $i, 1);
                 $c++;
@@ -289,10 +296,10 @@ sub delete_fields {
     return $c;
 }
 
-=head2 append
+=head2 append ( ...fields or records... )
 
 Appends one or more fields to the end of the record. Parameters can be
-L<PICA::Field> objects or parameters that are passed to PICA::Field->new.
+L<PICA::Field> objects or parameters that are passed to C<PICA::Field->new>.
 
     my $field = PICA::Field->new('037A','a' => 'My note');
     $record->append($field);
@@ -311,7 +318,22 @@ You can also append multiple fields with one call:
         '037A', 'a' => '2nd note',
     );
 
-Returns the number of fields appended.
+Please not that passed L<PICA::Field> objects are not be copied but directly
+used:
+
+    my $field = PICA::Field->new('037A','a' => 'My note');
+    $record->append($field);
+    $field->replace('a' => 'Your note'); # Also changes $record's field!
+
+You can avoid this by cloning fields:
+
+    $record->append($field->copy());
+
+You can also append copies of all fields of another record:
+
+    $record->append( $record2 );
+
+The append method returns the number of fields appended.
 
 =cut
 
@@ -321,9 +343,18 @@ sub append {
     my $c = 0;
 
     while (@_) {
+        # Append a field (whithout creating a copy)
         while (@_ and ref($_[0]) eq 'PICA::Field') {
             push(@{ $self->{_fields} }, shift);
             $c++;
+        }
+        # Append a whole record (copy all its fields)
+        while (@_ and ref($_[0]) eq 'PICA::Record') {
+            my $record = shift;
+            for my $field ( $record->all_fields ) {
+                push(@{ $self->{_fields} }, $field->copy );
+                $c++;
+            }
         }
         if (@_) {
             my @params = (shift);
@@ -348,22 +379,22 @@ sub append {
     return $c;
 }
 
-=head2 replace
+=head2 replace( $tag, $field or @fieldspec )
 
 Replace a field. You must pass a tag and a field. 
-Attention: Only the first occurence will be replaced so 
-better not use this method for repeatable fields.
+Attention: Only the first occurence will be replaced
+so better not use this method for repeatable fields.
 
 =cut
 
 sub replace {
     my $self = shift;
     my $tag = shift;
-    
+
     croak("Not a valid tag: $tag") unless parse_pp_tag($tag);
-    
+
     my $replace;
-    
+
     if (@_ and ref($_[0]) eq 'PICA::Field') {
         $replace = shift;
     } else {
@@ -371,8 +402,8 @@ sub replace {
     } 
 
     my $regex = _get_regex($tag);
-    
-    for my $field ( $self->fields ) {
+
+    for my $field ( $self->all_fields ) {
         if ( $field->tag() =~ $regex ) {
             $field->replace($replace);
             return;
@@ -382,8 +413,8 @@ sub replace {
 
 =head2 sort() 
 
-Sort all fields. Most times the order of fields is not changed and not relevant 
-but sorted fields are helpful for viewing records.
+Sort all fields. Most times the order of fields is not changed 
+and not relevant but sorted fields are helpful for viewing records.
 
 =cut
 
@@ -414,7 +445,6 @@ sub add_headers {
     my @timestamp = defined $params{timestamp} ? @{$params{timestamp}} : localtime;
     # TODO: Test timestamp
 
-
     my $hdate = strftime ("$eln:%d-%m-%g", @timestamp);
     my $htime = strftime ("%H:%M:%S", @timestamp);
 
@@ -436,6 +466,23 @@ sub add_headers {
     # PCIA3: 0500 - Bibliographische Gattung und Status
     # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0500.pdf
     $self->append( "002@", '0' => $status );
+}
+
+=head2 to_string
+
+Returns a string representation of the record for printing.
+
+=cut
+
+sub to_string() {
+    my $self = shift;
+    my @args = @_;
+
+    my @lines = ();
+    for my $field ( @{$self->{_fields}} ) {
+        push( @lines, $field->to_string(@args) );
+    }
+    return join("", @lines);
 }
 
 =head2 normalized()
@@ -505,7 +552,8 @@ __END__
 
 =head1 TODO
 
-clone, to_string, to_xml.
+The toString, to_xml, and normalized methods should be integrated
+into L<PICA::Writer> or vice versa.
 
 =head1 AUTHOR
 
@@ -513,12 +561,8 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-
-Please note that these module s not product of or supported by the 
-employers of the various contributors to the code nor by OCLC PICA.
-

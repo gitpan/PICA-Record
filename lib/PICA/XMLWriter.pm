@@ -13,9 +13,9 @@ use PICA::Writer;
 
 use Carp;
 
-use vars qw( @ISA );
-
+use vars qw($VERSION @ISA);
 @ISA = qw( PICA::Writer );
+$VERSION = "0.31";
 
 =head1 METHODS
 
@@ -41,7 +41,7 @@ sub write {
             $comment = "";
 
             $self->{recordcounter}++;
-            $self->{fieldcounter} += scalar $record->fields;
+            $self->{fieldcounter} += scalar $record->all_fields;
         } elsif (ref(\$record) eq 'SCALAR') {
             next if !$record;
             $comment .= "\n" if $comment;
@@ -92,12 +92,9 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-
-Please note that these module s not product of or supported by the 
-employers of the various contributors to the code nor by OCLC PICA.
 

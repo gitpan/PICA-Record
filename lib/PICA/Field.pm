@@ -9,10 +9,16 @@ use constant SUBFIELD_INDICATOR => "\x1F"; # 31
 use constant START_OF_FIELD     => "\x1E"; # 30
 use constant END_OF_FIELD       => "\x0A"; # 10
 
-use vars qw(@ISA @EXPORT);
+use constant FIELD_TAG_REGEXP => qr/^[012][0-9][0-9][A-Z@]$/;
+use constant FIELD_OCCURRENCE_REGEXP => qr/^[0-9][0-9]$/;
+use constant SUBFIELD_CODE_REGEXP => qr/^[0-9a-zA-Z]$/;
+
+use vars qw($VERSION @ISA @EXPORT);
 
 @ISA = qw(Exporter);
 @EXPORT = qw(parse_pp_tag);
+
+$VERSION = "0.32";
 
 =head1 NAME
 
@@ -40,7 +46,7 @@ The method C<parse_pp_tag> is exported.
 
 =head2 new()
 
-The constructor, which will return a PICA::Field object. You can call the
+The constructor, which will return a C<PICA::Field> object. You can call the
 constructor with a tag and a list of subfields:
 
   PICA::Field->new( '028A',
@@ -66,8 +72,8 @@ sub new($) {
     my $tag = shift;
     $tag or croak( "No tag provided." );
 
-    if (not @_) {    
-        return PICA::Field->parse($tag);
+    if (not @_) { # empty field
+        return PICA::Field->parse($tag); 
     }
 
     my ($occurrence, $tagno) = parse_pp_tag($tag);
@@ -79,23 +85,33 @@ sub new($) {
         _occurrence => $occurrence
     }, $class;
 
-    my $nfields = @_ / 2;
-
-    ($nfields >= 1)
-        or croak( "Field $tagno must have at least one subfield" );
-
-    for my $i ( 1..$nfields ) {
-        my $offset = ($i-1)*2;
-        my $code = $_[$offset];
-
-        croak( "Subfield code \"$code\" is not a valid subfield code" )
-            if !($code =~ /^.$/); # TODO: what chars are allowed?
-    }
-
-    $self->{_subfields} = [@_];
+    $self->add_subfields(@_);
 
     return $self;
 } # new()
+
+
+=head2 copy( $field )
+
+Creates and returns a copy of this object.
+
+=cut
+
+sub copy {
+    my $self = shift;
+
+    my $tagno = $self->{_tag};
+    my $occurrence = $self->{_occurrence};
+
+    my $copy = bless {
+        _tag => $tagno,
+        _occurrence => $occurrence,
+    }, ref($self);
+
+    $copy->add_subfields( @{$self->{_subfields}} );
+
+    return $copy;
+}
 
 =head2 parse( $string, [, \&tag_filter_func ] )
 
@@ -241,9 +257,9 @@ sub subfield {
     }
     if ( wantarray() ) { return @found; }
     return( $found[0] );
-} # subfield()
+}
 
-=head2 subfields()
+=head2 all_subfields()
 
 Returns all the subfields in the field.  What's returned is a list of
 lists, where the inner list is a subfield code and the subfield data.
@@ -258,9 +274,9 @@ For example, this might be the subfields from a 021A field:
 
 =cut
 
-sub subfields {
+sub all_subfields {
     my $self = shift;
-    return $self->subfield( @_ ) if @_; # forgot 's' in method call?
+    croak("You called all_subfields() but you probably want subfield()") if @_;
 
     my @list;
     my @data = @{$self->{_subfields}};
@@ -276,17 +292,29 @@ Adds subfields to the end of the subfield list.
 
     $field->add_subfields( 'c' => '1985' );
 
-Returns the number of subfields added, or C<undef> if there was an error.
+Returns the number of subfields added.
 
 =cut
 
 sub add_subfields(@) {
     my $self = shift;
 
-    # TODO: check subfield codes!
+    my $nfields = @_ / 2;
+
+    ($nfields >= 1)
+        or croak( "Missing at least one subfield" );
+
+    for my $i ( 1..$nfields ) {
+        my $offset = ($i-1)*2;
+        my $code = $_[$offset];
+
+        croak( "Subfield code \"$code\" is not a valid subfield code" )
+            if !($code =~ SUBFIELD_CODE_REGEXP);
+    }
 
     push( @{$self->{_subfields}}, @_ );
-    return @_/2;
+
+    return $nfields;
 }
 
 =head2 update()
@@ -320,29 +348,29 @@ sub update {
     my $changes = 0;
 
     while ( @_ ) {
-	my $code = shift;
-	my $val = shift;
+        my $code = shift;
+        my $val = shift;
 
         croak( "Subfield code \"$code\" is not a valid subfield code" )
-            if !($code =~ /^.$/); # TODO: what chars are allowed?
+            if !($code =~ SUBFIELD_CODE_REGEXP);
 
-        my $found = 0;
-	
+            my $found = 0;
+
         ## update existing subfield
-	for ( my $i=0; $i<@data; $i+=2 ) {
-	    if ($data[$i] eq $code) {
-	        $data[$i+1] = $val;
-		$found = 1;
-		$changes++;
-		last;
-	    }
-	}
+        for ( my $i=0; $i<@data; $i+=2 ) {
+            if ($data[$i] eq $code) {
+                $data[$i+1] = $val;
+            $found = 1;
+            $changes++;
+            last;
+            }
+        }
 
-	## append new subfield
-	if ( !$found ) {
-	    push( @data, $code, $val );
-	    $changes++;
-	}
+        ## append new subfield
+        if ( !$found ) {
+            push( @data, $code, $val );
+            $changes++;
+        }
     }
 
     ## synchronize our subfields
@@ -493,7 +521,7 @@ sub to_xml {
         $xml .= "<subfield code='$code'>";
         $text =~ s/&/&amp;/g;
         $text =~ s/</&lt;/g;
-        $xml .= $text;
+        $xml .= $text; # TODO: character encoding
         $xml .= "</subfield>\n";
     }
     $xml .= "</field>\n";
@@ -519,11 +547,9 @@ This method can be used to parse and test tag specifiers this way:
 sub parse_pp_tag {
     my $tag = shift;
 
-    my ($tagno, $occurrence);
-    if ($tag =~ /^([012][0-9][0-9][A-Z@])(\/([0-9][0-9]))?$/) {
-        $tagno = $1;
-        $occurrence = $3;
-    }
+    my ($tagno, $occurrence) = split ('/', $tag);
+    undef $tagno unless $tagno =~ FIELD_TAG_REGEXP;
+    undef $occurrence unless defined $occurrence and $occurrence =~ FIELD_OCCURRENCE_REGEXP;
 
     return ($occurrence, $tagno);
 }
@@ -538,22 +564,14 @@ See the "SEE ALSO" section for L<PICA::Record>.
 
 This module is mainly based on L<MARC::Field> by Andy Lester.
 
-=head1 TODO
-
-A method to clone fields needs to be implemented. Better handling of errors and warnings is needed.
-
 =head1 AUTHOR
 
 Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-
-Please note that these module s not product of or supported by the 
-employers of the various contributors to the code nor by OCLC PICA.
-

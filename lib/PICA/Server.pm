@@ -20,6 +20,9 @@ use Carp;
 use PICA::SRUSearchParser;
 use LWP::UserAgent;
 
+use vars qw($VERSION);
+$VERSION = "0.31";
+
 =head1 METHODS
 
 =head2 new
@@ -35,7 +38,8 @@ sub new {
 
     my $self = {
         title => $params{title} ? $params{title} : "Untitled",
-        SRU => $params{SRU} ? $params{SRU} : undef              # SRU interface
+        SRU => $params{SRU} ? $params{SRU} : undef,              # SRU interface
+        prev_record => undef
     };
 
     if ($self->{SRU} and not $self->{SRU} =~ /[\?&]$/) {
@@ -68,10 +72,14 @@ sub getPPN {
     my $response = $ua->request($request);
     if ($response->is_success) {
         my $xml = $response->decoded_content();
-        my $record;
-        my $parser = PICA::SRUSearchParser->new( Record=>sub { $record = shift; } );
-        $parser->parseResponse($xml);
-        return $record;
+        # create SRUSearchParser only once because of memory leak
+        if (!$self->{sruparser}) {
+            $self->{sruparser} = PICA::SRUSearchParser->new(
+                Record=>sub { $self->{prev_record} = shift; }
+            );
+        }
+        $self->{sruparser}->parseResponse($xml);
+        return $self->{prev_record};
     } else {
         croak("SRU Request failed: $url");
     }
@@ -79,10 +87,12 @@ sub getPPN {
 
 =head2 cqlQuery
 
-Perform a CQL query and return the XML data. If you supply an additional 
-hash with Record and Field handlers, it is used for parsing the PICA+ 
-records in the results with a L<PICA::SRUSearchParser>. Afterwards the parser
-is returned. If only one parameter is given, the full XML response is returned.
+Perform a CQL query. If only one parameter is given, the full XML response
+is returned and you can parse it with L<PICA::SRUSearchParser>.
+
+If you supply an additional hash with Record and Field handlers
+(see L<PICA::Parser>) this handlers are used. Afterwards the parser
+is returned.
 
 =cut
 
@@ -101,6 +111,8 @@ sub cqlQuery {
     my $response = $ua->request($request);
     if ($response->is_success) {
         my $xml = $response->decoded_content();
+        # TODO: the SRUSearchParser may not be free'd (memory leak)?
+        # TODO: Supply a PICA::SRUSearchParser or another PICA::Parser (?)
         if (%handlers) {
             my $parser = PICA::SRUSearchParser->new( %handlers ); # Record=>sub { my $record = shift; print "##\n";}  );
             $parser->parseResponse($xml);
@@ -150,7 +162,8 @@ __END__
 =head1 TODO
 
 Better error handling is needed, for instance of the server is 
-"System temporarily unavailable".
+"System temporarily unavailable". PICA::SRUSearchParser should 
+only be created once.
 
 =head1 AUTHOR
 
@@ -158,12 +171,9 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-
-Please note that these module s not product of or supported by the 
-employers of the various contributors to the code nor by OCLC PICA.
 

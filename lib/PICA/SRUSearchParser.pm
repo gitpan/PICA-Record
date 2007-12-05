@@ -12,6 +12,9 @@ use Carp;
 
 use PICA::XMLParser;
 
+use vars qw($VERSION);
+$VERSION = "0.4";
+
 =head1 METHODS
 
 =head2 new
@@ -71,7 +74,7 @@ sub counter {
    return return $self->{xmlparser}->{read_counter};
 }
 
-=head2 empty_counter
+=head2 empty
 
 Get the number of empty records that have been read so far.
 By default empty records are not passed to the record handler
@@ -79,9 +82,32 @@ but counted.
 
 =cut
 
-sub empty_counter {
+sub empty {
    my $self = shift; 
-   return $self->{xmlparser}->empty_counter;
+   return $self->{xmlparser}->empty;
+}
+
+=head2 size
+
+Get the total number of records in the SRU result set.
+The result set may be split into several chunks.
+
+=cut
+
+sub size {
+    my $self = shift;
+    return $self->{numberOfRecords};
+}
+
+=head2 resultSetId
+
+Get the SRU resultSetId.
+
+=cut
+
+sub resultSetId {
+    my $self = shift;
+    return $self->{resultSetId};
 }
 
 =head1 PRIVATE HANDLERS
@@ -91,7 +117,8 @@ Do not directly call this methods!
 =head2 _start_handler
 
 SAX handler for XML start tag. On PICA+ records this calls 
-the start handler of L<PICA::XMLParser>.
+the start handler of L<PICA::XMLParser>, outside of records
+it parses the SRU response.
 
 =cut
 
@@ -153,6 +180,9 @@ sub _char_handler {
 
 =head1 TODO
 
+There seems to be a memory leak in the new() method, try
+while(1) { my $parser = PICA::SRUSearchParser->new(); }
+
 A method to get the parameters in the header (numberOfRecords, resultSetId...)
 is needed to get the number of records before actually parsing the result.
 
@@ -170,13 +200,8 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-
-Please note that these module s not product of or supported by the 
-employers of the various contributors to the code nor by OCLC PICA.
-
-

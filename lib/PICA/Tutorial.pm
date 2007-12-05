@@ -1,6 +1,9 @@
 package PICA::Tutorial;
 use strict;
 
+use vars qw($VERSION);
+$VERSION = "0.31";
+
 1;
 
 =head1 NAME
@@ -53,6 +56,16 @@ To get an insight to the API have a look at the examples and tests
 included in this package. This document will be expanded to a full 
 Tutorial for users of L<PICA::Record>. Feedback is very welcome!
 
+The examples in the C<bin> directory include:
+
+=over
+
+=item dedup.pl - remove duplicate records
+
+=item parsepica.pl - parse PICA+ records
+
+=back
+
 =head1 SEE ALSO
 
 At CPAN there are the modules L<MARC::Record>, L<MARC>, and L<MARC::XML> 
@@ -72,12 +85,9 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-
-Please note that these module s not product of or supported by the 
-employers of the various contributors to the code nor by OCLC PICA.
 

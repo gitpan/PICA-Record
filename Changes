@@ -2,3 +2,12 @@
         - first internal release
 0.3     2007-07-20
         - first public release
+0.3.2  	2007-12-05
+        - avoid memory leak in PICA::Server->getPPN (caused by SRUSearchParser->new)
+        - renamed PICA::Record->fields() to PICA::Record->all_fields()
+        - renamed PICA::Record->subfields() to PICA::Record->all_subfields()
+        - added PICA::Field->copy() for cloning Fields
+	- added PICA::Converter and a very simple PICA::Converter::BibTeX
+        - fixed several typos in the documentation
+        - added another example with bin/gbvholdings.pl
+

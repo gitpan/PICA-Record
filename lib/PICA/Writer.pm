@@ -20,7 +20,8 @@ PICA::Writer - Write and count PICA+ records and fields
 
 =head1 DESCRIPTION
 
-This module contains a simple class to write and count PICA+ records and fields.
+This module contains a simple class to write and count PICA+ records and fields
+(printing of single fields may not be possible in all implementations).
 
 =cut
 
@@ -30,6 +31,9 @@ use warnings;
 use PICA::Record;
 use utf8;
 use Carp;
+
+use vars qw($VERSION);
+$VERSION = "0.31";
 
 =head1 PUBLIC METHODS
 
@@ -193,12 +197,10 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
 
-Please note that these module s not product of or supported by the 
-employers of the various contributors to the code nor by OCLC PICA.
 

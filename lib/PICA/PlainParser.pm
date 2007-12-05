@@ -37,6 +37,9 @@ use PICA::Record;
 
 use Carp;
 
+use vars qw($VERSION);
+$VERSION = "0.31";
+
 =head1 PUBLIC METHODS
 
 =head2 new (params)
@@ -70,7 +73,7 @@ sub new {
         fields => [],
 
         read_counter => 0,
-        empty_counter => 0,
+        empty => 0,
         active => 0,
     };
     bless $self, $class;
@@ -106,7 +109,7 @@ sub parsefile {
     }
 
     $self->{read_counter} = 0;
-    $self->{empty_counter} = 0;
+    $self->{empty} = 0;
     $self->{active} = 0;
     $self->{record} = undef;
     while (my $line = readline( $self->{filehandle} ) ) {
@@ -127,7 +130,7 @@ sub parsedata {
     my ($self, $data) = @_;
 
     $self->{read_counter} = 0;
-    $self->{empty_counter} = 0;
+    $self->{empty} = 0;
     $self->{active} = 0;
     $self->{record} = undef;
 
@@ -155,7 +158,7 @@ sub counter {
    return $self->{read_counter};
 }
 
-=head2 empty_counter
+=head2 empty
 
 Get the number of empty records that have been read so far.
 By default empty records are not passed to the record handler
@@ -163,9 +166,9 @@ but counted.
 
 =cut
 
-sub empty_counter {
+sub empty {
    my $self = shift; 
-   return $self->{empty_counter};
+   return $self->{empty};
 }
 
 =head1 PRIVATE METHODS
@@ -214,6 +217,7 @@ sub _parseline {
       eval {
           $field = PICA::Field->parse($line);
       };
+      # error parsing a field (TODO: call error handler)
       if($@) {
           $@ =~ s/ at .*\n//;
           my $msg = "$@ Tried to parse line: \"$line\"\n";
@@ -248,7 +252,7 @@ sub handle_record {
     }, 'PICA::Record';
 
     if ( $record->is_empty() ) {
-        $self->{empty_counter}++;
+        $self->{empty}++;
         if (!$self->{keep_empty_records}) {
             $self->{fields} = [];
             return;
@@ -274,12 +278,9 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-
-Please note that these module s not product of or supported by the 
-employers of the various contributors to the code nor by OCLC PICA.
 

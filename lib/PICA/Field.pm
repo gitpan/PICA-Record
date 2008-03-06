@@ -18,7 +18,7 @@ use vars qw($VERSION @ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(parse_pp_tag);
 
-$VERSION = "0.32";
+$VERSION = "0.35";
 
 =head1 NAME
 
@@ -154,28 +154,31 @@ sub parse($) {
 
     my $self = bless {}, $class;
 
-    my $p = index $data, ' ';
-    my $tagno = substr($data, 0, $p); # includes occurrence!
+    #my $p = index $data, ' ';
+    #my $tagno = substr($data, 0, $p); # includes occurrence!
+    #>     $sf =~ s/\$/\\\$/; 
 
-    if ( $tag_filter_func ) {
-        return unless $tag_filter_func->( $tagno);
-    }
+    my ($tagno, $sf, $subfields) = ($data =~ /([^\$\x1F\x83\s]+)\s?(.)(.*)/);
+
+    return if $tag_filter_func and !$tag_filter_func->($tagno);
 
     # TODO: better manage different parsing modes (normalized, plain, WinIBW...)
-    my $subfield_indicator = "\x1F";
-    my $sf = substr($data, $p+1, 1);
-    if ( $sf eq '$' ) {
-        $subfield_indicator = '\$';
-    } elsif( $sf eq "\x83" ) {
-        $subfield_indicator = "\x83";
-    } elsif( $sf ne "\x1F" ) {
-        croak("No or not allowed subfield indicator (ord: " . ord($sf) . ") specified!");
+    my $subfield_indicator = SUBFIELD_INDICATOR;
+    #my $sf = substr($data, $p+1, 1);
+    if ( $sf ne $subfield_indicator ) { # other usual subfield indicators
+        if ( $sf eq '$' ) { $subfield_indicator = '\$'; }
+        elsif( $sf eq "\x83" ) { $subfield_indicator = '\x83'; }
+        elsif( $sf eq "\x9f" ) { $subfield_indicator = '\x9f'; }
+        else {
+            croak("No or not allowed subfield indicator (ord: " . ord($sf) . ") specified!");
+        }
     }
 
-    my $subfields = substr($data, $p+2); # skip first indicator
+    #my $subfields = substr($data, $p+2); # skip first indicator
 
+    my @sfields = split($subfield_indicator, $subfields);
     my @subfields = ();
-    foreach my $s (split($subfield_indicator, $subfields)) {
+    foreach my $s (@sfields) {
         my $code = substr ($s, 0, 1);
         my $value = substr ($s, 1);
         push(@subfields, ($code, $value));

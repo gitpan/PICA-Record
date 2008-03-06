@@ -123,7 +123,7 @@ sub write {
             print { $self->{filehandle} } $record->normalized($comment) if $self->{filehandle};
             $comment = "";
             $self->{recordcounter}++;
-            $self->{fieldcounter} += scalar $record->fields;
+            $self->{fieldcounter} += scalar $record->all_fields;
         } elsif (ref(\$record) eq 'SCALAR') {
             next if !$record;
             $comment .= "\n" if $comment;

@@ -2,13 +2,15 @@
 
 use strict;
 
-use Test::More tests => 13;
+use Test::More tests => 15;
 
 use PICA::Field;
 
 my $normalized = "\x1E028A \x1F9117060275\x1F8Martin Schrettinger\x1FdMartin\x1FaSchrettinger\x0A";
-my $plain = '028A $9117060275$8Martin Schrettinger$dMartin$aSchrettinger';
+my $plain = "028A \$9117060275\$8Martin Schrettinger\$dMartin\$aSchrettinger";
 my $winibw = "028A \x839117060275\x838Martin Schrettinger\x83dMartin\x83aSchrettinger";
+my $packed = "028A\$9117060275\$8Martin Schrettinger\$dMartin\$aSchrettinger";
+my $picamarc = "028A \x9f9117060275\x9f8Martin Schrettinger\x9fdMartin\x9faSchrettinger";
 
 my $field;
 
@@ -24,6 +26,13 @@ ok( $field->normalized() eq $normalized, 'new with plain PICA+');
 
 $field = PICA::Field->new( $winibw );
 ok( $field->normalized() eq $normalized, 'new with WinIBW PICA+');
+
+$field = PICA::Field->new( $packed );
+ok( $field->normalized() eq $normalized, 'new with packed');
+
+$field = PICA::Field->new( $picamarc );
+ok( $field->normalized() eq $normalized, 'new with picamarc');
+
 
 my $fcopy = $field->copy(); #PICA::Field->new( $field );
 isa_ok( $fcopy, 'PICA::Field');

@@ -38,7 +38,7 @@ use PICA::Record;
 use Carp;
 
 use vars qw($VERSION);
-$VERSION = "0.31";
+$VERSION = "0.34";
 
 =head1 PUBLIC METHODS
 
@@ -57,7 +57,7 @@ sub new {
     my ($class, %params) = @_;
     $class = ref $class || $class;
 
-    my $self = {
+    my $self = bless {
         filename => "",
 
         field_handler  => $params{Field} ? $params{Field} : undef,
@@ -75,8 +75,10 @@ sub new {
         read_counter => 0,
         empty => 0,
         active => 0,
-    };
-    bless $self, $class;
+
+        continual => $params{continual} ? $params{continual} : 0
+    }, $class;
+
     return $self;
 }
 
@@ -108,8 +110,11 @@ sub parsefile {
         }
     }
 
-    $self->{read_counter} = 0;
-    $self->{empty} = 0;
+    if ( ! $self->{continual} ) {
+        $self->{read_counter} = 0;
+        $self->{empty} = 0;
+    }
+
     $self->{active} = 0;
     $self->{record} = undef;
     while (my $line = readline( $self->{filehandle} ) ) {
@@ -118,7 +123,7 @@ sub parsefile {
     $self->handle_record(); # handle last record
 }
 
-=head2 parsedata
+=head2 parsedata ( $data )
 
 Parses PICA+ data from a string, array or function. If you supply
 a function then this function is must return scalars or arrays and
@@ -127,12 +132,15 @@ it is called unless it returns undef.
 =cut
 
 sub parsedata {
-    my ($self, $data) = @_;
+    my ($self, $data, $additional) = @_;
 
-    $self->{read_counter} = 0;
-    $self->{empty} = 0;
     $self->{active} = 0;
     $self->{record} = undef;
+
+    if ( ! $self->{continual} ) {
+        $self->{read_counter} = 0;
+        $self->{empty} = 0;
+    }
 
     if ( ref($data) eq 'CODE' ) {
         my $chunk = &$data();
@@ -246,7 +254,7 @@ sub handle_record {
     my $self = shift;
 
     $self->{read_counter}++;
- 
+
     my $record = bless {
         _fields => [@{$self->{fields}}]
     }, 'PICA::Record';
@@ -263,7 +271,7 @@ sub handle_record {
         $record = $self->{record_handler}( $record );
     }
 
-    # TODO: save record if needed for collection handler
+    # TODO: save record if needed for Collection handler
 
     $self->{fields} = [];
 }

@@ -18,12 +18,17 @@ if ($isbn) {
     $server->cqlQuery( 'pica.isb=' . $isbn , 
         Record => sub { 
             $record = shift;
-            my @bib = $record->values( '101@$d' );
-            push @status, @bib;
+            my @fields = $record->field('101@|209A/..');
+            foreach my $f (@fields) {
+                if ($f->tag eq '101@') { # new library
+                    print "Location: " . $f->subfield('d') . "\n";
+                } else {
+                    print "  sublocation: " . $f->subfield('f') ."\n";
+                    print "    call-number: " . $f->subfield('a') ."\n";
+                }
+            }
         }
     );
-    @status = ("ISBN $isbn not found") unless @status;
-    print join("\n", @status) . "\n";
 } else {
     print "Usage: $0 <ISBN>\n";
 }

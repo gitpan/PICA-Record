@@ -4,6 +4,7 @@ Makefile.PL
 README
 bin/parsepica.pl
 bin/gbvholdings.pl
+bin/z3950.pl
 lib/PICA/Field.pm
 lib/PICA/Parser.pm
 lib/PICA/PlainParser.pm

@@ -1,7 +1,6 @@
-0.2	2007-04-03
-        - first internal release
-0.3     2007-07-20
-        - first public release
+0.3.4   2008-03-06
+        - added two more field syntax in PICA::Field
+        - added Z39.50 example
 0.3.2  	2007-12-05
         - avoid memory leak in PICA::Server->getPPN (caused by SRUSearchParser->new)
         - renamed PICA::Record->fields() to PICA::Record->all_fields()
@@ -10,4 +9,8 @@
 	- added PICA::Converter and a very simple PICA::Converter::BibTeX
         - fixed several typos in the documentation
         - added another example with bin/gbvholdings.pl
+0.3     2007-07-20
+        - first public release
+0.2	2007-04-03
+        - first internal release
 

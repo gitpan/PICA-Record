@@ -17,18 +17,20 @@ PICA::Server - Server that can be searched for PICA+ records
 use strict;
 use Carp;
 
+use PICA::PlainParser;
 use PICA::SRUSearchParser;
 use LWP::UserAgent;
 
 use vars qw($VERSION);
-$VERSION = "0.31";
+$VERSION = "0.34";
 
 =head1 METHODS
 
 =head2 new
 
 Create a new Server. You can specify a title with C<title> and
-the URL base of an SRU interface with C<SRU>.
+the URL base of an SRU interface with C<SRU> or a Z39.50 server
+with C<Z3950>.
 
 =cut
 
@@ -38,7 +40,8 @@ sub new {
 
     my $self = {
         title => $params{title} ? $params{title} : "Untitled",
-        SRU => $params{SRU} ? $params{SRU} : undef,              # SRU interface
+        SRU => $params{SRU} ? $params{SRU} : undef,
+        Z3950 => $params{Z3950} ? $params{Z3950} : undef,
         prev_record => undef
     };
 
@@ -52,6 +55,7 @@ sub new {
 =head2 getPPN
 
 Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
+Only available for SRU at the moment.
 
 =cut
 
@@ -87,8 +91,8 @@ sub getPPN {
 
 =head2 cqlQuery
 
-Perform a CQL query. If only one parameter is given, the full XML response
-is returned and you can parse it with L<PICA::SRUSearchParser>.
+Perform a CQL query (SRU). If only one parameter is given, the full 
+XML response is returned and you can parse it with L<PICA::SRUSearchParser>.
 
 If you supply an additional hash with Record and Field handlers
 (see L<PICA::Parser>) this handlers are used. Afterwards the parser
@@ -99,6 +103,7 @@ is returned.
 sub cqlQuery {
     my ($self, $cql, %handlers) = @_;
 
+    croak("No SRU interface defined") unless $self->{SRU};
     my $ua = LWP::UserAgent->new( agent => 'PICA::Server SRU-Client/0.1');
     $cql = url_encode($cql); #url_unicode_encode($cql);
 
@@ -122,6 +127,46 @@ sub cqlQuery {
         }
     } else {
         croak("SRU Request failed: $url");
+    }
+}
+
+=head2 z3950Query
+
+Perform a Z39.50 query via L<ZOOM>.If only one parameter is given, the 
+L<ZOOM::ResultSet> is returned and you can parse it with a L<PICA::PlainParser>:
+
+    my $n = $rs->size();
+    for my $i (0..$n-1) {
+        $parser->parsedata($rs->record($i)->raw());
+    }
+
+If you supply an additional hash with Record and Field handlers
+(see L<PICA::Parser>) this handlers are used. Afterwards the parser
+is returned.
+
+=cut
+
+sub z3950Query {
+    my ($self, $query, %handlers) = @_;
+
+    croak("No Z3950 interface defined") unless $self->{Z3950};
+    use ZOOM;
+
+    my $conn = new ZOOM::Connection( $self->{Z3950} , 0,
+        preferredRecordSyntax => "picamarc"
+    );
+
+    my $rs = $conn->search_pqf($query);
+
+    if (%handlers) {
+        my $parser = PICA::PlainParser->new( %handlers, continual=>1 );
+        my $n = $rs->size();
+        for my $i (0..$n-1) {
+            $parser->parsedata($rs->record($i)->raw());
+        }
+        return $parser;
+    } else {
+        return $rs;
     }
 }
 

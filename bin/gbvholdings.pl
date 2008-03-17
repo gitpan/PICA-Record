@@ -12,10 +12,13 @@ my $isbn = shift @ARGV;
 
 my @status;
 if ($isbn) {
-    my $server = PICA::Server->new(
-        SRU => "http://gso.gbv.de/sru/DB=2.1/"
-    );
-    $server->cqlQuery( 'pica.isb=' . $isbn , 
+    my $cql = 'pica.isb=' . $isbn;
+    my $url = "http://gso.gbv.de/sru/DB=2.1/";
+
+    print "SRU query '$cql' to $url\n";
+
+    my $server = PICA::Server->new( SRU => $url );
+    $server->cqlQuery( $cql,
         Record => sub { 
             $record = shift;
             my @fields = $record->field('101@|209A/..');

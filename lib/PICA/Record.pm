@@ -15,7 +15,7 @@ use vars qw($VERSION @ISA @EXPORT);
 require Exporter;
 @ISA = qw(Exporter);
 
-$VERSION = "0.34";
+$VERSION = "0.35";
 
 use POSIX qw(strftime);
 use PICA::Field;

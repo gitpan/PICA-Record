@@ -22,7 +22,7 @@ use PICA::SRUSearchParser;
 use LWP::UserAgent;
 
 use vars qw($VERSION);
-$VERSION = "0.34";
+$VERSION = "0.35";
 
 =head1 METHODS
 
@@ -42,6 +42,8 @@ sub new {
         title => $params{title} ? $params{title} : "Untitled",
         SRU => $params{SRU} ? $params{SRU} : undef,
         Z3950 => $params{Z3950} ? $params{Z3950} : undef,
+        user => $params{user} ? $params{user} : undef,
+        password => $params{password} ? $params{password} : undef,
         prev_record => undef
     };
 
@@ -152,14 +154,16 @@ sub z3950Query {
     croak("No Z3950 interface defined") unless $self->{Z3950};
     use ZOOM;
 
-    my $conn = new ZOOM::Connection( $self->{Z3950} , 0,
-        preferredRecordSyntax => "picamarc"
-    );
+    my %options = (preferredRecordSyntax => "picamarc");
+    $options{user} = $self->{user} if defined $self->{user};
+    $options{password} = $self->{password} if defined $self->{password};
+
+    my $conn = new ZOOM::Connection( $self->{Z3950} , 0, %options);
 
     my $rs = $conn->search_pqf($query);
 
     if (%handlers) {
-        my $parser = PICA::PlainParser->new( %handlers, continual=>1 );
+        my $parser = PICA::PlainParser->new( %handlers, Proceed=>1 );
         my $n = $rs->size();
         for my $i (0..$n-1) {
             $parser->parsedata($rs->record($i)->raw());

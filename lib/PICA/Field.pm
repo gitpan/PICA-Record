@@ -9,8 +9,8 @@ use constant SUBFIELD_INDICATOR => "\x1F"; # 31
 use constant START_OF_FIELD     => "\x1E"; # 30
 use constant END_OF_FIELD       => "\x0A"; # 10
 
-use constant FIELD_TAG_REGEXP => qr/^[012][0-9][0-9][A-Z@]$/;
-use constant FIELD_OCCURRENCE_REGEXP => qr/^[0-9][0-9]$/;
+use constant FIELD_TAG_REGEXP => qr/[012][0-9][0-9][A-Z@]$/;
+use constant FIELD_OCCURRENCE_REGEXP => qr/[0-9][0-9]$/;
 use constant SUBFIELD_CODE_REGEXP => qr/^[0-9a-zA-Z]$/;
 
 use vars qw($VERSION @ISA @EXPORT);

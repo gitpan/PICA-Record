@@ -38,7 +38,7 @@ use PICA::Record;
 use Carp;
 
 use vars qw($VERSION);
-$VERSION = "0.34";
+$VERSION = "0.35";
 
 =head1 PUBLIC METHODS
 
@@ -64,9 +64,11 @@ sub new {
         record_handler => $params{Record} ? $params{Record} : undef,
         collection_handler => $params{Collection} ? $params{Collection} : undef,
         keep_empty_records => $params{EmptyRecords},
+        proceed => $params{Proceed} ? $params{Proceed} : 0,
 
         record => undef,
 
+        dumpformat => $params{Dumpformat},
         lax => $params{lax} ? $params{lax} : 1,
         strict_mode => $params{Strict},
 
@@ -76,18 +78,21 @@ sub new {
         empty => 0,
         active => 0,
 
-        continual => $params{continual} ? $params{continual} : 0
     }, $class;
 
     return $self;
 }
 
-=head2 parsefile
+=head2 parsefile ( $file-or-handle [, options] )
 
 Parses a file, specified by a filename or file handle. Additional possible 
 parameters are handlers (C<Field>, C<Record>, C<Collection>) and options 
 (C<Strict>, C<EmptyRecords>). If you supply a filename with extension
-C<.gz> then it is extracted while reading with C<zcat>.
+C<.gz> then it is extracted while reading with C<zcat>, if the extension 
+is C<.zip> then C<unzip> is used to extract. 
+
+This method temporarily changes the end-of-line character if parsing in
+dumpformat is requested.
 
 =cut
 
@@ -102,7 +107,8 @@ sub parsefile {
         $self->{filename} = $arg;
 
         my $fh = $arg;
-        $fh = "zcat $fh|" if $fh =~ /\.gz$/;
+        $fh = "zcat $fh |" if $fh =~ /\.gz$/;
+        $fh = "unzip -p $fh |" if $fh =~ /\.zip$/;
 
         $self->{filehandle} = eval { local *FH; open( FH, $fh ) or die; *FH{IO}; };
         if ( $@ ) {
@@ -110,17 +116,44 @@ sub parsefile {
         }
     }
 
-    if ( ! $self->{continual} ) {
+    if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
         $self->{empty} = 0;
     }
 
     $self->{active} = 0;
     $self->{record} = undef;
-    while (my $line = readline( $self->{filehandle} ) ) {
-        $self->_parseline($line);
+
+    # dumpformat used \x1E instead of newlines
+    if ($self->{dumpformat}) {
+        my $EOL = $/;
+        $/ = chr(0x1E);
+        my $id = "";
+
+        while (my $line = readline( $self->{filehandle} ) ) {
+
+            $line =~ /^\x1D?([^\s]+)/;
+            if (PICA::Field::parse_pp_tag($1)) {
+                $self->_parseline($line);
+            } else {
+                if ( "$id" ne "$1" ) { 
+                    $self->_parseline("");
+                }
+                $id = $1;
+            }
+        }
+
+        $/ = $EOL;
+    } else {
+        while (my $line = readline( $self->{filehandle} ) ) {
+            $self->_parseline($line);
+        }
     }
+
     $self->handle_record(); # handle last record
+
+
+
 }
 
 =head2 parsedata ( $data )
@@ -137,7 +170,7 @@ sub parsedata {
     $self->{active} = 0;
     $self->{record} = undef;
 
-    if ( ! $self->{continual} ) {
+    if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
         $self->{empty} = 0;
     }
@@ -220,6 +253,8 @@ sub _parseline {
         $self->handle_record() if $self->{active};
     } elsif( $self->{lax} and ($line =~ /^[#\[]/ or $line =~ /^SET:/)) {
         # ignore comments and lines starting with "SET" or "[" (WinIBW output)
+  #  } elsif( $self->{strict_mode} and !($line =~ /^[\x1E]/)) {
+        # ignore non-data fields
     } else {
       my $field;
       eval {

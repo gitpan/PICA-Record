@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 9;
+use Test::More tests => 11;
 
 BEGIN {
     use_ok( 'PICA::XMLParser' );
@@ -55,6 +55,18 @@ PICA::Parser->parsedata( sub {return readline XML;},
 	Format => "xml"
 );
 isa_ok( $record, 'PICA::Record' );
+undef $record;
+
+# check proceed mode and non-proceed mode
+$parser = PICA::XMLParser->new( Proceed => 0 );
+$parser->parsedata($xmldata);
+$parser->parsedata($xmldata);
+ok( $parser->counter == 1, "reset counter" );
+
+$parser = PICA::XMLParser->new( Proceed => 1 );
+$parser->parsedata($xmldata);
+$parser->parsedata($xmldata);
+ok( $parser->counter == 2, "proceed" );
 
 __END__
 <?xml version="1.0"?>

@@ -13,13 +13,14 @@ use PICA::Record;
 use PICA::Field;
 use PICA::Parser;
 use PICA::Writer;
+use PICA::Server;
 use PICA::XMLWriter;
 
 # include other packages
 use Getopt::Long;
 use Pod::Usage;
 
-my ($outfilename, $badfilename, $logfile, $inputlistfile);
+my ($outfilename, $badfilename, $logfile, $inputlistfile, $dumpformat, $verbosemode);
 my ($quiet, $help, $man, $select, $selectprint, $xmlmode, $loosemode, $countmode);
 my %fieldstat_a; # all
 my %fieldstat_e; # exist?
@@ -36,6 +37,8 @@ GetOptions(
     "select:s" => \$select,        # select a special field/subfield
     "pselect:s" => \$selectprint,
     "count" => \$countmode,
+    "D" => \$dumpformat,
+    "v" => \$verbosemode,
     #"loose" => \$loosemode,        # loose parsing
     "xml" => \$xmlmode
 ) or pod2usage(2);
@@ -44,9 +47,9 @@ pod2usage(-verbose => 2) if $man;
 
 # TODO: documentation
 if (defined $selectprint) {
-	$select = $selectprint;
-	$quiet = 1 if (!defined $logfile and $logfile ne "-");
-	$outfilename = '-' if !defined $outfilename;	
+    $select = $selectprint;
+    $quiet = 1 if (!defined $logfile and $logfile ne "-");
+    $outfilename = '-' if !defined $outfilename;	
 }
 
 # Logfile
@@ -88,50 +91,81 @@ my $field_regex;
 my $subfield_select;
 
 if ($select) {
-	my ($tag, $subfield) = ("","");
+    my ($tag, $subfield) = ("","");
 
-	if ( index($select, '$') > 3 ) {
-    	($tag, $subfield) = split(/\$/,$select);
-	} else {
-		$tag = $select;
-	}
-	
-	$field_regex = qr/^$tag$/;
-	$subfield_select = $subfield if $subfield ne "";
+    if ( index($select, '$') > 3 ) {
+        ($tag, $subfield) = split(/\$/,$select);
+    } else {
+        $tag = $select;
+    }
 
-	$_field_handler = \&select_field_handler;
-	undef $_record_handler;
+    $field_regex = qr/^$tag$/;
+    $subfield_select = $subfield if $subfield ne "";
 
-	print LOG "Selecting field: $select\n" if !$quiet;
+    $_field_handler = \&select_field_handler;
+    undef $_record_handler;
+
+    print LOG "Selecting field: $select\n" if !$quiet;
 }
+
+my $sru_counter = 0;
+my $sru_empty = 0;
+
+my %options;
+%options = ('Dumpformat'=>1) if $dumpformat;
 
 # init parser
 my $parser = PICA::Parser->new(
     Field => $_field_handler,
     Record => $_record_handler,
+    %options
 );
 
 # parse files given at the command line, in the input file list or STDIN
+my $filename;
 if (@ARGV > 0) {
     if ($inputlistfile) {
-    	print STDERR "You can only specify either an input file or a file list!\n";
-    	exit 0;
+        print STDERR "You can only specify either an input file or a file list!\n";
+        exit 0;
     }
-    foreach my $filename (@ARGV) {
-        print LOG "Reading $filename\n" if !$quiet;
-        $parser->parsefile($filename);
+    while (($filename = shift @ARGV)) {
+        if ($filename =~ /^http:\/\//) { # SRU
+            my $url = $filename;
+            my $cql = shift @ARGV;
+            if (!$cql) {
+                print SDTERR "CQL Query missing!\n";
+            } else {
+                print LOG "SRU query '$cql' to $url\n";
+                my $server = PICA::Server->new( SRU => $url );
+
+                my $sruparser = $server->cqlQuery( $cql,
+                    #Record => sub { print STDERR "YEAH!\n"; }
+                #);
+
+                    # TODO: better pipe this to another parser (RecordParser)
+                    Field => $_field_handler,
+                    Record => $_record_handler
+                 #   Record => sub { print "YEAH!\n"; }
+                );
+                $sru_counter += $sruparser->counter();
+                $sru_empty += $sruparser->empty();
+            }
+        } else {
+            print LOG "Reading $filename\n" if !$quiet;
+            $parser->parsefile($filename);
+        }
     }
 } elsif ($inputlistfile) {
     while(<INFILES>) {
         chomp;
         next if $_ eq "";
-        my $filename = $_;
+        $filename = $_;
         print LOG "Reading $filename\n" if !$quiet;
-        $parser->parsefile($filename); 
+        $parser->parsefile($filename);
     }
 } else {
-	print LOG "Reading standard input\n" if !$quiet;
-	$parser->parsefile( \*STDIN ); 
+    print LOG "Reading standard input\n" if !$quiet;
+    $parser->parsefile( \*STDIN ); 
 }
 
 # Finish
@@ -139,8 +173,8 @@ $output->end_document() if $xmlmode;
 
 # Print summary
 # TODO: Input fields: ...
-print LOG "Input records:\t" . $parser->counter() .
-      "\nEmpty records:\t" . $parser->empty() .
+print LOG "Input records:\t" . ($parser->counter() + $sru_counter) .
+      "\nEmpty records:\t" . ($parser->empty() + $sru_empty) .
       "\nOutput records:\t" . $output->counter() .
       "\nOutput fields:\t" . $output->fields() .
       "\n" if !$quiet;
@@ -185,13 +219,13 @@ sub select_field_handler {
     # TODO: Combine with count/default handler
 
     my $field = shift;
-	return unless $field->tag() =~ $field_regex;
-	if (defined $subfield_select) {
-		my @sf = $field->subfield($subfield_select);
-		print join("\n",@sf) . "\n" if @sf;
-	} else {
-		$output->writefield($field);
-	}
+    return unless $field->tag() =~ $field_regex;
+    if (defined $subfield_select) {
+        my @sf = $field->subfield($subfield_select);
+        print join("\n",@sf) . "\n" if @sf;
+    } else {
+        $output->writefield($field);
+    }
 }
 
 # default record handler
@@ -209,13 +243,18 @@ sub record_handler {
         %fieldstat_e = ();
     }
 
+    # TODO
+    if ($verbosemode) {
+        print LOG $parser->counter() ."\n" unless ($parser->counter() % 100);
+    }
+
     $output->write( "Record " . $parser->counter(), $record);
 }
 
 # selecting record handler
 sub select_record_handler {
     my $record = shift;
- 
+
  # TODO
  #   foreach (@sf) {
  #       print "$_\n"
@@ -224,7 +263,7 @@ sub select_record_handler {
 
 =head1 SYNOPSIS
 
-parsepica.pl [options] [files...]
+parsepica.pl [options] [file(s) or SRU-Server(s) and queries(s)..]
 
 =head1 OPTIONS
 
@@ -237,10 +276,13 @@ parsepica.pl [options] [files...]
  -quiet         supress logging
  -select        select a specific field (no XML output possible yet)
  -pselect       select (sub)fields and print values
+ -D             read dumpfile format (no newlines)
 
 Not fully implemented yet:
  -bad FILE      print invalid records to a given file ('-': STDOUT)
- -sru SRU       fetch records via SRU. command line arguments are cql statements instead of files
+ -sru SRU       fetch records via SRU. command line arguments are cql
+                statements instead of files
+ -z3950         fetch records via Z39.50
 
 =head1 DESCRIPTION
 
@@ -268,6 +310,10 @@ Read records from 'picadata' and print parseable records to 'checkedrecords'.
 =item parsepica.pl picadata -s 021A -o - -q
 
 Select all fields '021A' from 'picadata' and write to STDOUT.
+
+=item parsepica.pl http://gso.gbv.de/sru/DB=2.1/ pica.isb=3-423-31039-1
+
+Get records with ISBN 3-423-31039-1 via SRU.
 
 =back
 

@@ -49,7 +49,7 @@ require XML::Parser;
 use Carp;
 
 use vars qw($VERSION);
-$VERSION = "0.31";
+$VERSION = "0.35";
 
 =head1 PUBLIC METHODS
 
@@ -80,6 +80,8 @@ sub new {
         record_handler => $params{Record} ? $params{Record} : undef,
         collection_handler => $params{Collection} ? $params{Collection} : undef,
 
+        proceed => $params{Proceed} ? $params{Proceed} : 0,
+
         read_counter => 0,
         empty => 0
     };
@@ -99,8 +101,14 @@ a C<PICA::XMLParser> object that was created with C<new()>.
 sub parsedata {
     my ($self, $data) = @_;
 
-    $self->{read_counter} = 0;
-    $self->{empty} = 0;
+    if ( ! $self->{proceed} ) {
+        $self->{read_counter} = 0;
+        $self->{empty} = 0;
+    }
+
+    if ( ref($data) eq 'PICA::Record' ) {
+        # TODO
+    }
 
     my $parser = new XML::Parser(
         Handlers => $self->_getHandlers
@@ -130,8 +138,10 @@ Parses data from a file or filehandle.
 sub parsefile {
     my ($self, $file) = @_;
 
-    $self->{read_counter} = 0;
-    $self->{empty} = 0;
+    if ( ! $self->{proceed} ) {
+        $self->{read_counter} = 0;
+        $self->{empty} = 0;
+    }
 
     $self->{filename} = $file if ref(\$file) eq 'SCALAR';
     my $parser = new XML::Parser(

@@ -108,8 +108,8 @@ if ($select) {
     print LOG "Selecting field: $select\n" if !$quiet;
 }
 
-my $sru_counter = 0;
-my $sru_empty = 0;
+my $remote_counter = 0;
+my $remote_empty = 0;
 
 my %options;
 %options = ('Dumpformat'=>1) if $dumpformat;
@@ -129,26 +129,37 @@ if (@ARGV > 0) {
         exit 0;
     }
     while (($filename = shift @ARGV)) {
-        if ($filename =~ /^http:\/\//) { # SRU
-            my $url = $filename;
-            my $cql = shift @ARGV;
-            if (!$cql) {
-                print SDTERR "CQL Query missing!\n";
+        my ($sruurl, $z3950host);
+        if ($filename =~ /^http:\/\//) { # SRU (http://...)
+            $sruurl = $filename;
+        } elsif ($filename =~ /^[^\\:]+:\d+/) { # Z3950 (host:port[/db])
+            $z3950host = $filename;
+        }
+        if ($sruurl or $z3950host) {
+            my $query = shift @ARGV;
+            if (!$query) {
+                print SDTERR "query missing!\n";
             } else {
-                print LOG "SRU query '$cql' to $url\n";
-                my $server = PICA::Server->new( SRU => $url );
-
-                my $sruparser = $server->cqlQuery( $cql,
-                    #Record => sub { print STDERR "YEAH!\n"; }
-                #);
-
-                    # TODO: better pipe this to another parser (RecordParser)
-                    Field => $_field_handler,
-                    Record => $_record_handler
-                 #   Record => sub { print "YEAH!\n"; }
-                );
-                $sru_counter += $sruparser->counter();
-                $sru_empty += $sruparser->empty();
+                my $remote_parser;
+                if ($sruurl) {
+                    print LOG "SRU query '$query' to $sruurl\n";
+                    my $server = PICA::Server->new( SRU => $sruurl );
+                    $remote_parser = $server->cqlQuery( $query,
+                        # TODO: better pipe this to another parser (RecordParser)
+                        Field => $_field_handler,
+                        Record => $_record_handler
+                    );
+                } else {
+                    print LOG "Z3950 query '$query' to $z3950host\n";
+                    my $server = PICA::Server->new( Z3950 => $z3950host );
+                    $remote_parser = $server->z3950Query( $query,
+                        # TODO: better pipe this to another parser (RecordParser)
+                        Field => $_field_handler,
+                        Record => $_record_handler
+                    );
+                }
+                $remote_counter += $remote_parser->counter();
+                $remote_empty += $remote_parser->empty();
             }
         } else {
             print LOG "Reading $filename\n" if !$quiet;
@@ -173,8 +184,8 @@ $output->end_document() if $xmlmode;
 
 # Print summary
 # TODO: Input fields: ...
-print LOG "Input records:\t" . ($parser->counter() + $sru_counter) .
-      "\nEmpty records:\t" . ($parser->empty() + $sru_empty) .
+print LOG "Input records:\t" . ($parser->counter() + $remote_counter) .
+      "\nEmpty records:\t" . ($parser->empty() + $remote_empty) .
       "\nOutput records:\t" . $output->counter() .
       "\nOutput fields:\t" . $output->fields() .
       "\n" if !$quiet;

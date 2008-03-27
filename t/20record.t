@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 29;
+use Test::More tests => 27;
 
 use PICA::Field;
 use PICA::Record;
@@ -121,11 +121,6 @@ use PICA::Parser;
 PICA::Parser->parsefile( "t/winibwsave.example", Record => sub { $record = shift; } );
 isa_ok( $record, 'PICA::Record' );
 
-# test main_record() and local_record()
+# test bibliographic()
 my $main = $record->main_record();
 isa_ok( $main, 'PICA::Record' );
-
-my $local = $record->local_record();
-isa_ok( $local, 'PICA::Record' );
-
-ok ( scalar ($local->all_fields) == 4, 'PICA::Record->all_fields' );

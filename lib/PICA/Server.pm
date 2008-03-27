@@ -22,7 +22,7 @@ use PICA::SRUSearchParser;
 use LWP::UserAgent;
 
 use vars qw($VERSION);
-$VERSION = "0.35";
+$VERSION = "0.36";
 
 =head1 METHODS
 
@@ -152,7 +152,7 @@ sub z3950Query {
     my ($self, $query, %handlers) = @_;
 
     croak("No Z3950 interface defined") unless $self->{Z3950};
-    use ZOOM;
+    require ZOOM;
 
     my %options = (preferredRecordSyntax => "picamarc");
     $options{user} = $self->{user} if defined $self->{user};

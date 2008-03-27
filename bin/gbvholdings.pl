@@ -15,19 +15,17 @@ if ($isbn) {
     my $cql = 'pica.isb=' . $isbn;
     my $url = "http://gso.gbv.de/sru/DB=2.1/";
 
-    print "SRU query '$cql' to $url\n";
-
     my $server = PICA::Server->new( SRU => $url );
     $server->cqlQuery( $cql,
         Record => sub { 
             $record = shift;
-            my @fields = $record->field('101@|209A/..');
-            foreach my $f (@fields) {
-                if ($f->tag eq '101@') { # new library
-                    print "Location: " . $f->subfield('d') . "\n";
-                } else {
-                    print "  sublocation: " . $f->subfield('f') ."\n";
-                    print "    call-number: " . $f->subfield('a') ."\n";
+            my @local = $record->local_records();
+            foreach my $l (@local) {
+                print "Location: " . $l->subfield('101@$d') . "\n";
+                my @copies = $l->copy_records();
+                foreach my $c (@copies) {
+                    print "  sublocation: " . $c->subfield('209A/..$f') ."\n";
+                    print "    call-number: " . $c->subfield('209A/..$a') ."\n";
                 }
             }
         }

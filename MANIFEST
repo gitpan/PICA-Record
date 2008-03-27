@@ -28,4 +28,6 @@ t/record.xml
 t/searchRetrieveResponse-1.xml
 t/winibwsave.example
 t/dumpformat
+t/holdings.t
+t/bgb.example
 META.yml                                 Module meta-data (added by MakeMaker)

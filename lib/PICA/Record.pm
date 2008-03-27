@@ -15,7 +15,7 @@ use vars qw($VERSION @ISA @EXPORT);
 require Exporter;
 @ISA = qw(Exporter);
 
-$VERSION = "0.35";
+$VERSION = "0.36";
 
 use POSIX qw(strftime);
 use PICA::Field;
@@ -212,43 +212,76 @@ sub values {
     return @list;
 } # values()
 
-=head2 main_record  
+=head2 main_record 
 
-Get the main record (all tags starting with '0').
+Get the main record (levl 0, all tags starting with '0').
 
 =cut
 
 sub main_record {
-  my ($self) = @_;
+  my $self = shift;
   my @fields = $self->field("0...(/..)?");
 
   my $record = PICA::Record->new(@fields);
 }
 
-=head2 local_record
+=head2 local_records
 
-Get the local record (all tags starting with '1').
+Get a list of local records (holdings, level 1 and 2).
 
 =cut
 
-sub local_record {
-  my ($self) = @_;
-  my @fields = $self->field("1...(/..)?");
+sub local_records {
+  my $self = shift;
 
-  my $record = PICA::Record->new(@fields);
+  my @holdings = ();
+  my @fields = ();
+  my $prevtag;
+
+  foreach my $f (@{$self->{_fields}}) {
+    next unless $f->tag =~ /^[^0]/;
+
+    if ($f->tag =~ /^1/) {
+        if ($prevtag && $prevtag =~ /^2/) {
+            push @holdings, PICA::Record->new(@fields) if (@fields);
+            @fields = ();
+        }
+    }
+
+    push @fields, $f;
+    $prevtag = $f->tag;
+  }
+  push @holdings, PICA::Record->new(@fields) if (@fields);
+  return @holdings;
 }
+
 
 =head2 copy_record
 
-Get the copy record (all tags starting with '2').
+Get the copy records (level 2, all tags starting with '2').
 
 =cut
 
-sub copy_record {
-  my ($self) = @_;
-  my @fields = $self->field("2...(/..)?");
+sub copy_records {
+  my $self = shift;
 
-  my $record = PICA::Record->new(@fields);
+  my @copies = ();
+  my @fields = ();
+  my $prevocc;
+
+  foreach my $f (@{$self->{_fields}}) {
+    next unless $f->tag =~ /^2...\/(..)/;
+
+    if (!($prevocc && $prevocc eq $1)) {
+      $prevocc = $1;
+      push @copies, PICA::Record->new(@fields) if (@fields);
+      @fields = ();
+    }
+
+    push @fields, $f;
+  }
+  push @copies, PICA::Record->new(@fields) if (@fields);
+  return @copies;
 }
 
 =head2 is_empty

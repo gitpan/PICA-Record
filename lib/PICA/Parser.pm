@@ -35,6 +35,11 @@ You can also export C<parsedata> and C<parsefile>:
       print $record->to_string() . "\n";
   });
 
+Both function return the parser, so you can use
+constructs like
+
+  my @records = parsefile($filename)->records();
+
 =head1 DESCRIPTION
 
 This module can be used to parse normalized PICA+ and PICA+ XML.
@@ -49,7 +54,7 @@ use warnings;
 use Carp;
 
 use vars qw($VERSION @ISA @EXPORT_OK);
-$VERSION = "0.35";
+$VERSION = "0.38";
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(parsefile parsedata);
@@ -85,27 +90,8 @@ L<PICA::Field> object is returned then it will be skipped.
 Reference to a handler function for parsed PICA+ records. The
 function is passed a L<PICA::Record>. If the function returns
 a record then this record will be stored in an array that is
-passed to C<EndCollection>. You can use this method as a filter
+passed to C<Collection>. You can use this method as a filter
 by returning a modified record.
-
-=item Collection
-
-Alias for C<EndCollection>. Ignored if C<EndCollection> is specified.
-
-=item StartCollection
-
-Reference to a handler function that is called before a
-collection of PICA+ record. Each file is treated as a
-collection so this is called before parsing a file.
-
-=item EndCollection
-
-Reference to a handler function for parsed PICA+ collections.
-An array of L<PICA::Record> objects is passed to the function.
-For performace reasons it is recommended to directly use the
-stream of records with the L<Record> handler instead of collecting
-all storing records and using them afterwards. This parameter is 
-not supported yet.
 
 =item Error
 
@@ -114,13 +100,16 @@ if data does not look like PICA+. By default errors are just ignored.
 
 TODO: Count errors and return the number of errors in the C<errors> method.
 
+=item Dumpformat
+
+If set to true, parse dumpformat (no newlines).
+
 =item Strict
 
 Stop on errors. By default a parser just omits records that could
 not been parsed. (default is false). Up to now strict_mode is only
 available in L<PICA::PlainParser>!
-
-=item EmptyRecords
+/bin/bash: indent: command not found
 
 Skip empty records so they will not be passed to the record handler
 (default is false). Empty records easily occur for instance if your 
@@ -189,13 +178,16 @@ sub parsefile {
             $params{Format} = "XML";
         }
         $parser = $self->_getparser( %params );
+        croak("Missing argument to parsefile") unless defined $arg;
+        $parser->parsefile( $arg );
+        $self;
     } else { # called as a function
         $arg = ($self eq 'PICA::Parser') ? shift : $self;
         $parser = PICA::Parser->new( @_ );
+        croak("Missing argument to parsefile") unless defined $arg;
+        $parser->parsefile( $arg );
+        $parser;
     }
-
-    croak("Missing argument to parsefile") unless defined $arg;
-    $parser->parsefile( $arg );
 }
 
 =head2 parsedata ( $data [, %params ] )
@@ -224,12 +216,33 @@ sub parsedata {
         $data = shift;
         my %params = @_;
         $parser = $self->_getparser( %params );
+        $parser->parsedata( $data );
+        $self;
     } else { # called as a function
         $data = ($self eq 'PICA::Parser') ? shift : $self;
         $parser = PICA::Parser->new( @_ );
+        $parser->parsedata( $data );
+        $parser;
     }
+}
 
-    $parser->parsedata( $data );
+=head2 records
+
+Get an array of the read records (as returned by the record handler which
+can thus be used as a filter). If no record handler was specified, records
+will be collected unmodified. For large record sets it is recommended not
+to collect the records but directly use them with a record handler.
+
+=cut
+
+sub records {
+    my $self = shift;
+    return [] unless ref $self;
+
+    return $self->{plainparser}->records() if $self->{plainparser};
+    return $self->{xmlparser}->records() if $self->{xmlparser};
+
+    return [];
 }
 
 =head2 counter
@@ -335,7 +348,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007, 2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

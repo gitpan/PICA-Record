@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 26;
+use Test::More tests => 28;
 
 use PICA::Parser qw(parsefile parsedata);
 use PICA::PlainParser;
@@ -77,6 +77,14 @@ $parser = PICA::Parser->new( Proceed => 1 );
 $parser->parsedata($picadata);
 $parser->parsedata($picadata);
 ok( $parser->counter == 2, "proceed" );
+
+# one call
+$parser = PICA::Parser->parsedata($picadata);
+ok( $parser->counter == 1, "one call" );
+
+# stored records
+my @r = PICA::Parser->parsedata($picadata)->records();
+ok( scalar @r == 1, "one call (->records)" );
 
 # run parsefile in many ways
 test_parsefile("t/kochbuch.pica");

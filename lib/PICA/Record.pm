@@ -15,7 +15,7 @@ use vars qw($VERSION @ISA @EXPORT);
 require Exporter;
 @ISA = qw(Exporter);
 
-$VERSION = "0.36";
+$VERSION = "0.38";
 
 use POSIX qw(strftime);
 use PICA::Field;
@@ -23,8 +23,37 @@ use Carp qw(croak);
 
 =head1 DESCRIPTION
 
-Module for handling PICA records as objects.
-See L<PICA::Tutorial> for an introduction.
+Module for handling PICA+ records as Perl objects.
+
+=head1 INTRODUCTION
+
+=head2 What is PICA+?
+
+PICA+ is the internal data format of the Local Library System (LBS) and
+the Central Library System (CBS) of OCLC, formerly PICA. Similar library
+formats are the MAchine Readable Cataloging format (MARC) and the
+Maschinelles Austauschformat für Bibliotheken (MAB). In additionally to
+PICA+ in CBS there is the catalouging format Pica3 which can losslessly 
+be convert to PICA+  and vice versa.
+
+=head2 What is PICA::Record?
+
+C<PICA::Record> is a Perl package that provides an API for PICA+ record 
+handling. The package contains a parser interface module L<PICA::Parser>
+to parse PICA+ (L<PICA::PlainParser>) and PICA XML (L<PICA::XMLParser>).
+Corresponding modules exist to write data (L<PICA::Writer> and 
+L<PICA::XMLWriter>). PICA+ data is handled in records (L<PICA::Record>) 
+that contain fields (L<PICA::Field>). To fetch records from databases
+via SRU or Z39.50 there is the interface L<PICA::Server> and to access
+the experimental CBS webcat interface there is L<PICA:Webcat>.
+
+You can use C<PICA::Record> for instance to convert between PICA+ and
+PicaXML, to process PICA+ records that you have downloaded with WinIBW 
+or download records in native format via SRU or Z39.50.
+
+To get an insight to the API have a look at the examples 
+(directory C<examples>) and tests (directory C<t>)
+included in this package.
 
 =head1 METHODS
 
@@ -37,7 +66,9 @@ C<append> so you can use the constructor in the same way:
 
   my $record = PICA::Record->new('037A','a' => 'My note');
 
-If no data is given then it just returns a completely empty record.
+If no data is given then it just returns a completely empty record. To load
+PICA records from a file, see L<PICA::Parser>, to load records from a SRU
+or Z39.50 server, see L<PICA::Server>.
 
 =cut
 
@@ -72,7 +103,7 @@ sub new() {
     return $self;
 } # new()
 
-=head2 copy
+=head2 copy ( )
 
 Creates a clone of this record by copying all fields.
 
@@ -83,7 +114,7 @@ sub copy {
     return PICA::Record->new( $self );
 } # copy()
 
-=head2 all_fields()
+=head2 all_fields ( )
 
 Returns an array of all the fields in the record. The array contains 
 a C<PICA::Field> object for each field in the record. An empty array 
@@ -97,7 +128,7 @@ sub all_fields() {
     return @{$self->{_fields}};
 }
 
-=head2 field( $tagspec(s) )
+=head2 field ( $tagspec(s) )
 
 Returns a list of C<PICA::Field> objects with tags that
 match the field specifier, or in scalar context, just
@@ -136,7 +167,7 @@ sub field {
     return @list;
 } # field()
 
-=head2 subfield
+=head2 subfield ( [ $tagspec , $subfield ] | $spec )
 
 Shortcut method for getting just the subfield's value of a tag (see L<PICA::Field>). 
 Returns a list of subfield values that match or in scalar context, just the 
@@ -185,7 +216,7 @@ sub subfield {
     return @list;
 } # subfield()
 
-=head2 values
+=head2 values ( )
 
 Shortcut method to get subfield values of multiple fields and subfields. The fields and subfields 
 are specified in a list of strings, for instance:
@@ -212,9 +243,9 @@ sub values {
     return @list;
 } # values()
 
-=head2 main_record 
+=head2 main_record ( )
 
-Get the main record (levl 0, all tags starting with '0').
+Get the main record (level 0, all tags starting with '0').
 
 =cut
 
@@ -222,12 +253,13 @@ sub main_record {
   my $self = shift;
   my @fields = $self->field("0...(/..)?");
 
-  my $record = PICA::Record->new(@fields);
+  return PICA::Record->new(@fields);
 }
 
-=head2 local_records
+=head2 local_records ( )
 
 Get a list of local records (holdings, level 1 and 2).
+Returns an array of L<PICA::Record> objects.
 
 =cut
 
@@ -256,9 +288,10 @@ sub local_records {
 }
 
 
-=head2 copy_record
+=head2 copy_records ( )
 
 Get the copy records (level 2, all tags starting with '2').
+Returns an array of L<PICA::Record> objects.
 
 =cut
 
@@ -284,7 +317,7 @@ sub copy_records {
   return @copies;
 }
 
-=head2 is_empty
+=head2 is_empty ( )
 
 Return true if the record is empty (no fields or all fields empty)
 
@@ -412,7 +445,7 @@ sub append {
     return $c;
 }
 
-=head2 replace( $tag, $field or @fieldspec )
+=head2 replace ( $tag, $field | @fieldspec )
 
 Replace a field. You must pass a tag and a field. 
 Attention: Only the first occurence will be replaced
@@ -444,10 +477,10 @@ sub replace {
     }
 }
 
-=head2 sort() 
+=head2 sort ( )
 
-Sort all fields. Most times the order of fields is not changed 
-and not relevant but sorted fields are helpful for viewing records.
+Sort all fields. Most times the order of fields is not changed and
+not relevant but sorted fields may be helpful for viewing records.
 
 =cut
 
@@ -458,7 +491,7 @@ sub sort() {
 }
 
 
-=head2 add_headers
+=head2 add_headers ( [ %options ] )
 
 Add header fields to a L<PICA::Record>. You must specify two named parameters
 (eln and satus). This method is experimental. There is no test whether the 
@@ -501,7 +534,7 @@ sub add_headers {
     $self->append( "002@", '0' => $status );
 }
 
-=head2 to_string
+=head2 to_string ( [ %options ] )
 
 Returns a string representation of the record for printing.
 
@@ -509,16 +542,17 @@ Returns a string representation of the record for printing.
 
 sub to_string() {
     my $self = shift;
-    my @args = @_;
+    my %args = @_;
+    $args{endfield} = "\n" unless defined($args{endfield});
 
     my @lines = ();
     for my $field ( @{$self->{_fields}} ) {
-        push( @lines, $field->to_string(@args) );
+        push( @lines, $field->to_string(%args) );
     }
-    return join("", @lines);
+    return join('', @lines);
 }
 
-=head2 normalized()
+=head2 normalized ( [ $prefix ] )
 
 Returns record as a normalized string. Optionally adds prefix data at the beginning.
 
@@ -540,7 +574,7 @@ sub normalized() {
     return "\x1D\x0A" . $prefix . join( "", @lines );
 }
 
-=head2 to_xml
+=head2 to_xml ( )
 
 Returns the record in XML format (not tested, nor official).
 
@@ -559,7 +593,7 @@ sub to_xml {
 
 =head1 INTERNAL METHDOS
 
-=head2 _get_regex
+=head2 _get_regex ( $reg )
 
 Get a complied regular expression
 
@@ -583,10 +617,23 @@ sub _get_regex {
 
 __END__
 
+=head1 SEE ALSO
+
+At CPAN there are the modules L<MARC::Record>, L<MARC>, and L<MARC::XML> 
+for MARC records. The deprecated module L<Net::Z3950::Record> had a 
+subclass L<Net::Z3950::Record::MAB> for MAB records (you should now 
+use L<Net::Z3950::ZOOM>).
+
 =head1 TODO
 
-The toString, to_xml, and normalized methods should be integrated
+The to_string, to_xml, and normalized methods should be integrated
 into L<PICA::Writer> or vice versa.
+
+Full Unicode support may need some more testing and bugfixes.
+
+The SRU interface to fetch PICA+ records is still limited.
+
+More points are in the file TODO in this distribution.
 
 =head1 AUTHOR
 
@@ -594,8 +641,9 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007,2008 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
+

@@ -8,7 +8,7 @@ of PICA+ and a simple SRU interface to PICA systems for downloading
 PICA+ records.
 
 For a more detailed introduction have a look at PICA::Tutorial, the 
-scripts in directory 'bin' and the tests in directory 't'.
+scripts in directory 'examples' and the tests in directory 't'.
 
 INSTALLATION
 
@@ -29,6 +29,8 @@ Parts of this module require these other modules and libraries:
 
 * LWP::UserAgent
 * XML::Parser
+* ZOOM
+* ...
 
 AUTHORS
 
@@ -36,7 +38,7 @@ Jakob Voss <jakob.voss@gbv.de>
 
 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Göttingen (VZG) and Jakob Voss
+Copyright (C) 2007,2008 by Verbundzentrale Göttingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

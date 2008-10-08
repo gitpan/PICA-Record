@@ -22,7 +22,7 @@ use PICA::SRUSearchParser;
 use LWP::UserAgent;
 
 use vars qw($VERSION);
-$VERSION = "0.36";
+$VERSION = "0.38";
 
 =head1 METHODS
 
@@ -151,22 +151,40 @@ is returned.
 sub z3950Query {
     my ($self, $query, %handlers) = @_;
 
+    croak("Please load package ZOOM to use Z39.50!")
+        unless defined $INC{'ZOOM.pm'};
     croak("No Z3950 interface defined") unless $self->{Z3950};
-    require ZOOM;
+    croak("Z3950 interface have host and database") 
+        unless $self->{Z3950} =~ /^(tcp:|ssl:)?([^\/:]+)(:[0-9]+)?\/(.*)/;
 
-    my %options = (preferredRecordSyntax => "picamarc");
-    $options{user} = $self->{user} if defined $self->{user};
-    $options{password} = $self->{password} if defined $self->{password};
+    my $options = new ZOOM::Options();
+    $options->option( preferredRecordSyntax => "picamarc" );
+    $options->option( user => $self->{user} ) if defined $self->{user};
+    $options->option( password => $self->{password} ) if defined $self->{password};
 
-    my $conn = new ZOOM::Connection( $self->{Z3950} , 0, %options);
-
-    my $rs = $conn->search_pqf($query);
+    my ($conn, $rs);
+    eval {
+        $conn = ZOOM::Connection->create( $options );
+        $conn->connect( $self->{Z3950} );
+    };
+    eval { $rs = $conn->search_pqf($query); } unless $@;
+    if ($@) {
+        croak("Z39.50 error " . $@->code(), ": ", $@->message());
+    }
 
     if (%handlers) {
         my $parser = PICA::PlainParser->new( %handlers, Proceed=>1 );
         my $n = $rs->size();
         for my $i (0..$n-1) {
-            $parser->parsedata($rs->record($i)->raw());
+            my $raw;
+            eval {
+                $raw = $rs->record($i)->raw();
+            };
+            if ($@) {
+                croak("Z39.50 error " . $@->code(), ": ", $@->message());
+            }
+            #print "$raw\n";
+            $parser->parsedata($raw);
         }
         return $parser;
     } else {

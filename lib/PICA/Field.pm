@@ -18,7 +18,7 @@ use vars qw($VERSION @ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(parse_pp_tag);
 
-$VERSION = "0.35";
+$VERSION = "0.38";
 
 =head1 NAME
 
@@ -154,65 +154,57 @@ sub parse($) {
 
     my $self = bless {}, $class;
 
-    #my $p = index $data, ' ';
-    #my $tagno = substr($data, 0, $p); # includes occurrence!
-    #>     $sf =~ s/\$/\\\$/; 
-
-    my ($tagno, $sf, $subfields) = ($data =~ /([^\$\x1F\x83\s]+)\s?(.)(.*)/);
+    my ($tagno, $subfields) = ($data =~ /([^\$\x1F\x83\s]+)\s?(.*)/);
 
     return if $tag_filter_func and !$tag_filter_func->($tagno);
 
     # TODO: better manage different parsing modes (normalized, plain, WinIBW...)
-    my $subfield_indicator = SUBFIELD_INDICATOR;
-    #my $sf = substr($data, $p+1, 1);
-    if ( $sf ne $subfield_indicator ) { # other usual subfield indicators
-        if ( $sf eq '$' ) { $subfield_indicator = '\$'; }
-        elsif( $sf eq "\x83" ) { $subfield_indicator = '\x83'; }
-        elsif( $sf eq "\x9f" ) { $subfield_indicator = '\x9f'; }
-        else {
-            croak("No or not allowed subfield indicator (ord: " . ord($sf) . ") specified!");
-        }
+    my $sfreg;
+    my $sf = substr($subfields, 0, 1);
+    if ($sf eq "\x1F") { $sfreg = '\x1F'; }
+    elsif ( $sf eq '$' ) { $sfreg = '\$'; }
+    elsif( $sf eq "\x83" ) { $sfreg = '\x83'; }
+    elsif( $sf eq "\x9f" ) { $sfreg = '\x9f'; }
+    else {
+        croak("No or not allowed subfield indicator (ord: " . ord($sf) . ") specified!");
     }
+    $sfreg = '('.$sfreg.'[0-9a-zA-Z])';
 
-    #my $subfields = substr($data, $p+2); # skip first indicator
+    my @sfields = split($sfreg, $subfields);
+    shift @sfields;
 
-    my @sfields = split($subfield_indicator, $subfields);
     my @subfields = ();
-    foreach my $s (@sfields) {
-        my $code = substr ($s, 0, 1);
-        my $value = substr ($s, 1);
+    my ($value, $code);
+    while (@sfields) {
+        $code = shift @sfields;
+        $code = substr($code, 1);
+        $value = shift @sfields;
+        $value =~ s/\$\$/\$/g if $sf eq '$';
         push(@subfields, ($code, $value));
     }
 
     return $self->new($tagno, @subfields);
 }
 
-=head2 tag()
+=head2 tag ( [$tag] )
 
-Returns the PICA+ tag and occurrence of the field.
+Returns the PICA+ tag and occurrence of the field. Optionally sets tag (and occurrence) to a new value.
 
 =cut
 
 sub tag {
     my $self = shift;
-    return $self->{_tag} . ($self->{_occurrence} ?  ("/" . $self->{_occurrence}) : "");
-}
-
-=head2 set_tag()
-
-Sets the tag and occurence of the field. Does not return a value.
-
-=cut
-
-sub set_tag {
-    my $self = shift;
     my $tag = shift;
 
-    my ($occurrence, $tagno) = parse_pp_tag($tag);
-    defined $tagno or croak( "\"$tag\" is not a valid tag." );
+    if (defined $tag) {
+        my ($occurrence, $tagno) = parse_pp_tag($tag);
+        defined $tagno or croak( "\"$tag\" is not a valid tag." );
 
-    $self->{_tag} = $tagno;
-    $self->{_occurrence} = $occurrence;
+        $self->{_tag} = $tagno;
+        $self->{_occurrence} = $occurrence;
+    }
+
+    return $self->{_tag} . ($self->{_occurrence} ?  ("/" . $self->{_occurrence}) : "");
 }
 
 =head2 level()
@@ -477,7 +469,7 @@ sub to_string() {
 
     my $subfields = defined($args{subfields}) ? $args{subfields} : '';
     my $startfield = defined($args{startfield}) ? $args{startfield} : '';
-    my $endfield  = defined($args{endfield}) ? $args{endfield} : "\n";
+    my $endfield  = defined($args{endfield}) ? $args{endfield} : "";
     my $startsubfield = defined($args{startsubfield}) ? $args{startsubfield} : '$';
 
     my @subs;
@@ -489,7 +481,10 @@ sub to_string() {
         my $offset = ($i-1)*2;
         my $code = $subs->[$offset];
         my $text = $subs->[$offset+1];
-        push( @subs, $code.$text ) if !$subfields || $code =~ /^[$subfields]$/;
+        if (!$subfields || $code =~ /^[$subfields]$/) {
+            $text =~ s/\$/\$\$/g if $startsubfield eq '$';
+            push( @subs, $code.$text ) 
+        }
     } # for
 
     my $occ = '';

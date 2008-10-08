@@ -13,7 +13,7 @@ use ExtUtils::MakeMaker;
         'Carp' => 0,
         'XML::Parser' => 0,
         'LWP::UserAgent' => 0,
-	'Text::BibTeX'	=> 0
+        'SOAP::Lite' => 0
     },
     dist            => {
         COMPRESS => 'gzip -9f',

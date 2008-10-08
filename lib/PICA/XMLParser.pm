@@ -49,7 +49,7 @@ require XML::Parser;
 use Carp;
 
 use vars qw($VERSION);
-$VERSION = "0.35";
+$VERSION = "0.37";
 
 =head1 PUBLIC METHODS
 
@@ -69,6 +69,8 @@ sub new {
         record => {},
         fields => {},
 
+        read_records => [],
+
         tag => "",
         occurrence => "",
         subfield_code => "",
@@ -78,7 +80,6 @@ sub new {
         # Handlers
         field_handler  => $params{Field} ? $params{Field} : undef,
         record_handler => $params{Record} ? $params{Record} : undef,
-        collection_handler => $params{Collection} ? $params{Collection} : undef,
 
         proceed => $params{Proceed} ? $params{Proceed} : 0,
 
@@ -104,6 +105,7 @@ sub parsedata {
     if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
         $self->{empty} = 0;
+        $self->{read_records} = [];
     }
 
     if ( ref($data) eq 'PICA::Record' ) {
@@ -127,6 +129,8 @@ sub parsedata {
     }
 
     $parser->parse($data);
+
+    $self;
 }
 
 =head2 parsefile (data)
@@ -141,6 +145,7 @@ sub parsefile {
     if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
         $self->{empty} = 0;
+        $self->{read_records} = [];
     }
 
     $self->{filename} = $file if ref(\$file) eq 'SCALAR';
@@ -153,6 +158,19 @@ sub parsefile {
     } else {
         $parser->parsefile($file);
     }
+
+    $self;
+}
+
+=head2 records ( )
+
+Get an array of the read records (if they have been stored)
+
+=cut
+
+sub records {
+   my $self = shift; 
+   return @{ $self->{read_records} };
 }
 
 =head2 counter
@@ -294,7 +312,10 @@ sub end_handler {
 
         if ($self->{record_handler}) {
             $record = $self->{record_handler}( $record );
+        } elsif (!$record->is_empty || $self->{keep_empty_records}) {
+            push @{ $self->{read_records} }, $record;
         }
+
 
          $self->{read_counter}++;
          # if ( $record->is_empty() ) {

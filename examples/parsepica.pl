@@ -33,7 +33,7 @@ GetOptions(
     "files:s" => \$inputlistfile,  # read names of input files from a file
     "quiet" => \$quiet,            # suppress status messages
     "help|?" => \$help,            # show help message
-    "man" => \$man,                # full documentation    
+    "man" => \$man,                # full documentation
     "select:s" => \$select,        # select a special field/subfield
     "pselect:s" => \$selectprint,
     "count" => \$countmode,

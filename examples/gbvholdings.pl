@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-gbvholdings.pl - get holding information in GBV union catalog for a given ISBN
+gbvholdings - get holding information in GBV union catalog for a given ISBN
 
 =cut
 

@@ -38,7 +38,7 @@ use PICA::Record;
 use Carp;
 
 use vars qw($VERSION);
-$VERSION = "0.35";
+$VERSION = "0.38";
 
 =head1 PUBLIC METHODS
 
@@ -60,13 +60,13 @@ sub new {
     my $self = bless {
         filename => "",
 
-        field_handler  => $params{Field} ? $params{Field} : undef,
-        record_handler => $params{Record} ? $params{Record} : undef,
-        collection_handler => $params{Collection} ? $params{Collection} : undef,
-        keep_empty_records => $params{EmptyRecords},
+        field_handler  => defined $params{Field} ? $params{Field} : undef,
+        record_handler => defined $params{Record} ? $params{Record} : undef,
+        keep_empty_records => defined $params{EmptyRecords},
         proceed => $params{Proceed} ? $params{Proceed} : 0,
 
         record => undef,
+        read_records => [],
 
         dumpformat => $params{Dumpformat},
         lax => $params{lax} ? $params{lax} : 1,
@@ -119,6 +119,7 @@ sub parsefile {
     if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
         $self->{empty} = 0;
+        $self->{read_records} = [];
     }
 
     $self->{active} = 0;
@@ -136,7 +137,7 @@ sub parsefile {
             if (PICA::Field::parse_pp_tag($1)) {
                 $self->_parseline($line);
             } else {
-                if ( "$id" ne "$1" ) { 
+                if ( !defined $id or "$id" ne "$1" ) { 
                     $self->_parseline("");
                 }
                 $id = $1;
@@ -152,8 +153,7 @@ sub parsefile {
 
     $self->handle_record(); # handle last record
 
-
-
+    $self;
 }
 
 =head2 parsedata ( $data )
@@ -173,6 +173,7 @@ sub parsedata {
     if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
         $self->{empty} = 0;
+        $self->{read_records} = [];
     }
 
     if ( ref($data) eq 'CODE' ) {
@@ -186,9 +187,23 @@ sub parsedata {
     }
 
     $self->handle_record(); # handle last record
+
+    $self;
 }
 
-=head2 counter
+
+=head2 records ( )
+
+Get an array of the read records (if they have been stored)
+
+=cut
+
+sub records {
+   my $self = shift; 
+   return @{ $self->{read_records} };
+}
+
+=head2 counter ( )
 
 Get the number of read records so far.
 
@@ -199,7 +214,7 @@ sub counter {
    return $self->{read_counter};
 }
 
-=head2 empty
+=head2 empty ( )
 
 Get the number of empty records that have been read so far.
 By default empty records are not passed to the record handler
@@ -304,9 +319,9 @@ sub handle_record {
 
     if ($self->{record_handler}) {
         $record = $self->{record_handler}( $record );
+    } elsif (!$record->is_empty || $self->{keep_empty_records}) {
+        push @{ $self->{read_records} }, $record;
     }
-
-    # TODO: save record if needed for Collection handler
 
     $self->{fields} = [];
 }

@@ -4,6 +4,7 @@ use strict;
 use integer;
 use Exporter;
 use Carp;
+use utf8;
 
 use constant SUBFIELD_INDICATOR => "\x1F"; # 31
 use constant START_OF_FIELD     => "\x1E"; # 30
@@ -18,7 +19,7 @@ use vars qw($VERSION @ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(parse_pp_tag);
 
-$VERSION = "0.38";
+$VERSION = "0.4a";
 
 =head1 NAME
 
@@ -31,7 +32,10 @@ PICA::Field - Perl extension for handling PICA+ fields
     '9' => '117060275',
     '8' => 'Martin Schrettinger'
   );
+
+  $field->add( 'd' => 'Martin', 'a' => 'Schrettinger' );
   $field->update( "8", "Schrettinger, Martin" );
+
   print $field->normalized();
 
 =head1 DESCRIPTION
@@ -44,10 +48,10 @@ The method C<parse_pp_tag> is exported.
 
 =head1 METHODS
 
-=head2 new()
+=head2 new ( [...] )
 
-The constructor, which will return a C<PICA::Field> object. You can call the
-constructor with a tag and a list of subfields:
+The constructor, which will return a C<PICA::Field> object or croak on error.
+You can call the constructor with a tag and a list of subfields:
 
   PICA::Field->new( '028A',
     '9' => '117060275',
@@ -85,13 +89,13 @@ sub new($) {
         _occurrence => $occurrence
     }, $class;
 
-    $self->add_subfields(@_);
+    $self->add(@_);
 
     return $self;
-} # new()
+}
 
 
-=head2 copy( $field )
+=head2 copy ( $field )
 
 Creates and returns a copy of this object.
 
@@ -108,12 +112,12 @@ sub copy {
         _occurrence => $occurrence,
     }, ref($self);
 
-    $copy->add_subfields( @{$self->{_subfields}} );
+    $copy->add( @{$self->{_subfields}} );
 
     return $copy;
 }
 
-=head2 parse( $string, [, \&tag_filter_func ] )
+=head2 parse ( $string, [, \&tag_filter_func ] )
 
 The constructur will return a PICA::Field object based on data that is 
 parsed if null if the filter dropped the field. Dropped fields will not 
@@ -207,9 +211,9 @@ sub tag {
     return $self->{_tag} . ($self->{_occurrence} ?  ("/" . $self->{_occurrence}) : "");
 }
 
-=head2 level()
+=head2 level ( )
 
-Returns the level (0: main, 1: local, 2: copy) of the field.
+Returns the level (0: main, 1: local, 2: copy) of this field.
 
 =cut
 
@@ -218,48 +222,65 @@ sub level {
     return substr($self->{_tag},0,1);
 }
 
-=head2 subfield(code)
+=head2 sf ( [ $code(s) ] )
 
-When called in a scalar context returns the text from the first subfield
-matching the subfield code. You may specify multiple subfields.
+Shortcut for method C<subfield>.
+
+=cut
+
+sub sf {
+    return subfield(@_);
+}
+
+=head2 subfield ( [ $code(s) ] )
+
+Return selected or all subfield values. If you specify 
+one ore more subfield codes, only matching subfields are 
+returned. When called in a scalar context returns only the
+first (matching) subfield. You may specify multiple subfield codes:
 
     my $subfield = $field->subfield( 'a' );   # first $a
     my $subfield = $field->subfield( 'acr' ); # first of $a, $c, $r
-
-Or if you think there might be more than one you can get all of them by
-calling in a list context:
+    my $subfield = $field->subfield( 'a', 'c', 'r' ); # the same
 
     my @subfields = $field->subfield( 'a' );
+    my @all_subfields = $field->subfield();
 
-If no matching subfields are found, C<undef> is returned in a scalar context
-and an empty list in a list context.
+If no matching subfields are found, C<undef> is returned in a scalar
+context or an empty list in a list context.
+
+Remember that there can be more than one subfield of a given code!
 
 =cut
 
 sub subfield {
     my $self = shift;
-    my $code_wanted = shift;
-    return unless defined $code_wanted;
+    my $codes = join('',@_);
+    $codes = '.' if $codes eq '';
+    $codes = "[$codes]";
+    $codes = qr/$codes/;
 
+    my @list;
     my @data = @{$self->{_subfields}};
-    my @found;
     while ( defined( my $code = shift @data ) ) {
-        if ( index($code_wanted, $code) != -1 ) {
-            push( @found, shift @data );
-        } else {
-            shift @data;
+        if ($code =~ $codes) {
+            if ( wantarray() ) {
+                push( @list, shift @data );
+            } else {
+                return shift @data; 
+            }
         }
     }
-    if ( wantarray() ) { return @found; }
-    return( $found[0] );
+    return @list;
 }
 
-=head2 all_subfields()
+=head2 content ( [ $code(s) ] )
 
-Returns all the subfields in the field.  What's returned is a list of
-lists, where the inner list is a subfield code and the subfield data.
+Return selected or all subfields as an array of arrays. If you specify 
+one ore more subfield codes, only matching subfields are returned. See
+the C<subfield> method for more examples.
 
-For example, this might be the subfields from a 021A field:
+This shows the subfields from a 021A field:
 
         [
           [ 'a', '@Traité de documentation' ],
@@ -269,31 +290,33 @@ For example, this might be the subfields from a 021A field:
 
 =cut
 
-sub all_subfields {
+sub content {
     my $self = shift;
-    croak("You called all_subfields() but you probably want subfield()") if @_;
+    my $codes = join('',@_);
+    $codes = '.' if $codes eq '';
+    $codes = "[$codes]";
+    $codes = qr/$codes/;
 
     my @list;
     my @data = @{$self->{_subfields}};
     while ( defined( my $code = shift @data ) ) {
-        push( @list, [$code, shift @data] );
+        push( @list, [$code, shift @data] ) if $code =~ $codes;
     }
     return @list;
 }
 
-=head2 add_subfields(code,text[,code,text ...])
+=head2 add ( $code, $text [, $code, $text ...] )
 
 Adds subfields to the end of the subfield list.
 
-    $field->add_subfields( 'c' => '1985' );
+    $field->add( 'c' => '1985' );
 
 Returns the number of subfields added.
 
 =cut
 
-sub add_subfields(@) {
+sub add(@) {
     my $self = shift;
-
     my $nfields = @_ / 2;
 
     ($nfields >= 1)
@@ -312,7 +335,7 @@ sub add_subfields(@) {
     return $nfields;
 }
 
-=head2 update()
+=head2 update ( )
 
 Allows you to change the values of the field. You can update indicators
 and subfields like this:
@@ -371,12 +394,12 @@ sub update {
     ## synchronize our subfields
     $self->{_subfields} = \@data;
     return($changes);
-} # update()
+}
 
-=head2 replace()
+=head2 replace ( $field | ... )
 
 Allows you to replace an existing field with a new one. You may pass a
-L<PICA::Field> object or parameters for a new field to replace the
+C<PICA::Field> object or parameters for a new field to replace the
 existing field with. Replace does not return a meaningful or reliable value.
 
 =cut
@@ -394,7 +417,7 @@ sub replace {
     %$self = %$new;
 }
 
-=head2 empty_subfields
+=head2 empty_subfields ( )
 
 Returns a list of all codes of empty subfields.
 
@@ -413,7 +436,7 @@ sub empty_subfields {
     return @list;
 }
 
-=head2 is_empty() 
+=head2 is_empty ( )
 
 Test whether there are no subfields or all subfields are empty.
 
@@ -431,7 +454,7 @@ sub is_empty() {
     return 1;
 }
 
-=head2 normalized( [$subfields] )
+=head2 normalized ( [$subfields] )
 
 Returns the field as a string. The tag number, occurrence and 
 subfield indicators are included. 
@@ -452,7 +475,7 @@ sub normalized() {
     );
 }
 
-=head2 to_string()
+=head2 to_string ( )
 
 Returns a pretty string for printing.
 
@@ -496,9 +519,11 @@ sub to_string() {
            $endfield;
 }
 
-=head2 to_xml
+=head2 to_xml ( )
 
-Returns the field in XML format. The XML format is an unofficial beta format and may change.
+Returns the field in XML format. Make sure to have set the 
+default namespace ('info:srw/schema/5/picaXML-v1.0')
+to get valid PICA XML. See also L<PICA::XMLWriter>.
 
 =cut
 
@@ -529,7 +554,7 @@ sub to_xml {
 
 =head1 STATIC METHODS
 
-=head2 parse_pp_tag tag
+=head2 parse_pp_tag tag ( $tag )
 
 Tests whether a string can be used as a tag/occurrence specifier. A tag
 indicator consists of a 'type' (00-99) and an 'indicator' (A-Z and @),
@@ -568,7 +593,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007, 2008 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

@@ -10,9 +10,9 @@ lib/PICA/Field.pm
 lib/PICA/Parser.pm
 lib/PICA/PlainParser.pm
 lib/PICA/Record.pm
-lib/PICA/Server.pm
+lib/PICA/Source.pm
 lib/PICA/SRUSearchParser.pm
-lib/PICA/Webcat.pm
+lib/PICA/Store.pm
 lib/PICA/Writer.pm
 lib/PICA/XMLParser.pm
 lib/PICA/XMLWriter.pm

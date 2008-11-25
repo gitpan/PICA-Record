@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 18;
+use Test::More tests => 22;
 
 use PICA::Field;
 
@@ -33,6 +33,9 @@ ok( $field->normalized() eq $normalized, 'new with packed');
 $field = PICA::Field->new( $picamarc );
 ok( $field->normalized() eq $normalized, 'new with picamarc');
 
+$field = PICA::Field->new("028A","9" => "117060275");
+$field->add( "8" => "Martin Schrettinger", "d" => "Martin", "a" => "Schrettinger" );
+ok( $field->normalized() eq $normalized, 'add method');
 
 my $fcopy = $field->copy(); #PICA::Field->new( $field );
 isa_ok( $fcopy, 'PICA::Field');
@@ -65,4 +68,11 @@ $enc = '021A $aGet a $$, loose a $$';
 $field = PICA::Field->parse($enc);
 ok( $field->to_string() eq $enc, 'dollar signs in field values (3)' );
 
+ok( $field->sf('a') eq 'Get a $, loose a $', 'Field->sf (scalar)' );
+$field = PICA::Field->parse('123A $axx$ayy');
+my @sf = $field->subfield('a');
+ok ($sf[0] eq 'xx' && $sf[1] eq 'yy', 'Field->sf (array)');
 
+$field = PICA::Field->parse('123A $axx$byy$czz');
+@sf = $field->sf('a','c');
+ok ($sf[0] eq 'xx' && $sf[1] eq 'zz', 'Field->sf (multiple)');

@@ -1,3 +1,12 @@
+0.3.9   2008-11-25
+        - renamed PICA::Webcat to PICA::Store (more generic)
+        - renamed PICA::Server to PICA::Source (more generic)
+        - In PICA::Store fixed SOAP message and added connection type
+        - simplified methods of PICA::Field
+        - added 'sf' and 'f' shortcuts
+        - added 'Offset' and 'Limit' parameter (PICA::Parser)
+        - removed 'Strict' parameter (PICA::Parser)
+        - removed special handling of empty records
 0.3.8   2008-10-08
         - added PICA::Webcat, removed PICA::Tutorial
         - moved examples to example directory

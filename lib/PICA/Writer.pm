@@ -8,7 +8,7 @@ PICA::Writer - Write and count PICA+ records and fields
 
 =head1 SYNOPSIS
 
-  my $writer = PICA::Writer->new(\*STDOUT);
+  my $writer = PICA::Writer->new( \*STDOUT );
 
   $writer->write( $record );
   $writer->write( $comment, $record );
@@ -17,6 +17,9 @@ PICA::Writer - Write and count PICA+ records and fields
 
   $writer->writefield( $field );
   $writer->reset();
+
+  $writer = PICA::Writer->new( \*STDOUT, format => 'xml' );
+  $writer = PICA::Writer->new( \*STDOUT, format => 'plain' );
 
 =head1 DESCRIPTION
 
@@ -29,53 +32,60 @@ use strict;
 use warnings;
 
 use PICA::Record;
+use PICA::XMLWriter;
 use utf8;
 use Carp;
 
 use vars qw($VERSION);
-$VERSION = "0.31";
+$VERSION = "0.35";
 
-=head1 PUBLIC METHODS
+=head1 METHODS
 
-=head2 new (file-or-handle)
+=head2 new ( [ <file-or-handle> ] [, %parameters ] )
 
-Create a new parser. Needs a reference to a file handle or a file 
-name. If no parameter is specified then the writer will not write 
-but count only.
+Create a new parser. You can path a reference to a handle or
+a file name and additional parameters. If file or handle is specified 
+then the writer will not write but count records. The only parameter
+so far is C<format> (with value C<xml>, C<normalized>, or C<plain>).
 
 =cut
 
 sub new {
-    my ($class) = shift;
-    $class = ref $class || $class;
+    my $class = shift;
+    my ($fh, %param) = @_ % 2 ? @_ : (undef, @_);
 
-    my $self = {
-        recordcounter => 0,
-        fieldcounter => 0,
-        filehandle => undef
-    };
-    bless $self, $class;
+    if (defined $param{format}) {
+        return PICA::XMLWriter->new( @_ ) if $param{format} =~ /^xml$/i;
+    }
 
-    $self->reset(@_);
-
-    return $self;
+    my $self = bless { 
+        'format' => $param{format} || "plain"
+    }, $class;
+    return $self->reset($fh);
 }
 
-=head2 reset
+=head2 reset ( [ $filename | $handle ] )
 
-Reset the writer by setting the counters to zero. 
-You may also specify a new file handler or file name.
+Reset the writer by setting the counters to zero.
+You may also specify a new handle or file name. 
+This methods returns the writer itself.
 
 =cut
 
 sub reset {
     my $self = shift;
-    my $arg = shift;
+    my $fh = shift;
 
     $self->{recordcounter} = 0;
     $self->{fieldcounter} = 0;
 
-    $self->reset_handler($arg) if $arg;
+    if ($fh) {
+        $self->reset_handler($fh);
+    } else {
+        $self->{filehandle} = undef;
+    }
+
+    $self;
 }
 
 =head2 reset_handler
@@ -86,17 +96,17 @@ Reset the file handler or file name without resetting the counters.
 
 sub reset_handler {
     my $self = shift;
-    my $arg = shift;
+    my $fh = shift;
 
-    my $ishandle = do { no strict; defined fileno($arg); };
+    my $ishandle = do { no strict; defined fileno($fh); };
     if ($ishandle) {
         $self->{filename} = "";
-        $self->{filehandle} = $arg;
+        $self->{filehandle} = $fh;
     } else {
-        $self->{filename} = $arg;
-        $self->{filehandle} = eval { local *FH; open( FH, ">$arg" ) or die; binmode FH, ":utf8"; *FH{IO}; };
+        $self->{filename} = $fh;
+        $self->{filehandle} = eval { local *FH; open( FH, ">$fh" ) or die; binmode FH, ":utf8"; *FH{IO}; };
         if ( $@ ) {
-            croak("Failed to open file for writing: $arg");
+            croak("Failed to open file for writing: $fh");
         }
     }
 }
@@ -120,7 +130,10 @@ sub write {
         my $record = shift;
 
         if (ref($record) eq 'PICA::Record') {
-            print { $self->{filehandle} } $record->normalized($comment) if $self->{filehandle};
+            my $str = $self->{format} eq 'plain' ?
+                $record->to_string() :
+                $record->normalized($comment);
+            print { $self->{filehandle} } $str if $self->{filehandle};
             $comment = "";
             $self->{recordcounter}++;
             $self->{fieldcounter} += scalar $record->all_fields;
@@ -148,10 +161,13 @@ sub writefield {
             if (ref($field) ne 'PICA::Field') {
                 croak("Cannot write object of unknown type (PICA::Field expected)!");
             } else {
-                print { $self->{filehandle} } $field->normalized() if $self->{filehandle};
+                my $str = $self->{format} eq 'plain' ?
+                    $field->to_string() :
+                    $field->normalized();
+                print { $self->{filehandle} } $str if $self->{filehandle};
                 $self->{fieldcounter}++;
             }
-	}
+    }
 }
 
 =head2 counter

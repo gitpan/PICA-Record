@@ -13,30 +13,30 @@ use PICA::Record;
 use PICA::Field;
 use PICA::Parser;
 use PICA::Writer;
-use PICA::Server;
+use PICA::Source;
 use PICA::XMLWriter;
 
 # include other packages
 use Getopt::Long;
 use Pod::Usage;
 
-my ($outfilename, $badfilename, $logfile, $inputlistfile, $dumpformat, $verbosemode);
-my ($quiet, $help, $man, $select, $selectprint, $xmlmode, $loosemode, $countmode);
+my ($outfilename, $logfile, $inputlistfile, $dumpformat, $verbosemode);
+my ($quiet, $help, $man, $select, $xmlmode, $loosemode, $countmode);
+my ($limit, $offset);
 my %fieldstat_a; # all
 my %fieldstat_e; # exist?
 my %fieldstat_r; # number of records
 
 GetOptions(
     "output:s" => \$outfilename,   # print valid records to a file
-    "bad:s" => \$badfilename,      # print invalid records to a file
     "log:s" => \$logfile,          # print messages to a file
     "files:s" => \$inputlistfile,  # read names of input files from a file
     "quiet" => \$quiet,            # suppress status messages
     "help|?" => \$help,            # show help message
     "man" => \$man,                # full documentation
-    "select:s" => \$select,        # select a special field/subfield
-    "pselect:s" => \$selectprint,
+    "select=s" => \$select,        # select a special field/subfield
     "count" => \$countmode,
+    "limit=i" => \$limit,
     "D" => \$dumpformat,
     "v" => \$verbosemode,
     #"loose" => \$loosemode,        # loose parsing
@@ -44,13 +44,6 @@ GetOptions(
 ) or pod2usage(2);
 pod2usage(1) if $help;
 pod2usage(-verbose => 2) if $man;
-
-# TODO: documentation
-if (defined $selectprint) {
-    $select = $selectprint;
-    $quiet = 1 if (!defined $logfile and $logfile ne "-");
-    $outfilename = '-' if !defined $outfilename;	
-}
 
 # Logfile
 $logfile = "-" if (!$logfile && !$quiet);
@@ -105,14 +98,20 @@ if ($select) {
     $_field_handler = \&select_field_handler;
     undef $_record_handler;
 
-    print LOG "Selecting field: $select\n" if !$quiet;
+    if (!$quiet) {
+        if ($subfield_select) {
+            print LOG "Selecting subfield: $select\n";
+        } else {
+            print LOG "Selecting field: $select\n";
+        }
+    }
 }
 
 my $remote_counter = 0;
-my $remote_empty = 0;
 
 my %options;
 %options = ('Dumpformat'=>1) if $dumpformat;
+$options{Limit} = $limit if defined $limit;
 
 # init parser
 my $parser = PICA::Parser->new(
@@ -143,7 +142,7 @@ if (@ARGV > 0) {
                 my $remote_parser;
                 if ($sruurl) {
                     print LOG "SRU query '$query' to $sruurl\n";
-                    my $server = PICA::Server->new( SRU => $sruurl );
+                    my $server = PICA::Source->new( SRU => $sruurl );
                     $remote_parser = $server->cqlQuery( $query,
                         # TODO: better pipe this to another parser (RecordParser)
                         Field => $_field_handler,
@@ -151,7 +150,7 @@ if (@ARGV > 0) {
                     );
                 } else {
                     print LOG "Z3950 query '$query' to $z3950host\n";
-                    my $server = PICA::Server->new( Z3950 => $z3950host );
+                    my $server = PICA::Source->new( Z3950 => $z3950host );
                     $remote_parser = $server->z3950Query( $query,
                         # TODO: better pipe this to another parser (RecordParser)
                         Field => $_field_handler,
@@ -159,7 +158,6 @@ if (@ARGV > 0) {
                     );
                 }
                 $remote_counter += $remote_parser->counter();
-                $remote_empty += $remote_parser->empty();
             }
         } else {
             print LOG "Reading $filename\n" if !$quiet;
@@ -185,7 +183,6 @@ $output->end_document() if $xmlmode;
 # Print summary
 # TODO: Input fields: ...
 print LOG "Input records:\t" . ($parser->counter() + $remote_counter) .
-      "\nEmpty records:\t" . ($parser->empty() + $remote_empty) .
       "\nOutput records:\t" . $output->counter() .
       "\nOutput fields:\t" . $output->fields() .
       "\n" if !$quiet;
@@ -285,12 +282,10 @@ parsepica.pl [options] [file(s) or SRU-Server(s) and queries(s)..]
  -output FILE   print all valid records to a given file ('-': STDOUT)
  -xml           output of records in XML
  -quiet         supress logging
- -select        select a specific field (no XML output possible yet)
- -pselect       select (sub)fields and print values
+ -select        select a specific field or subfield (no XML output possible yet)
  -D             read dumpfile format (no newlines)
 
 Not fully implemented yet:
- -bad FILE      print invalid records to a given file ('-': STDOUT)
  -sru SRU       fetch records via SRU. command line arguments are cql
                 statements instead of files
  -z3950         fetch records via Z39.50
@@ -336,10 +331,9 @@ Examples to implement:
 
 parsepica.pl -b errors picadata
 
-Parse records in C<picadata> and print records that are not 
-wellformed to C<errors>. The number of records will be reported.
+Parse records in C<picadata>. The number of records will be reported.
 
-parsepica.pl -out checked -bad errors -quiet picadata.gz
+parsepica.pl -out checked -quiet picadata.gz
 
 Parse records in C<picadata.gz>. Print records that are wellformed 
 to C<checked> and the other records to C<errors>. Supress any messages. 

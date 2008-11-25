@@ -10,19 +10,34 @@ use strict;
 use warnings;
 
 use PICA::Writer;
-
 use Carp;
 
-use vars qw($VERSION @ISA);
+use vars qw($VERSION $NAMESPACE @ISA);
 @ISA = qw( PICA::Writer );
-$VERSION = "0.31";
+$VERSION = "0.4";
+$NAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 =head1 METHODS
 
+=head2 new ( [ <file-or-handle> ] [, %parameters ] )
+
+Create a new XML writer.
+
+=cut
+
+sub new {
+    my $class = shift;
+    my ($fh, %params) = @_ % 2 ? @_ : (undef, @_);
+    my $self = bless { }, $class;
+    return $self->reset($fh);
+}
+
 =head2 write
 
-Write a record(s) of type L<PICA::Record>. You can also pass 
-strings that will be printed as comments.
+Write a record(s) of type L<PICA::Record>. You can also pass
+strings that will be printed as comments. Please make sure to
+have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
+to get valid PICA XML.
 
 =cut
 
@@ -52,15 +67,38 @@ sub write {
     }
 }
 
+=head2 writefield
+
+Write one ore more C<PICA::Field>.
+
+=cut
+
+sub writefield {
+    my $self = shift;
+    while (@_) {
+        my $field = shift;
+        if (ref($field) ne 'PICA::Field') {
+            croak("Cannot write object of unknown type (PICA::Field expected)!");
+        } else {
+            print { $self->{filehandle} } $field->to_xml() if $self->{filehandle};
+            $self->{fieldcounter}++;
+        }
+    }
+}
+
 =head2 start_document
 
-Write XML header and collection start element.
+Write XML header and collection start element. 
+The default namespace is set to 'info:srw/schema/5/picaXML-v1.0'.
 
 =cut
 
 sub start_document {
     my $self = shift;
-    print { $self->{filehandle} } "<?xml version='1.0' encoding='UTF-8'?>\n<collection>\n" if $self->{filehandle};
+    if ($self->{filehandle}) {
+        print { $self->{filehandle} } "<?xml version='1.0' encoding='UTF-8'?>\n";
+        print { $self->{filehandle} } "<collection xmlns='" . $NAMESPACE . "'>\n";
+    }
     $self->{in_doc} = 1;
 }
 
@@ -80,19 +118,13 @@ sub end_document {
 
 __END__
 
-=head1 TODO
-
-Support writing single fields without breaking the XML structure. 
-
-A namespace is needed (must be supplied by OCLC PICA).
-
 =head1 AUTHOR
 
 Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007, 2008 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

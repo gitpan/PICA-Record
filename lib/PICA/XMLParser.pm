@@ -49,7 +49,7 @@ require XML::Parser;
 use Carp;
 
 use vars qw($VERSION);
-$VERSION = "0.37";
+$VERSION = "0.38";
 
 =head1 PUBLIC METHODS
 
@@ -77,6 +77,9 @@ sub new {
         subfield_value => "",
         filename => "",
 
+        limit  => ($params{Limit} || 0) * 1,
+        offset  => ($params{Offset} || 0) * 1,
+
         # Handlers
         field_handler  => $params{Field} ? $params{Field} : undef,
         record_handler => $params{Record} ? $params{Record} : undef,
@@ -84,7 +87,6 @@ sub new {
         proceed => $params{Proceed} ? $params{Proceed} : 0,
 
         read_counter => 0,
-        empty => 0
     };
     bless $self, $class;
     return $self;
@@ -104,7 +106,6 @@ sub parsedata {
 
     if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
-        $self->{empty} = 0;
         $self->{read_records} = [];
     }
 
@@ -144,7 +145,6 @@ sub parsefile {
 
     if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
-        $self->{empty} = 0;
         $self->{read_records} = [];
     }
 
@@ -173,9 +173,11 @@ sub records {
    return @{ $self->{read_records} };
 }
 
-=head2 counter
+=head2 counter ( )
 
-Get the number of read records so far.
+Get the number of read records so far. Please note that the number
+of records as returned by the C<records> method may be lower because
+you may have filtered out some records.
 
 =cut
 
@@ -184,17 +186,16 @@ sub counter {
    return $self->{read_counter};
 }
 
-=head2 empty
+=head2 finished ( ) 
 
-Get the number of empty records that have been read so far.
-By default empty records are not passed to the record handler
-but counted.
+Return whether the parser will not parse any more records. This
+is the case if the number of read records is larger then the limit.
 
 =cut
 
-sub empty {
-   my $self = shift; 
-   return $self->{empty};
+sub finished {
+    my $self = shift; 
+    return $self->{limit} && $self->counter() >= $self->{limit};
 }
 
 =head1 PRIVATE HANDLERS
@@ -305,24 +306,22 @@ sub end_handler {
             push (@{$self->{fields}}, $field);
         }
     } elsif ($name eq "record") {
+        return if $self->finished();
 
-        my $record = bless {
-            _fields => [@{$self->{fields}}]
-        }, 'PICA::Record';
+        $self->{read_counter}++;
 
-        if ($self->{record_handler}) {
-            $record = $self->{record_handler}( $record );
-        } elsif (!$record->is_empty || $self->{keep_empty_records}) {
-            push @{ $self->{read_records} }, $record;
+        if (! ($self->{offset} && $self->{read_counter} < $self->{offset}) ) {
+            my $record = bless {
+                _fields => [@{$self->{fields}}]
+            }, 'PICA::Record';
+
+            if ($self->{record_handler}) {
+                $record = $self->{record_handler}( $record );
+            }
+            if ($record) {
+                push @{ $self->{read_records} }, $record;
+            }
         }
-
-
-         $self->{read_counter}++;
-         # if ( $record->is_empty() ) {
-         #   $self->{empty}++;
-            # TODO: Test whether empty records should be skipped
-         #}
-         # TODO: add to collection
 
     } elsif ($name eq "collection") {
       # TODO

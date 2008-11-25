@@ -54,7 +54,7 @@ use warnings;
 use Carp;
 
 use vars qw($VERSION @ISA @EXPORT_OK);
-$VERSION = "0.38";
+$VERSION = "0.39";
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(parsefile parsedata);
@@ -100,30 +100,24 @@ if data does not look like PICA+. By default errors are just ignored.
 
 TODO: Count errors and return the number of errors in the C<errors> method.
 
+=item Offset
+
+Skip a given number of records. Default is zero.
+
+=item Limit
+
+Stop after a given number of records. Non positive numbers equal to unlimited.
+
 =item Dumpformat
 
 If set to true, parse dumpformat (no newlines).
 
-=item Strict
-
-Stop on errors. By default a parser just omits records that could
-not been parsed. (default is false). Up to now strict_mode is only
-available in L<PICA::PlainParser>!
-/bin/bash: indent: command not found
-
-Skip empty records so they will not be passed to the record handler
-(default is false). Empty records easily occur for instance if your 
-field handler does not return anything - this is useful for performance 
-but you should not forget to set the EmptyRecords parameter. In every
-case empty records are counted with a special counter that can be read 
-with the C<empty> method. The normal counter (method C<counter>) 
-counts all records no matter if empty or not.
-
 =item Proceed
 
-By default the internal counters are reset with each call of C<parsefile> 
-and C<parsedata>. If you set the C<Proceed> parameter to a true value, 
-the same parser will be reused without reseting. 
+By default the internal counters are reset and all read records are
+forgotten before each call of C<parsefile> and C<parsedata>. 
+If you set the C<Proceed> parameter to a true value, the same parser
+will be reused without reseting counters and read record.
 
 =back
 
@@ -154,16 +148,14 @@ sub new {
 
 Parses pica data from a file, specified by a filename or filehandle.
 The default parser is L<PICA::PlainParser>. If the filename extension 
-is C<.xml> or C<.xml.gz> or the 'Format' parameter set to 'xml' then
+is C<.xml> or C<.xml.gz> or the C<Format> parameter set to C<xml> then
 L<PICA::XMLParser> is used instead. 
 
   PICA::Parser->parsefile( "data.picaplus", Field => \&field_handler );
   PICA::Parser->parsefile( \*STDIN, Field => \&field_handler, Format='XML' );
+  PICA::Parser->parsefile( "data.xml", Record => sub { ... } );
 
 See the constructor C<new> for a description of parameters.
-The C<Proceed> parameter is ignored.
-
-You cannot parse a file named C<"PICA::Parser"> by the way.
 
 =cut
 
@@ -192,19 +184,21 @@ sub parsefile {
 
 =head2 parsedata ( $data [, %params ] )
 
-Parses data from a string, array reference, or function. See
-C<parsefile> and the C<parsedata> method of L<PICA::PlainParser>
-and L<PICA::XMLParser> for a description of parameters.
-
-By default L<PICA::PlainParser> is used unless there the
-'Format' parameter set to 'xml':
+Parses data from a string, array reference, or function and returns
+the C<PICA::Parser> that was used. See C<parsefile> and the C<parsedata>
+method of L<PICA::PlainParser> and L<PICA::XMLParser> for a description
+of parameters. By default L<PICA::PlainParser> is used unless there the
+C<Format> parameter set to C<xml>.
 
   PICA::Parser->parsedata( $picastring, Field => \&field_handler );
   PICA::Parser->parsedata( \@picalines, Field => \&field_handler );
 
+  # called as a function
+  my @records = parsedata( $picastring )->records();
+
 If data is a L<PICA::Record> object, it is directly passed to the 
 record handler without re-parsing. See the constructor C<new> for 
-a description of parameters. The C<Proceed> parameter is ignored.
+a description of parameters.
 
 =cut
 
@@ -226,7 +220,7 @@ sub parsedata {
     }
 }
 
-=head2 records
+=head2 records ( )
 
 Get an array of the read records (as returned by the record handler which
 can thus be used as a filter). If no record handler was specified, records
@@ -245,9 +239,11 @@ sub records {
     return [];
 }
 
-=head2 counter
+=head2 counter ( )
 
-Get the number of read records so far.
+Get the number of read records so far. Please note that the number
+of records as returned by the C<records> method may be lower because
+you may have filtered out some records.
 
 =cut
 
@@ -259,26 +255,6 @@ sub counter {
     $counter += $self->{plainparser}->counter() if $self->{plainparser};
     $counter += $self->{xmlparser}->counter() if $self->{xmlparser};
     return $counter;
-}
-
-=head2 empty
-
-Get the number of empty records that have been read so far.
-Empty records are counted but not passed to the record handler 
-unless you specify the C<EmptyRecords> parameter. The number
-of non-empty records is the difference between C<counter> 
-and C<empty>.
-
-=cut
-
-sub empty {
-   my $self = shift; 
-   return undef if !ref $self;
-
-    my $empty = 0;
-    $empty += $self->{plainparser}->empty() if $self->{plainparser};
-    $empty += $self->{xmlparser}->empty() if $self->{xmlparser};
-    return $empty;
 }
 
 =head1 INTERNAL METHODS
@@ -337,10 +313,9 @@ __END__
 
 =head1 TODO
 
-Support multiple handlers per record?
 Better logging needs to be added, for instance a status message every n records.
-This may be implemented with multiple handlers per record (maybe piped). 
-Handling of broken records should also be improved.
+This may be implemented with multiple (piped?) handlers per record. Error handling
+of broken records should also be improved.
 
 =head1 AUTHOR
 
@@ -348,7 +323,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007, 2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007, 2008 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

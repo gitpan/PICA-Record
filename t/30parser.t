@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 28;
+use Test::More tests => 30;
 
 use PICA::Parser qw(parsefile parsedata);
 use PICA::PlainParser;
@@ -143,4 +143,12 @@ sub test_parsedata {
     ok( $visited == 2, "changed handler at call of parsefile");
     ok( $parser->counter() == 1 , "ignore Proceed when calling parsedata");
 }
+
+
+my @records;
+@records = PICA::Parser->parsefile( "t/winibwsave.example", Limit => 2 )->records();
+ok( @records == 2, "limit" );
+
+@records = PICA::Parser->parsefile( "t/winibwsave.example", Offset => 3 )->records();
+ok( @records == 3, "offset" );
 

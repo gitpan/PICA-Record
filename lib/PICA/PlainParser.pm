@@ -38,18 +38,15 @@ use PICA::Record;
 use Carp;
 
 use vars qw($VERSION);
-$VERSION = "0.38";
+$VERSION = "0.39";
 
 =head1 PUBLIC METHODS
 
 =head2 new (params)
 
 Create a new parser. See L<PICA::Parser> for a detailed description of
-the possible parameters C<Field>, C<Record>, and C<Collection>. Additionally
-you may specify the parameter C<EmptyRecords> to define that empty records
-will not be skipped but passed to the record handler and C<Strict> to abort
-when an error occured. Default behaviour is not strict: errors are reported
-to STDERR.
+the possible parameters C<Field>, C<Record>, and C<Collection>. Errors
+are reported to STDERR.
 
 =cut
 
@@ -62,20 +59,19 @@ sub new {
 
         field_handler  => defined $params{Field} ? $params{Field} : undef,
         record_handler => defined $params{Record} ? $params{Record} : undef,
-        keep_empty_records => defined $params{EmptyRecords},
         proceed => $params{Proceed} ? $params{Proceed} : 0,
+        limit  => ($params{Limit} || 0) * 1,
+        offset  => ($params{Offset} || 0) * 1,
 
         record => undef,
         read_records => [],
 
         dumpformat => $params{Dumpformat},
         lax => $params{lax} ? $params{lax} : 1,
-        strict_mode => $params{Strict},
 
         fields => [],
 
         read_counter => 0,
-        empty => 0,
         active => 0,
 
     }, $class;
@@ -87,7 +83,7 @@ sub new {
 
 Parses a file, specified by a filename or file handle. Additional possible 
 parameters are handlers (C<Field>, C<Record>, C<Collection>) and options 
-(C<Strict>, C<EmptyRecords>). If you supply a filename with extension
+(C<EmptyRecords>). If you supply a filename with extension
 C<.gz> then it is extracted while reading with C<zcat>, if the extension 
 is C<.zip> then C<unzip> is used to extract. 
 
@@ -118,7 +114,6 @@ sub parsefile {
 
     if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
-        $self->{empty} = 0;
         $self->{read_records} = [];
     }
 
@@ -131,7 +126,8 @@ sub parsefile {
         $/ = chr(0x1E);
         my $id = "";
 
-        while (my $line = readline( $self->{filehandle} ) ) {
+        while (my $line = readline( $self->{filehandle} )) {
+            last if ($self->finished());
 
             $line =~ /^\x1D?([^\s]+)/;
             if (PICA::Field::parse_pp_tag($1)) {
@@ -146,12 +142,14 @@ sub parsefile {
 
         $/ = $EOL;
     } else {
-        while (my $line = readline( $self->{filehandle} ) ) {
+        while (my $line = readline( $self->{filehandle} )) {
+            last if ($self->finished());
+
             $self->_parseline($line);
         }
     }
 
-    $self->handle_record(); # handle last record
+    $self->handle_record() unless $self->finished(); # handle last record
 
     $self;
 }
@@ -172,7 +170,6 @@ sub parsedata {
 
     if ( ! $self->{proceed} ) {
         $self->{read_counter} = 0;
-        $self->{empty} = 0;
         $self->{read_records} = [];
     }
 
@@ -205,7 +202,9 @@ sub records {
 
 =head2 counter ( )
 
-Get the number of read records so far.
+Get the number of read records so far. Please note that the number
+of records as returned by the C<records> method may be lower because
+you may have filtered out some records.
 
 =cut
 
@@ -214,17 +213,16 @@ sub counter {
    return $self->{read_counter};
 }
 
-=head2 empty ( )
+=head2 finished ( )
 
-Get the number of empty records that have been read so far.
-By default empty records are not passed to the record handler
-but counted.
+Return whether the parser will not parse any more records. This
+is the case if the number of read records is larger then the limit.
 
 =cut
 
-sub empty {
-   my $self = shift; 
-   return $self->{empty};
+sub finished {
+    my $self = shift; 
+    return $self->{limit} && $self->counter() >= $self->{limit};
 }
 
 =head1 PRIVATE METHODS
@@ -268,18 +266,19 @@ sub _parseline {
         $self->handle_record() if $self->{active};
     } elsif( $self->{lax} and ($line =~ /^[#\[]/ or $line =~ /^SET:/)) {
         # ignore comments and lines starting with "SET" or "[" (WinIBW output)
-  #  } elsif( $self->{strict_mode} and !($line =~ /^[\x1E]/)) {
         # ignore non-data fields
+        # TODO: be more specific here
     } else {
       my $field;
       eval {
           $field = PICA::Field->parse($line);
       };
-      # error parsing a field (TODO: call error handler)
+      # error parsing a field
       if($@) {
           $@ =~ s/ at .*\n//;
           my $msg = "$@ Tried to parse line: \"$line\"\n";
-          croak($msg) if $self->{strict_mode};
+          # TODO: pass this to an error handler that may abort parsing
+          # croak($msg);
           print STDERR $msg;
       } else {
         if ($self->{field_handler}) {
@@ -309,21 +308,16 @@ sub handle_record {
         _fields => [@{$self->{fields}}]
     }, 'PICA::Record';
 
-    if ( $record->is_empty() ) {
-        $self->{empty}++;
-        if (!$self->{keep_empty_records}) {
-            $self->{fields} = [];
-            return;
-        }
-    }
+    $self->{fields} = [];
+
+    return if ($self->{offset} && $self->{read_counter} < $self->{offset});
 
     if ($self->{record_handler}) {
         $record = $self->{record_handler}( $record );
-    } elsif (!$record->is_empty || $self->{keep_empty_records}) {
+    }
+    if ($record) {
         push @{ $self->{read_records} }, $record;
     }
-
-    $self->{fields} = [];
 }
 
 1;

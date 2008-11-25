@@ -8,6 +8,7 @@ PICA::Record - Perl extension for handling PICA+ records
 
 use strict;
 use integer;
+use utf8;
 
 use Exporter;
 
@@ -15,7 +16,7 @@ use vars qw($VERSION @ISA @EXPORT);
 require Exporter;
 @ISA = qw(Exporter);
 
-$VERSION = "0.38";
+$VERSION = "0.39";
 
 use POSIX qw(strftime);
 use PICA::Field;
@@ -32,19 +33,19 @@ Module for handling PICA+ records as Perl objects.
 PICA+ is the internal data format of the Local Library System (LBS) and
 the Central Library System (CBS) of OCLC, formerly PICA. Similar library
 formats are the MAchine Readable Cataloging format (MARC) and the
-Maschinelles Austauschformat für Bibliotheken (MAB). In additionally to
-PICA+ in CBS there is the catalouging format Pica3 which can losslessly 
-be convert to PICA+  and vice versa.
+Maschinelles Austauschformat für Bibliotheken (MAB). In addition to
+PICA+ in CBS there is the cataloging format Pica3 which can losslessly 
+be convert to PICA+ and vice versa.
 
 =head2 What is PICA::Record?
 
-C<PICA::Record> is a Perl package that provides an API for PICA+ record 
+B<PICA::Record> is a Perl package that provides an API for PICA+ record 
 handling. The package contains a parser interface module L<PICA::Parser>
 to parse PICA+ (L<PICA::PlainParser>) and PICA XML (L<PICA::XMLParser>).
 Corresponding modules exist to write data (L<PICA::Writer> and 
 L<PICA::XMLWriter>). PICA+ data is handled in records (L<PICA::Record>) 
 that contain fields (L<PICA::Field>). To fetch records from databases
-via SRU or Z39.50 there is the interface L<PICA::Server> and to access
+via SRU or Z39.50 there is the interface L<PICA::Source> and to access
 the experimental CBS webcat interface there is L<PICA:Webcat>.
 
 You can use C<PICA::Record> for instance to convert between PICA+ and
@@ -68,7 +69,7 @@ C<append> so you can use the constructor in the same way:
 
 If no data is given then it just returns a completely empty record. To load
 PICA records from a file, see L<PICA::Parser>, to load records from a SRU
-or Z39.50 server, see L<PICA::Server>.
+or Z39.50 server, see L<PICA::Source>.
 
 =cut
 
@@ -128,6 +129,16 @@ sub all_fields() {
     return @{$self->{_fields}};
 }
 
+=head2 f ( $tagspec(s) )
+
+Shortcut for method C<field>.
+
+=cut
+
+sub f {
+    return field(@_);
+}
+
 =head2 field ( $tagspec(s) )
 
 Returns a list of C<PICA::Field> objects with tags that
@@ -166,6 +177,16 @@ sub field {
 
     return @list;
 } # field()
+
+=head2 sf ( [ $tagspec , $subfield ] | $spec )
+
+Shortcut for method C<subfield>.
+
+=cut
+
+sub sf {
+    return subfield(@_);
+}
 
 =head2 subfield ( [ $tagspec , $subfield ] | $spec )
 
@@ -537,12 +558,13 @@ sub add_headers {
 =head2 to_string ( [ %options ] )
 
 Returns a string representation of the record for printing.
+See also L<PICA::Writer> for printing to a file or file handle.
 
 =cut
 
 sub to_string() {
-    my $self = shift;
-    my %args = @_;
+    my ($self, %args) = @_;
+
     $args{endfield} = "\n" unless defined($args{endfield});
 
     my @lines = ();
@@ -558,6 +580,8 @@ Returns record as a normalized string. Optionally adds prefix data at the beginn
 
     print $record->normalized();
     print $record->normalized("##TitleSequenceNumber 1\n");
+
+See also L<PICA::Writer> for printing to a file or file handle.
 
 =cut
 
@@ -576,7 +600,9 @@ sub normalized() {
 
 =head2 to_xml ( )
 
-Returns the record in XML format (not tested, nor official).
+Returns the record in PICA XML format. Make sure to
+have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
+to get valid PICA XML. See also L<PICA::XMLWriter>.
 
 =cut
 

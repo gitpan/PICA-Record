@@ -1,12 +1,12 @@
-package PICA::Server;
+package PICA::Source;
 
 =head1 NAME
 
-PICA::Server - Server that can be searched for PICA+ records
+PICA::Source - Data source that can be searched for PICA+ records
 
 =head1 SYNOPSIS
 
-  my $server = PICA::Server->new(
+  my $server = PICA::Source->new(
       title => "My server",
       SRU => "http://my.server.org/sru-interface.cgi"
   );
@@ -69,7 +69,7 @@ sub getPPN {
 
     my $query = "pica.ppn\%3D$ppn"; # CQL query
 
-    my $ua = LWP::UserAgent->new( agent => 'PICA::Server SRU-Client/0.1');
+    my $ua = LWP::UserAgent->new( agent => 'PICA::Source SRU-Client/0.1');
 
     my $url = $self->{SRU} . "query=" . $query . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
     # print "$url\n";
@@ -106,7 +106,7 @@ sub cqlQuery {
     my ($self, $cql, %handlers) = @_;
 
     croak("No SRU interface defined") unless $self->{SRU};
-    my $ua = LWP::UserAgent->new( agent => 'PICA::Server SRU-Client/0.1');
+    my $ua = LWP::UserAgent->new( agent => 'PICA::Source SRU-Client/0.1');
     $cql = url_encode($cql); #url_unicode_encode($cql);
 
     my $options = "";

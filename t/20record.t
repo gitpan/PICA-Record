@@ -85,7 +85,7 @@ ok( scalar $recordclone->all_fields() == 2 , "PICA::Record clone a new object" )
 $record = $testrecord;
 my @fields = $record->field("009P/03");
 ok( scalar @fields == 1 , "Record->field()" );
-@fields = $record->field("037A");
+@fields = $record->f("037A");
 ok( scalar @fields == 2 , "Record->field()" );
 @fields = $record->field("009P/03");
 ok( scalar @fields == 1 , "Record->field()" );

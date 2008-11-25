@@ -6,7 +6,7 @@ gbvholdings - get holding information in GBV union catalog for a given ISBN
 
 =cut
 
-use PICA::Server;
+use PICA::Source;
 
 my $isbn = shift @ARGV;
 
@@ -15,7 +15,7 @@ if ($isbn) {
     my $cql = 'pica.isb=' . $isbn;
     my $url = "http://gso.gbv.de/sru/DB=2.1/";
 
-    my $server = PICA::Server->new( SRU => $url );
+    my $server = PICA::Source->new( SRU => $url );
     $server->cqlQuery( $cql,
         Record => sub { 
             $record = shift;

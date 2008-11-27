@@ -72,7 +72,7 @@ sub getPPN {
     my $ua = LWP::UserAgent->new( agent => 'PICA::Source SRU-Client/0.1');
 
     my $url = $self->{SRU} . "query=" . $query . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
-    # print "$url\n";
+    #print "$url\n";
 
     my $request = HTTP::Request->new(GET => $url);
     my $response = $ua->request($request);

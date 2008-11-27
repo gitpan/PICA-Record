@@ -19,7 +19,7 @@ use vars qw($VERSION @ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(parse_pp_tag);
 
-$VERSION = "0.4a";
+$VERSION = "0.4b";
 
 =head1 NAME
 
@@ -256,21 +256,21 @@ Remember that there can be more than one subfield of a given code!
 sub subfield {
     my $self = shift;
     my $codes = join('',@_);
-    $codes = '.' if $codes eq '';
-    $codes = "[$codes]";
+    $codes = $codes eq '' ? '.' : "[$codes]";
     $codes = qr/$codes/;
 
     my @list;
     my @data = @{$self->{_subfields}};
-    while ( defined( my $code = shift @data ) ) {
-        if ($code =~ $codes) {
-            if ( wantarray() ) {
-                push( @list, shift @data );
-            } else {
-                return shift @data; 
-            }
+
+    for ( my $i=0; $i < @data; $i+=2 ) {
+        next unless $data[$i] =~ $codes;
+        if ( wantarray() ) {
+            push( @list,  $data[$i+1] );
+        } else {
+            return $data[$i+1];
         }
     }
+
     return @list;
 }
 
@@ -293,15 +293,17 @@ This shows the subfields from a 021A field:
 sub content {
     my $self = shift;
     my $codes = join('',@_);
-    $codes = '.' if $codes eq '';
-    $codes = "[$codes]";
+    $codes = $codes eq '' ? '.' : "[$codes]";
     $codes = qr/$codes/;
 
     my @list;
     my @data = @{$self->{_subfields}};
-    while ( defined( my $code = shift @data ) ) {
-        push( @list, [$code, shift @data] ) if $code =~ $codes;
+
+    for ( my $i=0; $i < @data; $i+=2 ) {
+        next unless $data[$i] =~ $codes;
+        push( @list, [ $data[$i], $data[$i+1] ] );
     }
+
     return @list;
 }
 

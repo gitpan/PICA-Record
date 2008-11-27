@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 22;
+use Test::More tests => 26;
 
 use PICA::Field;
 
@@ -36,6 +36,20 @@ ok( $field->normalized() eq $normalized, 'new with picamarc');
 $field = PICA::Field->new("028A","9" => "117060275");
 $field->add( "8" => "Martin Schrettinger", "d" => "Martin", "a" => "Schrettinger" );
 ok( $field->normalized() eq $normalized, 'add method');
+
+ok ( ! $field->sf('1tix') , 'non existing subfield');
+
+my @all = $field->sf();
+ok ( @all == 4, 'get all subfields (sf)');
+
+@all = $field->content();
+ok ( @all == 4, 'get all subfields (content)');
+
+my @c = $field->content();
+#use Data::Dumper;
+#print STDERR Dumper(@c) . "\n";
+ok ( $c[1][0] eq '8' && $c[1][1] eq "Martin Schrettinger", 'get all subfields as array');
+
 
 my $fcopy = $field->copy(); #PICA::Field->new( $field );
 isa_ok( $fcopy, 'PICA::Field');

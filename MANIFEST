@@ -24,6 +24,7 @@ t/20record.t
 t/30parser.t
 t/35XMLParser.t
 t/42SRUSearchParser.t
+t/50store.t
 t/kochbuch.pica
 t/record.xml
 t/searchRetrieveResponse-1.xml
@@ -31,4 +32,5 @@ t/winibwsave.example
 t/dumpformat
 t/holdings.t
 t/bgb.example
+t/bib.pica
 META.yml                                 Module meta-data (added by MakeMaker)

@@ -16,7 +16,7 @@ use vars qw($VERSION @ISA @EXPORT);
 require Exporter;
 @ISA = qw(Exporter);
 
-$VERSION = "0.391";
+$VERSION = "0.4";
 
 use POSIX qw(strftime);
 use PICA::Field;
@@ -88,10 +88,14 @@ sub new() {
     if ($first) {
         if ($#_ == 0 and ref(\$first) eq 'SCALAR') {
             my @lines = split("\n", $first);
+            my @l2 = split("\x1E", $first);
+            if (@l2 > @lines) { # normalized
+                @lines = @l2;
+            }
 
             foreach my $line (@lines) {
-                $line =~ s/^\x1D//; # start of record
-                next if !$line;     # skip empty lines
+                $line =~ s/^\x1D//;         # start of record
+                next if $line =~ /^\s*$/;   # skip empty lines
 
                 my $field = PICA::Field->parse($line);
                 push (@{$self->{_fields}}, $field) if $field;

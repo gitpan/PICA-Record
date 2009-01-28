@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 27;
+use Test::More tests => 28;
 
 use PICA::Field;
 use PICA::Record;
@@ -124,3 +124,11 @@ isa_ok( $record, 'PICA::Record' );
 # test bibliographic()
 my $main = $record->main_record();
 isa_ok( $main, 'PICA::Record' );
+
+### parse normalized by autodetection
+open PICA, "t/bib.pica"; # TODO: bib.pica is bytestream, not character-stream!
+$normalized = join( "", <PICA> );
+close PICA;
+
+$r = PICA::Record->new( $normalized );
+is( $r->all_fields(), 24, "detect and read normalized pica" );

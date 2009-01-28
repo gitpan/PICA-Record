@@ -1,5 +1,8 @@
 package PICA::Store;
 
+use strict;
+use utf8;
+
 =head1 NAME
 
 PICA::Store - CRUD interface to a PICA::Record storage
@@ -9,8 +12,8 @@ PICA::Store - CRUD interface to a PICA::Record storage
  use PICA::Store;
 
  $server = PICA::Store->new( SOAP => $baseurl, $userkey, $password, $dbsid );
- %result = $server->retrieve( $id );
- %result = $server->insert( $record );
+ %result = $server->get( $id );
+ %result = $server->create( $record );
  %result = $server->update( $id, $record, $version );
  %result = $server->delete( $id );
 
@@ -25,58 +28,52 @@ found at http://cws.gbv.de/ws/webcatws.wsdl.
 
 =cut
 
-use strict;
+
 use PICA::Record;
 use SOAP::Lite;
 #use SOAP::Lite +trace => 'debug';
 use Carp qw(croak);
 
-use utf8;
-
-use vars qw($VERSION);
-$VERSION = "0.39";
+our $VERSION = "0.4";
 
 =head1 METHODS
 
-=head2 new ( $type => $url, $userkey, $password, $dbsid [, $language ] )
+=head2 new ( $type => $url, %params )
 
-Create a new Server. You must specify a connection type and base URL, 
-userkey, password, and database id. The optional language (default: "en")
-for error messagescan be one of "de", "en", "fr" or "ne".
+Create a new Server. You must specify at least a connection type and a base URL.
+Other parameters are userkey, password, and database id. The optional language 
+parameter (default: "en") for error messagescan be one of "de", "en", "fr" or "ne".
 
-Currently only the connection type "SOAP" is supported.
-
-TODO: add SOAP error handling.
+Currently only the connection type "SOAP" is supported with limited error handling.
 
 =cut
 
 sub new {
-    my ($class, $type, $baseurl, $userkey, $password, $dbsid, $language) = @_;
+    my ($class, %params) = @_;
 
-    croak unless $type eq 'SOAP'; # currently there is only SOAP
-    croak "Missing SOAP base url" unless defined $baseurl;
-    croak "Missing dbsid" unless defined $dbsid;
-    croak "Missing userkey" unless defined $userkey;
-    croak "Missing password" unless defined $password;
+    croak "Missing SOAP base url" unless defined $params{SOAP};
+    croak "Missing dbsid" unless defined $params{dbsid};
+    croak "Missing userkey" unless defined $params{userkey};
+    croak "Missing password" unless defined $params{password};
 
-    $language = "en" unless $language;
+    $params{language} = "en" unless $params{language};
 
-    my $soap = SOAP::Lite->on_fault(sub{})->proxy($baseurl); # TODO: on_fault
+    my $soap = SOAP::Lite->on_fault(sub{})->proxy($params{SOAP}); # TODO: on_fault
     $soap->uri("http://www.gbv.de/schema/webcat-1.0")->encoding('utf8');
 
     bless {
         'soap' => $soap,
-        'dbsid' => SOAP::Data->name( "dbsid" => $dbsid )->type("string"),
-        'userkey' => SOAP::Data->name( "userkey" => $userkey )->type("string"), #->attr( { 'type' => 'xsd:string', } ),
-        'password' => SOAP::Data->name( "password" => $password )->type("string"),
-        'language' => SOAP::Data->name( "language" => $language )->type("string"),
-        'format' => SOAP::Data->name( "format" => "PP" )->type("string"),
-        'rectype_t' => SOAP::Data->name( "rectype" => "T" )->type("string"),
-        'rectype_a' => SOAP::Data->name( "rectype" => "A" )->type("string") #->attr( { 'type' => 'xsd:string', } )
+        'dbsid' => SOAP::Data->name( "dbsid" => $params{dbsid} )->type("string"),
+        'userkey' => SOAP::Data->name( "userkey" => $params{userkey} )->type("string"),
+        'password' => SOAP::Data->name( "password" => $params{password} )->type("string"),
+        'language' => SOAP::Data->name( "language" => $params{language} )->type("string"),
+        'format' => SOAP::Data->name( "format" => "pp" )->type("string"),
+        'rectype_title' => SOAP::Data->name( "rectype" => "title" )->type("string"),
+        'rectype_entry' => SOAP::Data->name( "rectype" => "entry" )->type("string")
     }, $class;
 }
 
-=head2 retrieve ( $id )
+=head2 get ( $id )
 
 Retrieve a record by ID.
 
@@ -86,16 +83,16 @@ element contains a L<PICA::Record> object.
 
 =cut
 
-sub retrieve {
+sub get {
     my ($self, $id) = @_;
-    my %result = $self->_soap_query( "retrieve", 
+    my %result = $self->_soap_query( "get", 
         SOAP::Data->name( "ppn" => $id )->type("string")
     );
     $result{record} = PICA::Record->new($result{record}) if $result{record};
     return %result;
 }
 
-=head2 insert ( $record )
+=head2 create ( $record )
 
 Insert a new record. The parameter must be a L<PICA::Record> object.
 
@@ -104,20 +101,19 @@ with 'id', 'record', and 'version'.
 
 =cut
 
-sub insert {
-    my ($self, $record, $rectype) = @_;
-    croak('insert needs a PICA::Record object') unless ref($record) eq 'PICA::Record';
-    if (!defined $rectype or ($rectype ne 'A' and $rectype ne 'T')) {
-        my $sf = $record->subfield('002@$0');
-        $rectype = 'A' if ($sf && $sf =~ /^T/); # authority record
-    }
-    $rectype = $self->{ $rectype eq 'A' ? "rectype_a" : "rectype_t" };
+sub create {
+    my ($self, $record) = @_;
+    croak('create needs a PICA::Record object') unless ref($record) eq 'PICA::Record';
+    my $rectype = $self->{"rectype_title"};
+
+    my $sf = $record->subfield('002@$0');
+    $rectype = $self->{"rectype_entry"} if ($sf && $sf =~ /^T/); # authority record
 
     # Don't ask me why SOAP::Lite breaks utf8
     my $recorddata = $record->to_string();
     utf8::decode($recorddata);
 
-    return $self->_soap_query( "insert",
+    return $self->_soap_query( "create",
         SOAP::Data->name( "record" )->type("string")->value( $recorddata ),
         $rectype
     );
@@ -126,7 +122,7 @@ sub insert {
 =head2 update ( $id, $record, $version )
 
 Update a record by ID, updated record (of type L<PICA::Record>),
-and version (of a previous retrieve, insert, or update command).
+and version (of a previous get, create, or update command).
 
 Returns a hash with either 'errorcode' and 'errormessage'
 or a hash with 'id', 'record', and 'version'.
@@ -170,7 +166,7 @@ sub delete {
 Internal method to prepare, perform and evaluate a SOAP request. Returns
 a hash with 'errorcode' and 'errormessage' or a hash with 'dbsid', 'id',
 'record', and 'version' depending on the type of query. Do not directly
-call this method!
+call this method.
 
 =cut
 
@@ -208,4 +204,14 @@ sub _soap_query {
 
 1;
 
-__END__
+=head1 AUTHOR
+
+Jakob Voss C<< <jakob.voss@gbv.de> >>
+
+=head1 LICENSE
+
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+
+This library is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself, either Perl version 5.8.8 or, at
+your option, any later version of Perl 5 you may have available.

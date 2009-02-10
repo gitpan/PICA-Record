@@ -1,3 +1,9 @@
+0.43    2009-02-10
+        - updated webcat.pl command line client
+        - added example pica2bibtex.pl
+        - added limit parameter to PICA::Record->field / subfield
+        - parsers and PICA::Record->new now support IO::Handle
+        - added unAPI support in PICA::Source
 0.4     2009-01-28
         - improved support of normalized PICA+ parsing
         - updated PICA::Store

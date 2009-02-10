@@ -79,13 +79,13 @@ sub new {
     return $self;
 }
 
-=head2 parsefile ( $file-or-handle [, options] )
+=head2 parsefile ( $filename | $handle )
 
-Parses a file, specified by a filename or file handle. Additional possible 
-parameters are handlers (C<Field>, C<Record>, C<Collection>) and options 
-(C<EmptyRecords>). If you supply a filename with extension
-C<.gz> then it is extracted while reading with C<zcat>, if the extension 
-is C<.zip> then C<unzip> is used to extract. 
+Parses a file, specified by a filename or file handle or L<IO::Handle>.
+Additional possible parameters are handlers (C<Field>, C<Record>,
+C<Collection>) and options (C<EmptyRecords>). If you supply a filename
+with extension C<.gz> then it is extracted while reading with C<zcat>,
+if the extension is C<.zip> then C<unzip> is used to extract.
 
 This method temporarily changes the end-of-line character if parsing in
 dumpformat is requested.
@@ -93,23 +93,25 @@ dumpformat is requested.
 =cut
 
 sub parsefile {
-    my ($self, $arg) = @_;
+    my ($self, $file) = @_;
 
-    my $ishandle = do { no strict; defined fileno($arg); };
-    if ($ishandle) {
-        $self->{filename} = scalar( $arg );
-        $self->{filehandle} = $arg;
+    if (ref($file) eq "GLOB" or eval { $file->isa("IO::Handle") }) {
+        $self->{filename} = "";
+        $self->{filehandle} = $file;
     } else {
-        $self->{filename} = $arg;
+        $self->{filename} = $file;
 
-        my $fh = $arg;
+        my $fh = $file;
         $fh = "zcat $fh |" if $fh =~ /\.gz$/;
         $fh = "unzip -p $fh |" if $fh =~ /\.zip$/;
 
-        $self->{filehandle} = eval { local *FH; open( FH, $fh ) or die; *FH{IO}; };
-        if ( $@ ) {
-            croak("Error opening file '$arg'");
-        }
+        $self->{filehandle} = eval { 
+            my $handle; open( $handle, "<", $fh )
+                or die "failed to open file $file"; 
+            # binmode $fh, ":utf8"; ?
+            $handle;
+        };
+        croak($@) if $@;
     }
 
     if ( ! $self->{proceed} ) {

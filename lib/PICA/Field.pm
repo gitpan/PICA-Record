@@ -19,7 +19,7 @@ use vars qw($VERSION @ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(parse_pp_tag);
 
-$VERSION = "0.4b";
+$VERSION = "0.43";
 
 =head1 NAME
 
@@ -523,8 +523,14 @@ sub to_string() {
 
 =head2 to_xml ( )
 
-Returns the field in XML format. Make sure to have set the 
-default namespace ('info:srw/schema/5/picaXML-v1.0')
+Returns the field in XML format:
+
+  <field tag='....' occurrence='..'>
+    <subfield code='.'>....</subfield>
+    ...
+  </field>
+
+Make sure to have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
 to get valid PICA XML. See also L<PICA::XMLWriter>.
 
 =cut
@@ -585,8 +591,6 @@ __END__
 
 =head1 SEE ALSO
 
-See the "SEE ALSO" section for L<PICA::Record>.
-
 This module is mainly based on L<MARC::Field> by Andy Lester.
 
 =head1 AUTHOR
@@ -595,7 +599,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007, 2008 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

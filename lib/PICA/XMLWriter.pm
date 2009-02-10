@@ -12,10 +12,9 @@ use warnings;
 use PICA::Writer;
 use Carp;
 
-use vars qw($VERSION $NAMESPACE @ISA);
-@ISA = qw( PICA::Writer );
-$VERSION = "0.4";
-$NAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
+use base qw( PICA::Writer );
+our $VERSION = "0.43";
+our $NAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 =head1 METHODS
 
@@ -32,7 +31,7 @@ sub new {
     return $self->reset($fh);
 }
 
-=head2 write
+=head2 write ( [ $comment, ] $record [, $record ... ] )
 
 Write a record(s) of type L<PICA::Record>. You can also pass
 strings that will be printed as comments. Please make sure to
@@ -61,15 +60,17 @@ sub write {
             next if !$record;
             $comment .= "\n" if $comment;
             $comment .= '# ' . join("\n# ", split(/\n/,$record)) . "\n";
+            $comment =~ s/--//g;
+            print "<!-- $comment -->";
         } else {
             croak("Cannot write object of unknown type (PICA::Record expected)!");
         }
     }
 }
 
-=head2 writefield
+=head2 writefield ( $field [, $field ... ] )
 
-Write one ore more C<PICA::Field>.
+Write one ore more C<PICA::Field> in XML, based on C<PICA::Field->to_xml>.
 
 =cut
 

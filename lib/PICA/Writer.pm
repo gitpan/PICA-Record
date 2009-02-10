@@ -4,8 +4,6 @@ package PICA::Writer;
 
 PICA::Writer - Write and count PICA+ records and fields
 
-=cut
-
 =head1 SYNOPSIS
 
   my $writer = PICA::Writer->new( \*STDOUT );
@@ -30,14 +28,13 @@ This module contains a simple class to write and count PICA+ records and fields
 
 use strict;
 use warnings;
+use utf8;
 
 use PICA::Record;
 use PICA::XMLWriter;
-use utf8;
 use Carp;
 
-use vars qw($VERSION);
-$VERSION = "0.35";
+our $VERSION = "0.43";
 
 =head1 METHODS
 
@@ -88,7 +85,7 @@ sub reset {
     $self;
 }
 
-=head2 reset_handler
+=head2 reset_handler ( )
 
 Reset the file handler or file name without resetting the counters.
 
@@ -111,7 +108,7 @@ sub reset_handler {
     }
 }
 
-=head2 write
+=head2 write ( [ $comment, ] $record [, $record ... ] )
 
 Write a record(s) of type L<PICA::Record>. You may specify strings before a record
 that will be used as a comment:
@@ -147,7 +144,7 @@ sub write {
     }
 }
 
-=head2 writefield
+=head2 writefield ( $field [, $field ... ] )
 
 Write one ore more C<PICA::Field>. Please be aware that the output will not 
 be wellformed PICA+ if you have not written a start record marker before!
@@ -170,7 +167,7 @@ sub writefield {
     }
 }
 
-=head2 counter
+=head2 counter ( )
 
 Returns the number of written records.
 
@@ -181,7 +178,7 @@ sub counter {
     return $self->{recordcounter};
 }
 
-=head2 fields
+=head2 fields ( )
 
 Returns the number of written fields.
 
@@ -192,7 +189,7 @@ sub fields {
     return $self->{fieldcounter};
 }
 
-=head2 name
+=head2 name ( )
 
 Returns the name of the writer (usually the filename) if defined.
 

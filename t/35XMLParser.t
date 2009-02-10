@@ -2,12 +2,13 @@
 
 use strict;
 
-use Test::More tests => 11;
+use Test::More tests => 13;
 
 BEGIN {
     use_ok( 'PICA::XMLParser' );
     use_ok( 'PICA::Parser' );
     use_ok( 'PICA::Record' );
+    use_ok( 'IO::File' );
 }
 
 use PICA::XMLParser;
@@ -41,9 +42,15 @@ PICA::Parser->parsefile( $xmlfile, Record => \&handle_record );
 isa_ok( $record, 'PICA::Record');
 undef $record;
 
+# parse from IO::Handle
+use IO::File;
+my $fh = new IO::File("< $xmlfile");
+PICA::Parser->parsefile( $fh, Record => \&handle_record, Format => "xml" );
+isa_ok( $record, 'PICA::Record');
+
 # Use PICA::Parser and parse from file handle with XML data
 open XML, $xmlfile;
-PICA::Parser->parsefile( \*XML, Record => \&handle_record, Format=>"xml" );
+PICA::Parser->parsefile( \*XML, Record => \&handle_record, Format => "xml" );
 isa_ok( $record, 'PICA::Record');
 undef $record;
 close XML;
@@ -51,8 +58,8 @@ close XML;
 # parse from a function
 open XML, $xmlfile;
 PICA::Parser->parsedata( sub {return readline XML;}, 
-	Record => \&handle_record,
-	Format => "xml"
+    Record => \&handle_record,
+    Format => "xml"
 );
 isa_ok( $record, 'PICA::Record' );
 undef $record;

@@ -15,7 +15,8 @@ PICA::Parser - Parse PICA+ data
 
   PICA::Parser->parsedata( $string_or_function ,
       Field => \&field_handler,
-      Record => \&record_handler
+      Record => \&record_handler,
+      Limit => 5
   );
 
   $parser = PICA::Parser->new(
@@ -26,7 +27,7 @@ PICA::Parser - Parse PICA+ data
   $parser->parsedata( $picadata );
   print $parser->counter() . " records read.\n";
 
-You can also export C<parsedata> and C<parsefile>:
+You can also C<parsedata> and C<parsefile>:
 
   use PICA::Parser qw(parsefile);
 
@@ -39,6 +40,10 @@ Both function return the parser, so you can use
 constructs like
 
   my @records = parsefile($filename)->records();
+
+To parse just one record, use
+
+  my ($record) = parsefile($filename, Limit => 1)->records();
 
 =head1 DESCRIPTION
 
@@ -53,11 +58,9 @@ use warnings;
 
 use Carp;
 
-use vars qw($VERSION @ISA @EXPORT_OK);
-$VERSION = "0.39";
-
-@ISA = qw(Exporter);
-@EXPORT_OK = qw(parsefile parsedata);
+use base qw( Exporter );
+our $VERSION = "0.43";
+our @EXPORT_OK = qw(parsefile parsedata);
 
 =head1 CONSTRUCTOR
 
@@ -323,7 +326,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007, 2008 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

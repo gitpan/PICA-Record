@@ -29,7 +29,7 @@ ok ( %config, "read webcat config file");
 exit unless %config;
 
 my $webcat = PICA::Store->new(
-    SOAP => $config{baseurl},
+    SOAP => $config{soap},
     userkey => $config{userkey},
     password => $config{password},
     dbsid => $config{dbsid}

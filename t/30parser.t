@@ -2,13 +2,14 @@
 
 use strict;
 
-use Test::More tests => 30;
+use Test::More tests => 34;
 
 use PICA::Parser qw(parsefile parsedata);
 use PICA::PlainParser;
 use PICA::XMLParser;
 use PICA::Record;
 use PICA::Writer;
+use IO::File;
 
 my $record;
 my $plainpicafile = "t/kochbuch.pica";
@@ -16,6 +17,17 @@ sub handle_record { $record = shift; }
 
 # parse from a file
 PICA::Parser->parsefile( $plainpicafile, Record => \&handle_record );
+isa_ok( $record, 'PICA::Record' );
+undef $record;
+
+# parse via PICA::Record->new
+$record = PICA::Record->new( new IO::File("< $plainpicafile") );
+isa_ok( $record, 'PICA::Record' );
+is( scalar $record->all_fields(), 26, "read via IO::File" );
+undef $record;
+
+open (F, "<", $plainpicafile);
+$record = PICA::Record->new( \*F );
 isa_ok( $record, 'PICA::Record' );
 undef $record;
 
@@ -66,6 +78,12 @@ $parser = PICA::Parser->new( Dumpformat => 1, Record => sub { $writer->write( sh
 $parser->parsefile("t/dumpformat");
 ok( $writer->counter() == 3, 'parse dumpformat (records)' );
 ok( $writer->fields() == 92, 'parse dumpformat (fields)' );
+
+# parse from IO::Handle
+use IO::File;
+my $fh = new IO::File("< t/dumpformat");
+$parser->parsefile( $fh, Record => \&handle_record );
+ok( $writer->counter() == 3, 'parse dumpformat (records)' );
 
 # check proceed mode and non-proceed mode
 $parser = PICA::Parser->new( Proceed => 0 );

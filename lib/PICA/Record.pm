@@ -10,16 +10,13 @@ use strict;
 use integer;
 use utf8;
 
-use Exporter;
-
-use vars qw($VERSION @ISA @EXPORT);
-require Exporter;
-@ISA = qw(Exporter);
-
-$VERSION = "0.4";
+use base qw(Exporter);
+our $VERSION = "0.43";
 
 use POSIX qw(strftime);
 use PICA::Field;
+use PICA::Parser;
+use Scalar::Util qw(looks_like_number);
 use Carp qw(croak);
 
 =head1 DESCRIPTION
@@ -34,31 +31,66 @@ PICA+ is the internal data format of the Local Library System (LBS) and
 the Central Library System (CBS) of OCLC, formerly PICA. Similar library
 formats are the MAchine Readable Cataloging format (MARC) and the
 Maschinelles Austauschformat für Bibliotheken (MAB). In addition to
-PICA+ in CBS there is the cataloging format Pica3 which can losslessly 
+PICA+ in CBS there is the cataloging format Pica3 which can losslessly
 be convert to PICA+ and vice versa.
 
 =head2 What is PICA::Record?
 
-B<PICA::Record> is a Perl package that provides an API for PICA+ record 
+B<PICA::Record> is a Perl package that provides an API for PICA+ record
 handling. The package contains a parser interface module L<PICA::Parser>
 to parse PICA+ (L<PICA::PlainParser>) and PICA XML (L<PICA::XMLParser>).
-Corresponding modules exist to write data (L<PICA::Writer> and 
-L<PICA::XMLWriter>). PICA+ data is handled in records (L<PICA::Record>) 
+Corresponding modules exist to write data (L<PICA::Writer> and
+L<PICA::XMLWriter>). PICA+ data is handled in records (L<PICA::Record>)
 that contain fields (L<PICA::Field>). To fetch records from databases
 via SRU or Z39.50 there is the interface L<PICA::Source> and to access
-the experimental CBS webcat interface there is L<PICA:Webcat>.
+a record store via CWS webcat interface there is L<PICA::Store>.
 
-You can use C<PICA::Record> for instance to convert between PICA+ and
+You can use PICA::Record for instance to convert between PICA+ and
 PicaXML, to process PICA+ records that you have downloaded with WinIBW 
 or download records in native format via SRU or Z39.50.
 
-To get an insight to the API have a look at the examples 
-(directory C<examples>) and tests (directory C<t>)
-included in this package.
+=head1 SYNOPSIS
+
+To get a deeper insight to the API have a look at the documentation,
+the examples (directory C<examples>) and tests (directory C<t>). Here
+are some additional two-liners:
+
+  # create a field
+  my $field = PICA::Field->new(
+    "028A", "9" => "117060275", "d" => "Martin", "a" => "Schrettinger" );
+
+  # create a record and add some fields (note that fields can be repeated)
+  my $record = PICA::Record->new();
+  $record->append( '044C', 'a' => "Perl", '044C', 'a' => "Programming", );
+
+  # read all records from a file
+  my @records = PICA::Parser->new->parsefile( $filename )->records();
+
+  # read one record from a string
+  my ($record) =  PICA::Parser->parsedata( $picadata, Limit => 1)->records();
+
+  # get two fields of a record
+  my ($f1, $f2) = $record->field( 2, "028B/.." );
+
+  # extract some subfield values
+  my ($given, $surname) = ($record->sf(1,'028A$d'), $record->sf(1,'028A$a'));
+
+  # read records from a STDIN and print to STDOUT of field 003@ exists
+  PICA::Parser->new->parsefile( \STDIN, Record => sub {
+      my $record = shift;
+      print $record->to_string() if $record->field('003@');
+  });
+
+  # print record in normalized format
+  print $record->normalized();
+
+  # write some records in XML to a file
+  my $writer = PICA::Writer->new( $filename, format => 'xml' );
+  $writer->write( @records );
 
 =head1 METHODS
 
-=head2 new ( [ ...data... ] )
+=head2 new ( [ ...data... | $filehandle ] )
 
 Base constructor for the class. A single string will be parsed line by 
 line into L<PICA::Field> objects, empty lines and start record markers will 
@@ -69,11 +101,18 @@ C<append> so you can use the constructor in the same way:
 
 If no data is given then it just returns a completely empty record. To load
 PICA records from a file, see L<PICA::Parser>, to load records from a SRU
-or Z39.50 server, see L<PICA::Source>.
+or Z39.50 server, see L<PICA::Source>. 
+
+If you provide a file handle or L<IO::Handle>, the first record is read from
+it. The following lines have same result:
+
+  $record = PICA::Record->new( IO::Handle->new("< $filename") );
+  ($record) = PICA::Parser->parsefile( $filename, Limit => 1 )->records(),
+  open (F, "<", $plainpicafile); $record = PICA::Record->new( \*F ); close F;
 
 =cut
 
-sub new() {
+sub new {
     my $class = shift;
     my $first = $_[0];
 
@@ -100,6 +139,11 @@ sub new() {
                 my $field = PICA::Field->parse($line);
                 push (@{$self->{_fields}}, $field) if $field;
             }
+        } elsif (ref($first) eq 'GLOB' or eval { $first->isa("IO::Handle") }) {
+            PICA::Parser->parsefile( $first, Limit => 1, Field => sub {
+                my $field = shift;
+                push (@{$self->{_fields}}, $field);
+            });
         } else {
             $self->append(@_);
         }
@@ -117,7 +161,7 @@ Creates a clone of this record by copying all fields.
 sub copy {
     my $self = shift;
     return PICA::Record->new( $self );
-} # copy()
+}
 
 =head2 all_fields ( )
 
@@ -133,17 +177,7 @@ sub all_fields() {
     return @{$self->{_fields}};
 }
 
-=head2 f ( $tagspec(s) )
-
-Shortcut for method C<field>.
-
-=cut
-
-sub f {
-    return field(@_);
-}
-
-=head2 field ( $tagspec(s) )
+=head2 field ( [ $limit, ] $tagspec(s) )
 
 Returns a list of C<PICA::Field> objects with tags that
 match the field specifier, or in scalar context, just
@@ -156,16 +190,22 @@ You may specify multiple tags and use regular expressions.
   my @fields = $record->field("02..");
   my @fields = $record->field("039[B-E]");
 
+If the first parameter is an integer, it is used as a limitation
+of response size, for instance two get only two fields:
+
+  my ($f1, $f2) = $record->field( 2, "028B/.." );
+
 =cut
 
 my %field_regex;
 
 sub field {
     my $self = shift;
+    my $limit = looks_like_number($_[0]) ? shift : 0;
     my @specs = @_;
 
+    return unless @specs;
     my @list = ();
-    return @list if !@specs;
 
     for my $tag ( @specs ) {
         my $regex = _get_regex($tag);
@@ -173,8 +213,10 @@ sub field {
         for my $maybe ( $self->all_fields ) {
             if ( $maybe->tag() =~ $regex ) {
                 return $maybe unless wantarray;
-
                 push( @list, $maybe );
+                if ($limit > 0) {
+                    return @list unless --$limit;
+                }
             }
         }
     }
@@ -182,17 +224,17 @@ sub field {
     return @list;
 } # field()
 
-=head2 sf ( [ $tagspec , $subfield ] | $spec )
+=head2 f ( $tagspec(s) )
 
-Shortcut for method C<subfield>.
+Shortcut for method C<field>.
 
 =cut
 
-sub sf {
-    return subfield(@_);
+sub f {
+    return field(@_);
 }
 
-=head2 subfield ( [ $tagspec , $subfield ] | $spec )
+=head2 subfield ( [ $limit, ] [ $tagspec , $subfield ] | $spec )
 
 Shortcut method for getting just the subfield's value of a tag (see L<PICA::Field>). 
 Returns a list of subfield values that match or in scalar context, just the 
@@ -217,29 +259,54 @@ You may also use wildcards like in C<field()> and the C<subfield()> method of L<
   my @values = $pica->subfield('005A', '0a');    # 005A$0 and 005A$a
   my @values = $pica->subfield('005[AIJ]', '0'); # 005A$0, 005I$0, and 005J$0
 
+If the first parameter is an integer, it is used as a limitation
+of response size, for instance two get only two fields:
+
+  my ($f1, $f2) = $record->subfield( 2, '028B/..$a' );
+
 =cut
 
 sub subfield {
-    my ($self, $tag, $subfield) = @_;
+    my $self = shift;
+    my $limit = looks_like_number($_[0]) ? shift : 0;
+    my ($tag, $subfield) = @_;
     return unless defined $tag;
 
-    ($tag, $subfield) = split(/\$/,$tag) if (!defined $subfield and index($tag, '$') > 3);
+    ($tag, $subfield) = split(/\$/,$tag) unless defined $subfield;
     croak("No subfields specified in '$tag'") if !defined $subfield;
-
-    my @fields = $self->field($tag) or return;
 
     my @list = ();
 
-    foreach my $f (@fields) {
-        my @s = $f->subfield($subfield);
-        if (@s) {
-            return shift @s unless wantarray;
-            push( @list, @s );
+    my $tag_regex = _get_regex($tag);
+    for my $f ( $self->all_fields ) {
+        if ( $f->tag() =~ $tag_regex ) {
+            my @s = $f->subfield($subfield);
+            if (@s) {
+                return shift @s unless wantarray;
+                if ($limit > 0) {
+                    if (scalar @s >= $limit) {
+                        push @list, @s[0..($limit-1)];
+                        return @list;
+                    }
+                    $limit -= scalar @s;
+                }
+                push( @list, @s );
+            }
         }
     }
 
     return @list;
 } # subfield()
+
+=head2 sf ( [ $tagspec , $subfield ] | $spec )
+
+Shortcut for method C<subfield>.
+
+=cut
+
+sub sf {
+    return subfield(@_);
+}
 
 =head2 values ( )
 
@@ -392,8 +459,8 @@ sub delete_fields {
 Appends one or more fields to the end of the record. Parameters can be
 L<PICA::Field> objects or parameters that are passed to C<PICA::Field->new>.
 
-    my $field = PICA::Field->new('037A','a' => 'My note');
-    $record->append($field);
+    my $field = PICA::Field->new( '037A','a' => 'My note' );
+    $record->append( $field );
 
 is equivalent to
 
@@ -402,7 +469,7 @@ is equivalent to
 You can also append multiple fields with one call:
 
     my $field = PICA::Field->new('037A','a' => 'First note');
-    $record->append($field, '037A','a' => 'Second note');
+    $record->append( $field, '037A','a' => 'Second note' );
 
     $record->append(
         '037A', 'a' => '1st note',
@@ -413,12 +480,12 @@ Please not that passed L<PICA::Field> objects are not be copied but directly
 used:
 
     my $field = PICA::Field->new('037A','a' => 'My note');
-    $record->append($field);
-    $field->replace('a' => 'Your note'); # Also changes $record's field!
+    $record->append( $field );
+    $field->replace( 'a' => 'Your note' ); # Also changes $record's field!
 
 You can avoid this by cloning fields:
 
-    $record->append($field->copy());
+    $record->append( $field->copy() );
 
 You can also append copies of all fields of another record:
 
@@ -515,50 +582,6 @@ sub sort() {
     @{$self->{_fields}} = sort {$a->tag() cmp $b->tag()} @{$self->{_fields}};
 }
 
-
-=head2 add_headers ( [ %options ] )
-
-Add header fields to a L<PICA::Record>. You must specify two named parameters
-(eln and satus). This method is experimental. There is no test whether the 
-header fields already exist.
-
-=cut
-
-sub add_headers {
-    my ($self, %params) = @_;
-
-    my $eln = $params{eln};
-    croak("add_headers needs an ELN") unless defined $eln;
-
-    my $status = $params{status};
-    croak("add_headers needs status") unless defined $status;
-
-    my @timestamp = defined $params{timestamp} ? @{$params{timestamp}} : localtime;
-    # TODO: Test timestamp
-
-    my $hdate = strftime ("$eln:%d-%m-%g", @timestamp);
-    my $htime = strftime ("%H:%M:%S", @timestamp);
-
-    # Pica3: 000K - Unicode-Kennzeichen
-    $self->append( "001U", '0' => 'utf8' );
-
-    # PICA3: 0200 - Kennung und Datum der Ersterfassung
-    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0200.pdf
-    $self->append( "001A", '0' => $hdate );
-
-    # PICA3: 0200 - Kennung und Datum der letzten Aenderung
-    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0210.pdf
-    $self->append( "001B", '0' => $hdate, 't' => $htime );
-
-    # PICA3: 0230 - Kennung und Datum der Statusaenderung
-    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0230.pdf
-    $self->append( "001D", '0' => $hdate );
-
-    # PCIA3: 0500 - Bibliographische Gattung und Status
-    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0500.pdf
-    $self->append( "002@", '0' => $status );
-}
-
 =head2 to_string ( [ %options ] )
 
 Returns a string representation of the record for printing.
@@ -621,11 +644,54 @@ sub to_xml {
     return join("", @xml) . "\n";
 }
 
+=head2 add_headers ( [ %options ] )
+
+Add header fields to a L<PICA::Record>. You must specify two named parameters
+(eln and satus). This method is experimental. There is no test whether the 
+header fields already exist.
+
+=cut
+
+sub add_headers {
+    my ($self, %params) = @_;
+
+    my $eln = $params{eln};
+    croak("add_headers needs an ELN") unless defined $eln;
+
+    my $status = $params{status};
+    croak("add_headers needs status") unless defined $status;
+
+    my @timestamp = defined $params{timestamp} ? @{$params{timestamp}} : localtime;
+    # TODO: Test timestamp
+
+    my $hdate = strftime ("$eln:%d-%m-%g", @timestamp);
+    my $htime = strftime ("%H:%M:%S", @timestamp);
+
+    # Pica3: 000K - Unicode-Kennzeichen
+    $self->append( "001U", '0' => 'utf8' );
+
+    # PICA3: 0200 - Kennung und Datum der Ersterfassung
+    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0200.pdf
+    $self->append( "001A", '0' => $hdate );
+
+    # PICA3: 0200 - Kennung und Datum der letzten Aenderung
+    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0210.pdf
+    $self->append( "001B", '0' => $hdate, 't' => $htime );
+
+    # PICA3: 0230 - Kennung und Datum der Statusaenderung
+    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0230.pdf
+    $self->append( "001D", '0' => $hdate );
+
+    # PCIA3: 0500 - Bibliographische Gattung und Status
+    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0500.pdf
+    $self->append( "002@", '0' => $status );
+}
+
 =head1 INTERNAL METHDOS
 
 =head2 _get_regex ( $reg )
 
-Get a complied regular expression
+Get a complied regular expression.
 
 =cut
 
@@ -645,25 +711,13 @@ sub _get_regex {
 
 1;
 
-__END__
-
 =head1 SEE ALSO
 
 At CPAN there are the modules L<MARC::Record>, L<MARC>, and L<MARC::XML> 
 for MARC records. The deprecated module L<Net::Z3950::Record> had a 
-subclass L<Net::Z3950::Record::MAB> for MAB records (you should now 
-use L<Net::Z3950::ZOOM>).
-
-=head1 TODO
-
-The to_string, to_xml, and normalized methods should be integrated
-into L<PICA::Writer> or vice versa.
-
-Full Unicode support may need some more testing and bugfixes.
-
-The SRU interface to fetch PICA+ records is still limited.
-
-More points are in the file TODO in this distribution.
+subclass L<Net::Z3950::Record::MAB> for MAB records. You should now 
+better use L<Net::Z3950::ZOOM> which is also needed if you query Z39.50
+servers with L<PICA::Source>.
 
 =head1 AUTHOR
 
@@ -671,7 +725,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007,2008 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

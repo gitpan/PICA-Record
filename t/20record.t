@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 28;
+use Test::More tests => 35;
 
 use PICA::Field;
 use PICA::Record;
@@ -30,28 +30,28 @@ isa_ok( $record, 'PICA::Record');
 
 # append a field
 $record->append($field);
-ok( $record->normalized() eq $normalized, 'Record->normalized()');
+is( $record->normalized(), $normalized, 'Record->normalized()');
 
 # directly pass a field to new()
 $record = PICA::Record->new($field);
-ok( $record->normalized() eq $normalized, 'Record->normalized()');
+is( $record->normalized(), $normalized, 'Record->normalized()');
 
 # directly pass data to new() for parsing
 $record = PICA::Record->new( $normalized );
-ok( $record->normalized() eq $normalized, 'Record->normalized()');
+is( $record->normalized(), $normalized, 'Record->normalized()');
 
 # directly pass data to new()
 $record = PICA::Record->new("028A","9" => "117060275", "d" => "Martin", "a" => "Schrettinger");
-ok( $record->normalized() eq $normalized, 'Record->normalized()');
+is( $record->normalized(), $normalized, 'Record->normalized()');
 
 # use append to add fields
 $record = PICA::Record->new();
 $record->append("028A","9" => "117060275", "d" => "Martin", "a" => "Schrettinger");
-ok( $record->normalized() eq $normalized, 'Record->normalized()');
+is( $record->normalized(), $normalized, 'Record->normalized()');
 
 $record = PICA::Record->new();
 $record->append($field, '037A','a' => 'First note');
-ok( scalar $record->all_fields() == 2 , "Record->append()" );
+is( scalar $record->all_fields(), 2 , "Record->append()" );
 
 $record = PICA::Record->new();
 $record->append(
@@ -60,60 +60,76 @@ $record->append(
         PICA::Field->new('037A','a' => 'Second note'),
         '037A','a' => 'Third note',
 );
-ok( scalar $record->all_fields() == 4 , "Record->append()" );
+is( scalar $record->all_fields(), 4 , "Record->append()" );
 
 # use the same object of provided
-ok ( $record->subfield('028A','9') eq '117060275', "Field value" );
+is( $record->subfield('028A','9'), '117060275', "Field value" );
 $field->update('9'=>'12345');
-ok ( $record->subfield('028A','9') eq '12345', "Field value modified" );
+is( $record->subfield('028A','9'), '12345', "Field value modified" );
 
 $record = PICA::Record->new();
 $record->append(
     '037A', 'a' => '1st note',
     '037A', 'a' => '2nd note',
 );
-ok( scalar $record->all_fields() == 2 , "Record->append()" );
+is( scalar $record->all_fields(), 2 , "Record->append()" );
 
 # clone constructor
 my $recordclone = PICA::Record->new($record);
-ok( scalar $recordclone->all_fields() == 2 , "PICA::Record clone constructor" );
+is( scalar $recordclone->all_fields(), 2 , "PICA::Record clone constructor" );
 $record->delete_fields('037A');
-ok( scalar $recordclone->all_fields() == 2 , "PICA::Record clone a new object" );
+is( scalar $recordclone->all_fields(), 2 , "PICA::Record clone a new object" );
 
 
 ### field()
 $record = $testrecord;
 my @fields = $record->field("009P/03");
-ok( scalar @fields == 1 , "Record->field()" );
+is( scalar @fields, 1 , "Record->field()" );
 @fields = $record->f("037A");
-ok( scalar @fields == 2 , "Record->field()" );
+is( scalar @fields, 2 , "Record->field()" );
 @fields = $record->field("009P/03");
-ok( scalar @fields == 1 , "Record->field()" );
+is( scalar @fields, 1 , "Record->field()" );
 @fields = $record->field("0...(/..)?");
-ok( scalar @fields == 4 , "Record->field()" );
+is( scalar @fields, 4 , "Record->field()" );
 @fields = $record->all_fields();
-ok( scalar @fields == 5 , "Record->field()" );
+is( scalar @fields, 5 , "Record->field()" );
+@fields = $record->field(2, "0...(/..)?");
+is( scalar @fields, 2, "Record->field() with limit" );
+@fields = $record->field(0, "0...(/..)?");
+is( scalar @fields, 4 , "Record->field() with limit zero" );
+@fields = $record->f(1, "037A");
+is( scalar @fields, 1 , "Record->field() with limit one" );
+@fields = $record->f(99, "037A");
+is( scalar @fields, 2 , "Record->field() with limit high" );
+
+### subfield()
+is( $record->subfield('009P/03$0'), "http", "subfield()");
+my @s = $record->subfield(0,'....$a');
+is( scalar @s, 3, "subfield() with limit zero");
+@s = $record->subfield(2,'....$a');
+is( scalar @s, 2, "subfield() with limit");
+
 
 ### delete_fields
 my $r = PICA::Record->new($record);
 $r->delete_fields("037A");
-ok( scalar $r->all_fields() == 3 , "delete()" );
+is( scalar $r->all_fields(), 3 , "delete()" );
 
 $r = PICA::Record->new($record);
 $r->delete_fields("0...");
-ok( scalar $r->all_fields() == 2 , "delete()" );
+is( scalar $r->all_fields(), 2 , "delete()" );
 
 $r = PICA::Record->new($record);
 $r->delete_fields("0..@","111@");
-ok( scalar $r->all_fields() == 3 , "delete()" );
+is( scalar $r->all_fields(), 3 , "delete()" );
 
 ### replace fields
 $record = $testrecord;
 $record->replace('010@', PICA::Field->new('010@', 'a' => 'ger'));
-ok( $record->subfield('010@$a') eq 'ger', "replace field");
+is( $record->subfield('010@$a'), 'ger', "replace field");
 
 $record->replace('010@', 'a' => 'fra');
-ok( $record->subfield('010@$a') eq 'fra', "replace field");
+is( $record->subfield('010@$a'), 'fra', "replace field");
 
 ### parse WinIBW output
 use PICA::Parser;

@@ -2,7 +2,7 @@ package PICA::Source;
 
 =head1 NAME
 
-PICA::Source - Data source that can be searched for PICA+ records
+PICA::Source - Data source that can be queried for PICA+ records
 
 =head1 SYNOPSIS
 
@@ -11,6 +11,8 @@ PICA::Source - Data source that can be searched for PICA+ records
       SRU => "http://my.server.org/sru-interface.cgi"
   );
   my $record = $server->getPPN('1234567890');
+
+Instead or in addition to SRU you can use Z39.50 and unAPI.
 
 =cut
 
@@ -21,16 +23,15 @@ use PICA::PlainParser;
 use PICA::SRUSearchParser;
 use LWP::UserAgent;
 
-use vars qw($VERSION);
-$VERSION = "0.38";
+our $VERSION = "0.40";
 
 =head1 METHODS
 
 =head2 new
 
 Create a new Server. You can specify a title with C<title> and
-the URL base of an SRU interface with C<SRU> or a Z39.50 server
-with C<Z3950>.
+the URL base of an SRU interface with C<SRU>, a Z39.50 server
+with C<Z3950> and an unAPI base url with C<unAPI>.
 
 =cut
 
@@ -42,6 +43,7 @@ sub new {
         title => $params{title} ? $params{title} : "Untitled",
         SRU => $params{SRU} ? $params{SRU} : undef,
         Z3950 => $params{Z3950} ? $params{Z3950} : undef,
+        unAPI => $params{unAPI} ? $params{unAPI} : undef,
         user => $params{user} ? $params{user} : undef,
         password => $params{password} ? $params{password} : undef,
         prev_record => undef
@@ -54,40 +56,56 @@ sub new {
     bless $self, $class;
 }
 
-=head2 getPPN
+=head2 getPPN ( $ppn )
 
 Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
-Only available for SRU at the moment.
+Only available for SRU and unAPI at the moment. If both are specified, unAPI
+is used.
 
 =cut
 
 sub getPPN {
     my ($self, $ppn) = @_;
 
-    croak("No SRU interface defined") unless $self->{SRU};
+    croak("No SRU or unAPI interface defined") unless $self->{SRU} or $self->{unAPI};
     croak("Not a PPN: $ppn") unless $ppn =~ /^[0-9]+[0-9Xx]$/;
 
-    my $query = "pica.ppn\%3D$ppn"; # CQL query
+    my $ua = LWP::UserAgent->new( agent => 'PICA::Source/'.$PICA::Source::VERSION);
 
-    my $ua = LWP::UserAgent->new( agent => 'PICA::Source SRU-Client/0.1');
-
-    my $url = $self->{SRU} . "query=" . $query . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
-    #print "$url\n";
-
-    my $request = HTTP::Request->new(GET => $url);
-    my $response = $ua->request($request);
-    if ($response->is_success) {
-        my $xml = $response->decoded_content();
-        # create SRUSearchParser only once because of memory leak
-        if (!$self->{sruparser}) {
-            $self->{sruparser} = PICA::SRUSearchParser->new(
-                Record=>sub { $self->{prev_record} = shift; }
-            );
+    if ( $self->{unAPI} ) {
+        my $url = $self->{unAPI}
+                . ((index($self->{unAPI},'?') == -1) ? '?' : '&')
+                . "format=pp&id=ppn:$ppn";
+        print STDERR "URL: $url\n";
+        my $request = HTTP::Request->new(GET => $url);
+        my $response = $ua->request($request);
+        if ($response->is_success) {
+            my $data = $response->decoded_content();
+            my $record = PICA::Record->new( $data );
+            return $record;
+        } else {
+            croak("unAPI request failed: $url");
         }
-        $self->{sruparser}->parseResponse($xml);
-        return $self->{prev_record};
     } else {
-        croak("SRU Request failed: $url");
+        my $query = "pica.ppn\%3D$ppn"; # CQL query
+
+        my $url = $self->{SRU} . "query=" . $query . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
+
+        my $request = HTTP::Request->new(GET => $url);
+        my $response = $ua->request($request);
+        if ($response->is_success) {
+            my $xml = $response->decoded_content();
+            # create SRUSearchParser only once because of memory leak
+            if (!$self->{sruparser}) {
+                $self->{sruparser} = PICA::SRUSearchParser->new(
+                    Record=>sub { $self->{prev_record} = shift; }
+                );
+            }
+            $self->{sruparser}->parseResponse($xml);
+            return $self->{prev_record};
+        } else {
+            croak("SRU Request failed: $url");
+        }
     }
 }
 
@@ -106,7 +124,7 @@ sub cqlQuery {
     my ($self, $cql, %handlers) = @_;
 
     croak("No SRU interface defined") unless $self->{SRU};
-    my $ua = LWP::UserAgent->new( agent => 'PICA::Source SRU-Client/0.1');
+    my $ua = LWP::UserAgent->new( agent => 'PICA::Source/' . $PICA::Source::VERSION);
     $cql = url_encode($cql); #url_unicode_encode($cql);
 
     my $options = "";
@@ -238,9 +256,8 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-

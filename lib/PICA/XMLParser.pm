@@ -48,8 +48,7 @@ require XML::Parser;
 
 use Carp;
 
-use vars qw($VERSION);
-$VERSION = "0.38";
+our $VERSION = "0.38";
 
 =head1 PUBLIC METHODS
 
@@ -134,9 +133,9 @@ sub parsedata {
     $self;
 }
 
-=head2 parsefile (data)
+=head2 parsefile ( $filename | $handle )
 
-Parses data from a file or filehandle.
+Parses data from a file or filehandle or L<IO::Handle>.
 
 =cut
 
@@ -153,8 +152,8 @@ sub parsefile {
         Handlers => $self->_getHandlers
     );
 
-    if (ref($file) eq 'GLOB') {
-    	$parser->parse($file);
+    if (ref($file) eq 'GLOB' or eval { $file->isa("IO::Handle") }) {
+        $parser->parse($file);
     } else {
         $parser->parsefile($file);
     }
@@ -397,7 +396,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

@@ -6,6 +6,7 @@ examples/parsepica.pl
 examples/gbvholdings.pl
 examples/z3950.pl
 examples/webcat.pl
+examples/pica2bibtex.pl
 lib/PICA/Field.pm
 lib/PICA/Parser.pm
 lib/PICA/PlainParser.pm
@@ -25,6 +26,7 @@ t/30parser.t
 t/35XMLParser.t
 t/42SRUSearchParser.t
 t/50store.t
+t/minimal.pica
 t/kochbuch.pica
 t/record.xml
 t/searchRetrieveResponse-1.xml

@@ -11,7 +11,9 @@ PICA::Store - CRUD interface to a PICA::Record storage
 
  use PICA::Store;
 
- $server = PICA::Store->new( SOAP => $baseurl, $userkey, $password, $dbsid );
+ $server = PICA::Store->new(
+    SOAP => $baseurl, 
+    userkey => $userkey, password => $password, dbsid => $dbsid );
  %result = $server->get( $id );
  %result = $server->create( $record );
  %result = $server->update( $id, $record, $version );
@@ -34,7 +36,7 @@ use SOAP::Lite;
 #use SOAP::Lite +trace => 'debug';
 use Carp qw(croak);
 
-our $VERSION = "0.4";
+our $VERSION = "0.41";
 
 =head1 METHODS
 
@@ -204,13 +206,18 @@ sub _soap_query {
 
 1;
 
+=head1 SEE ALSO
+
+The webcat.pl script in the examples directory of this distribution provides 
+a simple command line client based on PICA::Store.
+
 =head1 AUTHOR
 
-Jakob Voss C<< <jakob.voss@gbv.de> >>
+Jakob Voß <jakob.voss@gbv.de>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

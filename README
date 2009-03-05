@@ -3,12 +3,12 @@ PICA::Record
 
 PICA::Record is a Perl module for handling PICA+ records. There are
 classes and methods for reading in, manipulating, and outputting
-bibliographic records in PICA+. There is also an XML representation
-of PICA+ and a simple SRU interface to PICA systems for downloading
-PICA+ records.
+bibliographic records in PICA+ in different ways. This also includes
+an XML representation of PICA+ and connection to some interfaces 
+to PICA systems for downloading or uploading PICA+ records.
 
-For a more detailed introduction have a look at the example scripts,
-the tests in t directory and above all the source documentation.
+For a more detailed introduction have a look at the documentation,
+at example scripts, and tests in this distribution.
 
 INSTALLATION
 
@@ -19,9 +19,10 @@ To install this module use the CPAN module or type the following:
    make test
    make install
 
-You may also just point you PERL5LIB environment variable to
-the 'lib' directory of this distribution. To directly call the 
-scripts in the 'bin' directory, you may add it to your PATH.
+You may also just point you PERL5LIB environment variable to the 'lib'
+directory of this distribution. The script in the 'script' directory
+should automatically be installed to a path where you can directly 
+run them. Otherwise you may add the directory to your PATH.
 
 DEPENDENCIES
 

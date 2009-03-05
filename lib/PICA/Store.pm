@@ -1,23 +1,33 @@
 package PICA::Store;
 
-use strict;
-use utf8;
-
 =head1 NAME
 
-PICA::Store - CRUD interface to a PICA::Record storage
+PICA::Store - CRUD interface to a L<PICA::Record> storage
+
+=cut
+
+use strict;
+use utf8;
+our $VERSION = "0.45";
 
 =head1 SYNOPSIS
 
- use PICA::Store;
+  use PICA::Store;
 
- $server = PICA::Store->new(
+  # connect to store
+  $server = PICA::Store->new(
     SOAP => $baseurl, 
-    userkey => $userkey, password => $password, dbsid => $dbsid );
- %result = $server->get( $id );
- %result = $server->create( $record );
- %result = $server->update( $id, $record, $version );
- %result = $server->delete( $id );
+    userkey => $userkey, password => $password, dbsid => $dbsid 
+  );
+
+  # better get connection details from config file
+  $server = PICA::Store->new( config => "myconf.conf" );
+  $server = PICA::Store->new( config => undef ); # autodetect
+
+  %result = $server->get( $id );
+  %result = $server->create( $record );
+  %result = $server->update( $id, $record, $version );
+  %result = $server->delete( $id );
 
 =head1 DESCRIPTION
 
@@ -33,16 +43,18 @@ found at http://cws.gbv.de/ws/webcatws.wsdl.
 
 use PICA::Record;
 use SOAP::Lite;
+use Config::Simple;
 #use SOAP::Lite +trace => 'debug';
 use Carp qw(croak);
 
-our $VERSION = "0.41";
-
 =head1 METHODS
 
-=head2 new ( $type => $url, %params )
+=head2 new ( %params )
 
-Create a new Server. You must specify at least a connection type and a base URL.
+Create a new Server. You must specify at least a connection type and a
+base URL or the config file parameter to read this settings from a config
+file. Defined parameters override settings in a config file.
+
 Other parameters are userkey, password, and database id. The optional language 
 parameter (default: "en") for error messagescan be one of "de", "en", "fr" or "ne".
 
@@ -53,25 +65,47 @@ Currently only the connection type "SOAP" is supported with limited error handli
 sub new {
     my ($class, %params) = @_;
 
+    if (exists $params{config}) {
+        my %config;
+        my $cfile = $params{config};
+        if (!(defined $cfile)) {
+            if ($ENV{WEBCAT_CONF}) {
+                $cfile = $ENV{WEBCAT_CONF};
+            } elsif ( -f "./webcat.conf" ) {
+                $cfile = "./webcat.conf";
+            }
+        }
+        croak("config file (webcat.conf) not found") unless $cfile;
+        Config::Simple->import_from( $cfile, \%config)
+            or croak( "Failed to parse config file $cfile" );
+        while (my ($key, $value) = each %config) {
+            $key =~ s/default.//; # remove default namespace
+            # TODO: add support of blocks/namespaces in config file
+            $params{$key} = $value unless defined $params{$key};
+        }
+    }
+
     croak "Missing SOAP base url" unless defined $params{SOAP};
     croak "Missing dbsid" unless defined $params{dbsid};
     croak "Missing userkey" unless defined $params{userkey};
-    croak "Missing password" unless defined $params{password};
 
     $params{language} = "en" unless $params{language};
 
     my $soap = SOAP::Lite->on_fault(sub{})->proxy($params{SOAP}); # TODO: on_fault
     $soap->uri("http://www.gbv.de/schema/webcat-1.0")->encoding('utf8');
 
+    my $password = $params{password};
+    $password = "" unless defined $password;
+
     bless {
         'soap' => $soap,
-        'dbsid' => SOAP::Data->name( "dbsid" => $params{dbsid} )->type("string"),
-        'userkey' => SOAP::Data->name( "userkey" => $params{userkey} )->type("string"),
-        'password' => SOAP::Data->name( "password" => $params{password} )->type("string"),
-        'language' => SOAP::Data->name( "language" => $params{language} )->type("string"),
-        'format' => SOAP::Data->name( "format" => "pp" )->type("string"),
-        'rectype_title' => SOAP::Data->name( "rectype" => "title" )->type("string"),
-        'rectype_entry' => SOAP::Data->name( "rectype" => "entry" )->type("string")
+        'dbsid' => SOAP::Data->name( "dbsid" )->type( string => $params{dbsid} ),
+        'userkey' => SOAP::Data->name( "userkey" )->type( string => $params{userkey} ),
+        'password' => SOAP::Data->name( "password" )->type( string => $password ),
+        'language' => SOAP::Data->name( "language" )->type( string => $params{language} ),
+        'format' => SOAP::Data->name( "format" )->type( string => "pp" ),
+        'rectype_title' => SOAP::Data->name( "rectype" )->type( string => "title" ),
+        'rectype_entry' => SOAP::Data->name( "rectype" )->type( string => "entry" )
     }, $class;
 }
 
@@ -88,7 +122,7 @@ element contains a L<PICA::Record> object.
 sub get {
     my ($self, $id) = @_;
     my %result = $self->_soap_query( "get", 
-        SOAP::Data->name( "ppn" => $id )->type("string")
+        SOAP::Data->name( "ppn" )->type( string => $id )
     );
     $result{record} = PICA::Record->new($result{record}) if $result{record};
     return %result;
@@ -111,12 +145,10 @@ sub create {
     my $sf = $record->subfield('002@$0');
     $rectype = $self->{"rectype_entry"} if ($sf && $sf =~ /^T/); # authority record
 
-    # Don't ask me why SOAP::Lite breaks utf8
     my $recorddata = $record->to_string();
-    utf8::decode($recorddata);
 
     return $self->_soap_query( "create",
-        SOAP::Data->name( "record" )->type("string")->value( $recorddata ),
+        SOAP::Data->name( "record" )->type( string => $recorddata ),
         $rectype
     );
 }
@@ -135,14 +167,12 @@ sub update {
     my ($self, $id, $record, $version) = @_;
     croak('update needs a PICA::Record object') unless ref($record) eq 'PICA::Record';
 
-    # Don't ask me why SOAP::Lite breaks utf8
     my $recorddata = $record->to_string();
-    utf8::decode($recorddata);
 
     return $self->_soap_query( "update",
-        SOAP::Data->name( "ppn" => $id )->type("string"),
-        SOAP::Data->name( "record" )->type("string")->value( $recorddata ),
-        SOAP::Data->name( "version" => $version )->type("string")
+        SOAP::Data->name("ppn")->type( string => $id ),
+        SOAP::Data->name("record")->type( string => $recorddata ),
+        SOAP::Data->name("version")->type( string => $version )
     );
 }
 
@@ -157,7 +187,7 @@ Returns a hash with either 'errorcode' and 'errormessage' or a hash with 'id'.
 sub delete {
     my ($self, $id) = @_;
     return $self->_soap_query( "delete", 
-        SOAP::Data->name( "ppn" => $id )->type("string")
+        SOAP::Data->name( "ppn" )->type( string  => $id )
     );
 }
 
@@ -168,7 +198,7 @@ sub delete {
 Internal method to prepare, perform and evaluate a SOAP request. Returns
 a hash with 'errorcode' and 'errormessage' or a hash with 'dbsid', 'id',
 'record', and 'version' depending on the type of query. Do not directly
-call this method.
+call this method!
 
 =cut
 
@@ -176,11 +206,8 @@ sub _soap_query {
     my ($self, $operation, @params) = @_;
 
     push @params, $self->{"format"} unless $operation eq "delete"; 
-    push @params,
-        $self->{dbsid},
-        $self->{userkey},
-        $self->{password},
-        $self->{language};
+    push @params, ($self->{dbsid}, $self->{userkey}, $self->{language});
+    push @params, $self->{password} if defined $self->{password};
 
     my $response = $self->{soap}->$operation( @params );
 
@@ -196,7 +223,8 @@ sub _soap_query {
         my $rbody = $response->body->{response};
         if (defined $rbody) {
             $result{id} = $rbody->{ppn} if defined $rbody->{ppn};
-            $result{record} = PICA::Record->new($rbody->{record}) if defined $rbody->{record};
+            $result{record} = PICA::Record->new($rbody->{record}) 
+		if defined $rbody->{record};
             $result{version} = $rbody->{version} if defined $rbody->{version};
         }
     }
@@ -208,12 +236,12 @@ sub _soap_query {
 
 =head1 SEE ALSO
 
-The webcat.pl script in the examples directory of this distribution provides 
-a simple command line client based on PICA::Store.
+This distribution contains the command line client C<picawebcat> based on
+PICA::Store.
 
 =head1 AUTHOR
 
-Jakob Voß <jakob.voss@gbv.de>
+Jakob Voss <jakob.voss@gbv.de>
 
 =head1 LICENSE
 

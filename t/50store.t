@@ -6,57 +6,52 @@ use Test::More qw(no_plan);
 
 use PICA::Record;
 use PICA::Store;
+use IO::File;
+use Data::Dumper;
 
-if (!$ENV{WEBCAT_TEST_CONFIG}) {
-    diag("Skipping tests of PICA::Store, set WEBCAT_TEST_CONFIG to point to config file");
+if (!$ENV{WEBCAT_CONF_TEST}) {
+    diag("Skipping tests of PICA::Store, set WEBCAT_CONF_TEST to point to config file");
     ok(1);
     exit;
 }
 
-my %config;
-if ( open F, ("<".$ENV{WEBCAT_TEST_CONFIG}) ) {
-    while(<F>) {
-        chomp;
-        next if /^\s*#/;
-        if ( /^\s*([a-z_]+)\s*=\s*([^ ]+)/ ) {
-            $config{$1} = $2;
-        }
-    }
-}
-close F;
+my $webcat = PICA::Store->new( config => $ENV{WEBCAT_CONF_TEST} );
+my (@records, %result, $record);
 
-ok ( %config, "read webcat config file");
-exit unless %config;
-
-my $webcat = PICA::Store->new(
-    SOAP => $config{soap},
-    userkey => $config{userkey},
-    password => $config{password},
-    dbsid => $config{dbsid}
-);
-
-my $record = PICA::Record->new("002@ \$0Aau\n021A \$aDas Kapital\n028A \$dKarl\$aMarx");
-
-
-my %result = $webcat->create($record);
-ok ($result{record} && $result{id}, "createRecord");
-
-%result = $webcat->get( $result{id} );
-ok ($result{record} && $result{id}, "getRecord");
-
+# use a simple record
 $record = PICA::Record->new("002@ \$0Aau\n021A \$aDas zweite Kapital\n028A \$dKarl\$aMarx");
-%result = $webcat->update($result{id}, $record, $result{version});
-ok ($result{record} && $result{id}, "updateRecord");
+push @records, $record;
 
-#%result = $webcat->update($result{id}, $testrecord);
-#ok ($result{record} && $result{id}, "updateRecord without version");
+# use a record with Unicode
+$record = PICA::Record->new( IO::File->new("t/minimal.pica") );
+$record->delete_fields('003@'); # remove PPN
+push @records, $record;
 
-%result = $webcat->delete($result{id});
-ok ($result{id}, "deleteRecord");
+while( @records ) {
+    $record = shift @records;
+    #print $record->to_string() . "\n";
 
-%result = $webcat->get($result{id});
+    my %result = $webcat->create($record);
+    ok ($result{record} && $result{id}, "createRecord") 
+        or print "#" . $result{errormessage} . "\n";
+    my $id = $result{id};
+
+    %result = $webcat->get( $id );
+    ok ($result{record} && $result{id}, "getRecord");
+    my $version = $result{version};
+
+    if (@records) {
+        $record = $records[0];
+        %result = $webcat->update( $id, $record, $version );
+        ok ($result{record} && $result{id}, "updateRecord") 
+            or print "#" . $result{errormessage} . "\n";
+        #%result = $webcat->update( $id, $testrecord);
+        #ok ($result{record} && $result{id}, "updateRecord without version");
+    }
+
+    %result = $webcat->delete( $id );
+    is ( $result{id}, $id, "deleteRecord");
+}
+
+%result = $webcat->get( 123 );
 ok ($result{errorcode}, "getRecord of non-existing id");
-
-# TODO: check unicode safety
-
-ok(1);

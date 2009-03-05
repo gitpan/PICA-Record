@@ -1,3 +1,10 @@
+0.45    2009-03-05
+        - added and improved error handlers in PICA::PlainParser
+        - added support of webcat.conf config file in PICA::Store
+        - started to fix XML and Unicode output mess
+        - fixed bugs in PICA::Field (to_xml and fields without subfields)
+        - improved parsepica and picawebcat scripts (installed as executables)
+        - temporarily disabled Limit and Offset parameter
 0.43    2009-02-10
         - updated webcat.pl command line client
         - added example pica2bibtex.pl

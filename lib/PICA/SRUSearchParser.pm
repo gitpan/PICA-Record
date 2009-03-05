@@ -7,13 +7,11 @@ PICA::SRUSearchParser - Parse a SRU response in XML and extract PICA+ records.
 =cut
 
 use strict;
-use warnings;
-use Carp;
 
+our $VERSION = "0.41";
+
+use Carp qw(croak);
 use PICA::XMLParser;
-
-use vars qw($VERSION);
-$VERSION = "0.4";
 
 =head1 METHODS
 
@@ -200,7 +198,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

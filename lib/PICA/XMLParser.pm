@@ -4,6 +4,16 @@ package PICA::XMLParser;
 
 PICA::XMLParser - Parse PICA+ XML
 
+=cut
+
+use strict;
+use utf8;
+our $VERSION = "0.42";
+
+use base qw(Exporter);
+use Carp qw(croak);
+our @EXPORT_OK = qw(parsefile parsedata);
+
 =head1 SYNOPSIS
 
   my $rcount = 1;
@@ -38,21 +48,14 @@ slightly change in the future.
 
 =cut
 
-use strict;
-use warnings;
-
 use PICA::Field;
 use PICA::Record;
-
 require XML::Parser;
-
-use Carp;
-
-our $VERSION = "0.38";
+use Carp qw(croak);
 
 =head1 PUBLIC METHODS
 
-=head2 new
+=head2 new ( [ %params ] )
 
 Creates a new Parser. See L<PICA::Parser> for a description of 
 parameters to define handlers (Field and Record).
@@ -74,7 +77,6 @@ sub new {
         occurrence => "",
         subfield_code => "",
         subfield_value => "",
-        filename => "",
 
         limit  => ($params{Limit} || 0) * 1,
         offset  => ($params{Offset} || 0) * 1,
@@ -101,36 +103,45 @@ a C<PICA::XMLParser> object that was created with C<new()>.
 =cut
 
 sub parsedata {
-    my ($self, $data) = @_;
+    my $self = shift;
 
-    if ( ! $self->{proceed} ) {
-        $self->{read_counter} = 0;
-        $self->{read_records} = [];
+    if ( ref($self) eq "PICA::XMLParser" ) { # called as a method
+      my $data = shift;
+
+      if ( ! $self->{proceed} ) {
+          $self->{read_counter} = 0;
+          $self->{read_records} = [];
+      }
+
+      if ( ref($data) eq 'PICA::Record' ) {
+          # TODO: reparse
+      }
+
+      my $parser = new XML::Parser(
+          Handlers => $self->_getHandlers
+      );
+
+      if (ref($data) eq 'ARRAY') {
+        $data = join('',@{$data})
+      } elsif (ref($data) eq 'CODE') {
+          my $code = $data;
+          $data = "";
+          my $chunk = &$code();
+          while(defined $chunk) {
+              $data .= $chunk;
+              $chunk = &$code();
+          }
+      }
+
+      $parser->parse($data);
+
+      $self;
+
+    } else { # called as function
+        my $data = ($self eq 'PICA::XMLParser') ? shift : $self;
+        croak("Missing argument to parsedata") unless defined $data;
+        PICA::XMLParser->new( @_ )->parsedata( $data );
     }
-
-    if ( ref($data) eq 'PICA::Record' ) {
-        # TODO
-    }
-
-    my $parser = new XML::Parser(
-        Handlers => $self->_getHandlers
-    );
-
-    if (ref($data) eq 'ARRAY') {
-       $data = join('',@{$data})
-    } elsif (ref($data) eq 'CODE') {
-        my $code = $data;
-        $data = "";
-        my $chunk = &$code();
-        while(defined $chunk) {
-            $data .= $chunk;
-            $chunk = &$code();
-        }
-    }
-
-    $parser->parse($data);
-
-    $self;
 }
 
 =head2 parsefile ( $filename | $handle )
@@ -140,25 +151,34 @@ Parses data from a file or filehandle or L<IO::Handle>.
 =cut
 
 sub parsefile {
-    my ($self, $file) = @_;
+    my $self = shift;
 
-    if ( ! $self->{proceed} ) {
-        $self->{read_counter} = 0;
-        $self->{read_records} = [];
+    if ( ref($self) eq "PICA::XMLParser" ) { # called as a method
+        my $file = shift;
+
+        if ( ! $self->{proceed} ) {
+            $self->{read_counter} = 0;
+            $self->{read_records} = [];
+        }
+
+        $self->{filename} = $file if ref(\$file) eq 'SCALAR';
+        my $parser = new XML::Parser(
+            Handlers => $self->_getHandlers
+        );
+
+        if (ref($file) eq 'GLOB' or eval { $file->isa("IO::Handle") }) {
+            $parser->parse($file);
+        } else {
+            $parser->parsefile($file);
+        }
+
+        $self;
+
+    } else { # called as a function       
+        my $file = ($self eq 'PICA::XMLParser') ? shift : $self;
+        croak("Missing argument to parsefile") unless defined $file;
+        PICA::XMLParser->new( @_ )->parsefile( $file );
     }
-
-    $self->{filename} = $file if ref(\$file) eq 'SCALAR';
-    my $parser = new XML::Parser(
-        Handlers => $self->_getHandlers
-    );
-
-    if (ref($file) eq 'GLOB' or eval { $file->isa("IO::Handle") }) {
-        $parser->parse($file);
-    } else {
-        $parser->parsefile($file);
-    }
-
-    $self;
 }
 
 =head2 records ( )
@@ -396,7 +416,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

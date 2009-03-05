@@ -4,6 +4,12 @@ package PICA::PlainParser;
 
 PICA::PlainParser - Parse normalized PICA+
 
+=cut
+
+use strict;
+use utf8;
+our $VERSION = "0.40";
+
 =head1 SYNOPSIS
 
   my $parser = PICA::PlainParser->new(
@@ -29,16 +35,9 @@ This module contains a parser for normalized PICA+
 
 =cut
 
-use strict;
-use warnings;
-
 use PICA::Field;
 use PICA::Record;
-
-use Carp;
-
-use vars qw($VERSION);
-$VERSION = "0.39";
+use Carp qw(croak);
 
 =head1 PUBLIC METHODS
 
@@ -55,25 +54,27 @@ sub new {
     $class = ref $class || $class;
 
     my $self = bless {
-        filename => "",
-
         field_handler  => defined $params{Field} ? $params{Field} : undef,
         record_handler => defined $params{Record} ? $params{Record} : undef,
+
+        broken_field_handler => defined $params{FieldError} ? $params{FieldError} : undef,
+        broken_record_handler => defined $params{RecordError} ? $params{RecordError} : undef,
+
+        dumpformat => $params{Dumpformat}, # TODO: remove this parameters
+
         proceed => $params{Proceed} ? $params{Proceed} : 0,
         limit  => ($params{Limit} || 0) * 1,
         offset  => ($params{Offset} || 0) * 1,
 
         record => undef,
+        broken => undef,    # broken record
+
         read_records => [],
-
-        dumpformat => $params{Dumpformat},
         lax => $params{lax} ? $params{lax} : 1,
-
+        filename => "",
         fields => [],
-
         read_counter => 0,
         active => 0,
-
     }, $class;
 
     return $self;
@@ -160,7 +161,8 @@ sub parsefile {
 
 Parses PICA+ data from a string, array or function. If you supply
 a function then this function is must return scalars or arrays and
-it is called unless it returns undef.
+it is called unless it returns undef. You can also supply a 
+L<PICA::Record> object to be parsed again.
 
 =cut
 
@@ -181,6 +183,12 @@ sub parsedata {
             $self->_parsedata($chunk);
             $chunk = &$data();
         }
+    } elsif( UNIVERSAL::isa($data, "PICA::Record") ) {
+        my @fields = $data->all_fields();
+        foreach (@fields) {
+            # TODO: we could improve performance here
+            $self->_parseline( $_->to_string() );
+        }
     } else {
         $self->_parsedata($data);
     }
@@ -198,21 +206,21 @@ Get an array of the read records (if they have been stored)
 =cut
 
 sub records {
-   my $self = shift; 
-   return @{ $self->{read_records} };
+    my $self = shift; 
+    return @{ $self->{read_records} };
 }
 
 =head2 counter ( )
 
-Get the number of read records so far. Please note that the number
-of records as returned by the C<records> method may be lower because
-you may have filtered out some records.
+Get the number of records that have been (tried to) read. This also includes
+broken records and other records that have been skipped, for instance by
+filtering out with the record handler.
 
 =cut
 
 sub counter {
-   my $self = shift; 
-   return $self->{read_counter};
+    my $self = shift; 
+    return $self->{read_counter};
 }
 
 =head2 finished ( )
@@ -265,37 +273,69 @@ sub _parseline {
 
     # start of record marker
     if ( $line eq "\x1D" or ($self->{lax} and $line =~ /^\s*$/) ) {
+        # TODO: ignore multiple newlines after each other!
         $self->handle_record() if $self->{active};
     } elsif( $self->{lax} and ($line =~ /^[#\[]/ or $line =~ /^SET:/)) {
         # ignore comments and lines starting with "SET" or "[" (WinIBW output)
         # ignore non-data fields
         # TODO: be more specific here
     } else {
-      my $field;
-      eval {
-          $field = PICA::Field->parse($line);
-      };
-      # error parsing a field
-      if($@) {
-          $@ =~ s/ at .*\n//;
-          my $msg = "$@ Tried to parse line: \"$line\"\n";
-          # TODO: pass this to an error handler that may abort parsing
-          # croak($msg);
-          print STDERR $msg;
-      } else {
-        if ($self->{field_handler}) {
+        my $field = eval { PICA::Field->parse($line); };
+        if ($@) {
+            $@ =~ s/ at .*\n//; # remove line number
+            $field = $self->broken_field( $@, $line );
+        } elsif ($self->{field_handler}) {
             $field = $self->{field_handler}( $field );
         }
-
-        if (UNIVERSAL::isa($field,'PICA::Field')) {
+        if ( UNIVERSAL::isa( $field, 'PICA::Field' ) ) {
             push (@{$self->{fields}}, $field);
+        } elsif ( defined $field ) {
+            $self->{broken} = $field unless defined $self->{broken};
         }
-      }
     }
     $self->{active} = 1;
 }
 
-=head2 handle_record
+=head2 broken_field ( $errormessage [, $line ] )
+
+If a line could not be parsed into a L<PICA::Field>, this method is called.
+If it returns undef, the line is ignored, if it returns a PICA::Field object,
+this field is used instead and if it returns a true value, the whole record
+will be marked as broken. This method can be used as error handler. By default
+it always returns undef and prints an error message to STDERR.
+
+=cut
+
+sub broken_field {
+    my ($self, $msg, $line) = @_;
+    if ($self->{broken_field_handler}) {
+        return $self->{broken_field_handler}( $msg, $line );
+    }
+    $msg = "$msg in line \"$line\"" if defined $line;
+    print STDERR "$msg\n";
+    # TODO: count/collect errors
+    return;
+}
+
+=head2 broken_record ( $errormessage [, $record ] )
+
+Error handler for broken records. By default
+prints the errormessage to STDERR if it is defined 
+and the record is not empty.
+
+=cut
+
+sub broken_record {
+    my ($self, $msg, $record) = @_;
+    if ($self->{broken_record_handler}) {
+        return $self->{broken_record_handler}( $msg, $record );
+    }
+    return if $record && $record->is_empty();
+    print STDERR "$msg\n" if defined $msg;
+    return;
+}
+
+=head2 handle_record ( )
 
 Calls the record handler.
 
@@ -306,18 +346,37 @@ sub handle_record {
 
     $self->{read_counter}++;
 
-    my $record = bless {
-        _fields => [@{$self->{fields}}]
-    }, 'PICA::Record';
-
-    $self->{fields} = [];
-
-    return if ($self->{offset} && $self->{read_counter} < $self->{offset});
-
-    if ($self->{record_handler}) {
-        $record = $self->{record_handler}( $record );
+    my ($record, $broken);
+    if (defined $self->{broken}) {
+        $broken = $self->{broken};
+    } else {
+        $record = bless {
+            _fields => [@{$self->{fields}}]
+        }, 'PICA::Record';
     }
-    if ($record) {
+    $self->{fields} = [];
+    $self->{broken} = undef;
+
+    # TODO: fix this
+    # return if ($self->{offset} && $self->{read_counter} < $self->{offset});
+
+    if (not defined $broken) {
+        if ($self->{record_handler}) {
+            $record = $self->{record_handler}( $record );
+            $record = undef if $record =~ /^-?\d+$/;            
+        }
+        if (defined $record) {
+            if ( UNIVERSAL::isa( $record, 'PICA::Record' ) ) {
+                $broken = "empty record" if $record->is_empty();
+            } else {
+                $broken = $record;
+            }
+        }
+    }
+
+    if ( defined $broken ) {
+        $self->broken_record( $broken, $record );
+    } elsif ( defined $record ) {
         push @{ $self->{read_records} }, $record;
     }
 }
@@ -332,9 +391,8 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-

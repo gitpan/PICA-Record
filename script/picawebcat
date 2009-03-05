@@ -1,0 +1,280 @@
+#!/usr/bin/perl
+
+use strict;
+use utf8;
+
+=head1 NAME
+
+picawebcat - command line interface to L<PICA::Store>
+
+=cut
+
+use PICA::Store 0.4;
+use Getopt::Long 2.33;
+use Pod::Usage;
+use PICA::Parser;
+use Data::Dumper;
+
+#binmode STDOUT, ":utf8";
+#binmode STDERR, ":utf8";
+
+our $VERSION = "0.45";
+
+my ($soap, $dbsid, $userkey, $password, $language, $simulate);
+my ($help, $man, $version, $command, $from, $move, $quiet);
+my $config;
+
+my %messages = (
+    "update" => "updated %s from %s now %s\n",
+    "delete" => "deleted %s\n",
+    "create" => "created %s from %s\n",
+);
+
+# parse command line parameters
+GetOptions(
+    'config=s' => \$config,
+    'from=s' => \$from,
+    'help|?' => \$help,
+    'dbsid=s' => \$dbsid,
+    'password=s' => \$password,
+    'quiet' => \$quiet,
+    'SOAP=s' => \$soap,
+    'simulate' => \$simulate, # TODO: this works, but ugly code
+    'userkey=s' => \$userkey,
+    'language=s' => \$language,
+    'man' => \$man,
+    'move:s' => \$move, # TODO: implement
+    'version' => \$version,
+) or pod2usage(2);
+
+pod2usage(0) if $help;
+pod2usage(-verbose => 2) if $man;
+pod2usage(-msg => "picawebcat version $VERSION\n", -exitval => 0) if $version;
+
+my @commands = ("get","create","update","delete","upsert");
+$command = shift @ARGV || "/";
+my %commands = map { substr($_, 0, length($command)) => $_ } @commands;
+$command = $commands{$command}
+    || error("Command (".join(", ",@commands).") needed. Use -? or -m for help.");
+
+# read config file and initialize connection
+if ( -f "./webcat.conf"  || -f $ENV{WEBCAT_CONF} || $config ) {
+    my $f = $config ? $config : $ENV{WEBCAT_CONF};
+    $f = "webcat.conf" unless $config;
+    message("using config file $f");
+} elsif( not ($soap && $userkey && $dbsid) ) {
+    error("please provide a config file or connection parameters!");
+}
+
+my $webcat = PICA::Store->new(
+    config => $config,
+    SOAP => $soap,
+    userkey => $userkey, password => $password, dbsid => $dbsid 
+);
+
+error( "Failed to connect!") unless $webcat;
+
+# read items from file.
+# TODO: perform action while reading - also with update/upsert and ID table
+my @items;
+if (defined $from) {
+    my $file;
+    if ($from eq '-') {
+        $file = \*STDIN;
+        message("Reading input files from STDIN");
+    } else {
+        open ($file, "<", $from);
+        message("Reading input files from $from");
+    }
+    error("Failed to open file $from") unless $file;
+    @items = map { chomp; s/^\s+|\s+$//g; $_; } <$file>;
+    @items = grep { $_ ne ""; } @items;
+    close $file unless $from eq '-';
+}
+push @items, @ARGV if @ARGV;
+
+# TODO: if there is an '%' in a file, try to URL-decode
+# TODO: conversion to PICA+ via script instead of directly reading
+
+# perform action
+if ($command eq "get") {
+    error ("please provide ID(s) to get") unless @items;
+    foreach my $id (@items) {
+        if ($simulate) {
+            print "got record $id\n";
+        } else {
+            my %result = action("get", $id);
+            print $result{record}->to_string();
+        }
+    }
+} elsif ($command eq "delete") {
+    error ("please provide an ID") unless @ARGV;
+    foreach my $id (@ARGV) {
+        if ($simulate) {
+            printf($messages{"delete"}, $id);
+        } else {
+            my %result = action("delete", $id);
+            printf($messages{"delete"}, $result{id});
+        }
+    }
+} elsif ($command eq "create") {
+    error ("please provide input file(s) to create") unless @items;
+    my $filename;
+    my $parser = PICA::Parser->new( 
+        Record => sub {
+            my $record = shift;
+            return "empty" if $record->is_empty(); # empty records => error
+            message( "read record from " . $filename );
+            if ($simulate) {
+                printf($messages{"create"}, "ID", $filename);
+            } else {
+                my %result = action("create", $record);
+                printf($messages{"create"}, $result{id}, $filename);
+            }
+        },
+        FieldError => sub { return shift; }, # don't ignore field errors
+        RecordError => sub {
+            print STDERR "Ignoring invalid record in $filename\n";
+        },
+        Proceed => 1
+    );
+    foreach (@items) {
+        $filename = $_;
+        $parser->parsefile( $filename );
+    }
+    # TODO: summarize number of records and errors
+} elsif ($command eq "update") {
+    my $id = shift @ARGV || error ("please provide an ID");
+    my $filename = shift @ARGV || error ("please provide an input file");
+
+    my @records = PICA::Parser->parsefile( $filename )->records();
+    error ("input file must contain exactely one record") unless @records == 1;
+
+    my $version = shift @ARGV;
+    if ($simulate) {
+        printf($messages{update}, "ID", $filename, "VERSION")
+    } else {
+        if (!defined $version) {
+            my %result = $webcat->get( $id );
+            error( $result{errorcode}, $result{errormessage} ) 
+                if ( defined $result{errorcode} );
+            $version = $result{version};
+        }
+        my %result = action("update", $id, shift @records, $version );
+        printf($messages{update},  $result{id}, $filename, $result{version})
+    }
+} elsif ($command eq "upsert") {
+    error ("please provide ID(s) to get") unless @items;
+    if ($simulate) {
+        print "upsert\n";  # TODO: more information
+    } else {
+        foreach (@items) {
+            my $filename = $_;
+            my $id = $filename;
+            $id =~ s/.*\/([^\/]+)$/$1/; # filename without path
+
+            my @records = PICA::Parser->parsefile( $filename )->records();
+            error ("input file must contain exactely one record") unless @records == 1;
+            my $record = shift @records;
+
+            my %result = $webcat->get( $id );
+            if ($result{version}) {
+                my %result = action("update", $id, $record, $result{version} );
+                printf($messages{update},  $result{id}, $filename, $result{version});
+            } else {
+                %result = action("create", $record);
+                printf($messages{"create"}, $result{id}, $filename);
+            }
+        }
+    }
+}
+
+# perform action and print return value
+sub action {
+    my ($command, @params) = @_;
+    my %result = $webcat->$command( @params);
+    error( $result{errorcode}, $result{errormessage} ) if defined $result{errorcode};
+    return %result;
+}
+
+# print error message/code and exit
+sub error {
+    my ($errorcode, $errormessage) = @_;
+    if (defined $errormessage) {
+        print STDERR "ERROR $errorcode: $errormessage\n";
+        exit $errorcode;
+    } else {
+        print STDERR "$errorcode\n";
+        exit 1;
+    }
+}
+
+# print status message unless quiet mode
+sub message {
+    my $message = shift;
+    print "$message\n" unless $quiet;
+}
+
+__END__
+
+=head1 SYNOPSIS
+
+picawebcat [options] <command>
+
+   Commands:
+     get    <id(s)>
+     create <file(s)>
+     update <id> <file> [<version>]
+     delete <id>
+     upsert <file(s)>
+
+   Options:
+     -config    <file>   set config file (see description with -m)
+     -dbsid     <dbsdi>  set database id
+     -from      <file>   read ids or files from a file (empty lines ignored)
+     -help               brief help message
+     -language  <lang>   set language code
+     -man                full documentation
+     -password  <pwd>    set password
+     -quiet              no additional output
+     -SOAP      <url>    set SOAP interface base URL
+     -simulate           simulate (only print what would be done)
+     -userkey   <user>   set user
+     -version            print version of this script
+
+=head1 DESCRIPTION
+
+This script can be used to get, insert, update, and delete records in a
+L<PICA::Record> storage. The connection to a specific storage can be
+specified with command line options or in a special config file.
+
+You can use one of five commands get, create, update, delete, and upsert.
+A get command will print the record(s) data to STDOUT, the other commands
+only print a status message on success. If an error occurred, the error
+message is send to STDOUT and the script ends with error code.
+
+The upsert command expects files to be named with their ids and works like:
+
+  if ( get <id> ) then
+      update <id> <file>
+  else
+      create <file>
+
+=head2 Config file
+
+By default the script first looks whether the environment variable 
+WEBCAT_CONF points to a config file, otherwise whether a file named 
+"webcat.conf" located in the current directory exists. The config file
+can contain key=value pairs of dbsid, SOAP, userkey, password, language.
+
+Command line parameters override settings in a config file.
+
+=head2 Examples
+
+  webcat get 000000477
+  webcat delete 000000477
+  webcat create myrecord.pica
+  webcat update 000000477 myrecord.pica
+  webcat -f records.list create > creation.log 2> creation.err
+
+=cut

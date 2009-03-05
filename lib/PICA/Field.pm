@@ -1,10 +1,19 @@
 package PICA::Field;
 
+=head1 NAME
+
+PICA::Field - Perl extension for handling PICA+ fields
+
+=cut
+
 use strict;
-use integer;
-use Exporter;
-use Carp;
 use utf8;
+
+use base qw(Exporter);
+our $VERSION = "0.45";
+
+use Carp qw(croak);
+our @EXPORT = qw(parse_pp_tag);
 
 use constant SUBFIELD_INDICATOR => "\x1F"; # 31
 use constant START_OF_FIELD     => "\x1E"; # 30
@@ -13,17 +22,6 @@ use constant END_OF_FIELD       => "\x0A"; # 10
 use constant FIELD_TAG_REGEXP => qr/[012][0-9][0-9][A-Z@]$/;
 use constant FIELD_OCCURRENCE_REGEXP => qr/[0-9][0-9]$/;
 use constant SUBFIELD_CODE_REGEXP => qr/^[0-9a-zA-Z]$/;
-
-use vars qw($VERSION @ISA @EXPORT);
-
-@ISA = qw(Exporter);
-@EXPORT = qw(parse_pp_tag);
-
-$VERSION = "0.43";
-
-=head1 NAME
-
-PICA::Field - Perl extension for handling PICA+ fields
 
 =head1 SYNOPSIS
 
@@ -37,6 +35,7 @@ PICA::Field - Perl extension for handling PICA+ fields
   $field->update( "8", "Schrettinger, Martin" );
 
   print $field->normalized();
+  print $field->to_xml();
 
 =head1 DESCRIPTION
 
@@ -170,7 +169,7 @@ sub parse($) {
     elsif( $sf eq "\x83" ) { $sfreg = '\x83'; }
     elsif( $sf eq "\x9f" ) { $sfreg = '\x9f'; }
     else {
-        croak("No or not allowed subfield indicator (ord: " . ord($sf) . ") specified!");
+        croak("No or not allowed subfield indicator (ord: " . ord($sf) . ") specified");
     }
     $sfreg = '('.$sfreg.'[0-9a-zA-Z])';
 
@@ -477,14 +476,16 @@ sub normalized() {
     );
 }
 
-=head2 to_string ( )
+=head2 to_string ( [ %params ] )
 
 Returns a pretty string for printing.
 
 Returns the field as a string. The tag number, occurrence and 
 subfield indicators are included. 
 
-If C<$subfields> is specified, then only those subfields will be included.
+If C<subfields> is specified, then only those subfields will be included.
+
+Fields without subfields return an empty string.
 
 =cut
 
@@ -494,7 +495,7 @@ sub to_string() {
 
     my $subfields = defined($args{subfields}) ? $args{subfields} : '';
     my $startfield = defined($args{startfield}) ? $args{startfield} : '';
-    my $endfield  = defined($args{endfield}) ? $args{endfield} : "";
+    my $endfield  = defined($args{endfield}) ? $args{endfield} : "\n";
     my $startsubfield = defined($args{startsubfield}) ? $args{startsubfield} : '$';
 
     my @subs;
@@ -512,6 +513,8 @@ sub to_string() {
         }
     } # for
 
+    return "" unless @subs; # no subfields => no field
+
     my $occ = '';
     $occ = "/" . $self->{_occurrence} if defined $self->{_occurrence};
 
@@ -525,10 +528,10 @@ sub to_string() {
 
 Returns the field in XML format:
 
-  <field tag='....' occurrence='..'>
+  <datafield tag='....' occurrence='..'>
     <subfield code='.'>....</subfield>
     ...
-  </field>
+  </datafield>
 
 Make sure to have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
 to get valid PICA XML. See also L<PICA::XMLWriter>.
@@ -538,24 +541,26 @@ to get valid PICA XML. See also L<PICA::XMLWriter>.
 sub to_xml {
     my $self = shift;
 
-    my $xml = "<field tag='" . $self->{_tag} . "'";
+    my $xml = "<datafield tag='" . $self->{_tag} . "'";
     $xml .= " occurrence='" . $self->{_occurrence} . "'" if defined $self->{_occurrence};
     $xml .= ">\n";
 
     my $subs = $self->{_subfields};
     my $nfields = @$subs / 2;
 
+    return "" unless $nfields; # field without subfields
+
     for my $i ( 1..$nfields ) {
         my $offset = ($i-1)*2;
         my $code = $subs->[$offset];
         my $text = $subs->[$offset+1];
-        $xml .= "<subfield code='$code'>";
+        $xml .= "  <subfield code='$code'>";
         $text =~ s/&/&amp;/g;
         $text =~ s/</&lt;/g;
-        $xml .= $text; # TODO: character encoding
+        $xml .= $text; # TODO: character encoding (?)
         $xml .= "</subfield>\n";
     }
-    $xml .= "</field>\n";
+    $xml .= "</datafield>\n";
 
     return $xml;
 }
@@ -599,7 +604,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

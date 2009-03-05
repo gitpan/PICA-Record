@@ -7,13 +7,14 @@ PICA::XMLWriter - Write and count PICA+ records and fields in XML format
 =cut
 
 use strict;
-use warnings;
-
-use PICA::Writer;
-use Carp;
+use utf8;
 
 use base qw( PICA::Writer );
-our $VERSION = "0.43";
+our $VERSION = "0.44";
+
+#use PICA::Writer;
+use Carp qw(croak);
+
 our $NAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 =head1 METHODS
@@ -27,7 +28,11 @@ Create a new XML writer.
 sub new {
     my $class = shift;
     my ($fh, %params) = @_ % 2 ? @_ : (undef, @_);
-    my $self = bless { }, $class;
+    my $self = bless { 
+        header => $params{header},
+        xslt => $params{xslt},
+        collection => defined $params{collection} ? $params{collection} : 1,
+    }, $class;
     return $self->reset($fh);
 }
 
@@ -37,6 +42,11 @@ Write a record(s) of type L<PICA::Record>. You can also pass
 strings that will be printed as comments. Please make sure to
 have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
 to get valid PICA XML.
+
+This method does not write an XML header and footer but you can
+easily chain method calls like this:
+
+  $writer->start_document()->write($record)->end_document();
 
 =cut
 
@@ -49,7 +59,6 @@ sub write {
 
         if (ref($record) eq 'PICA::Record') {
             if ( $self->{filehandle} ) {
-                $self->start_document() unless $self->{in_doc};
                 print { $self->{filehandle} } $record->to_xml() ;
             }
             $comment = "";
@@ -66,6 +75,7 @@ sub write {
             croak("Cannot write object of unknown type (PICA::Record expected)!");
         }
     }
+    $self;
 }
 
 =head2 writefield ( $field [, $field ... ] )
@@ -87,25 +97,45 @@ sub writefield {
     }
 }
 
-=head2 start_document
+=head2 start_document ( [ %params ] )
 
 Write XML header and collection start element. 
 The default namespace is set to 'info:srw/schema/5/picaXML-v1.0'.
+
+Possible parameters include 'stylesheet' to add an XSLT script reference.
 
 =cut
 
 sub start_document {
     my $self = shift;
-    if ($self->{filehandle}) {
-        print { $self->{filehandle} } "<?xml version='1.0' encoding='UTF-8'?>\n";
-        print { $self->{filehandle} } "<collection xmlns='" . $NAMESPACE . "'>\n";
+    my %params = @_;
+
+    # TODO: see PICA::Record->to_xml and combine
+    my @xml;
+
+    if ($params{header}) {
+        push @xml, "<?xml version='1.0' encoding='UTF-8'?>";
+        $params{collection} = 1;
     }
+
+    if ($self->{filehandle}) {
+        push @xml, "<?xml version='1.0' encoding='UTF-8'?>";
+        if ($params{xslt}) {
+            my $xslt = $params{xslt};
+            $xslt =~ s/'/&apos/;
+            push @xml, "<?xml-stylesheet type='text/xsl' href='$xslt'?>";
+        }
+        push @xml, "<collection xmlns='" . $NAMESPACE . "'>";
+    }
+    print { $self->{filehandle} } join("\n",@xml)."\n" if @xml;
     $self->{in_doc} = 1;
+    $self;
 }
 
-=head2 end_document
+=head2 end_document ( )
 
 Write XML footer (collection end element).
+Note that this method does close the file handle if you write to a file.
 
 =cut
 
@@ -125,7 +155,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007, 2008 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

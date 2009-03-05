@@ -8,6 +8,8 @@ parsepica - parse PICA+ data and print summary information
 
 use strict;
 
+our $VERSION = '0.21';
+
 # include PICA packages
 use PICA::Record;
 use PICA::Field;
@@ -46,11 +48,10 @@ pod2usage(1) if $help;
 pod2usage(-verbose => 2) if $man;
 
 # Logfile
-$logfile = "-" if (!$logfile && !$quiet);
 if ($logfile and $logfile ne "-") {
     open LOG, ">$logfile" 
         or die("Error opening $logfile\n");
-} else {
+} elsif( $logfile eq "-" or !$quiet) {
     *LOG = *STDOUT;
 }
 
@@ -61,6 +62,7 @@ $xmlmode = 1 if $outfilename =~ /\.xml$/;
 my $output = $xmlmode ? PICA::XMLWriter->new() : PICA::Writer->new();
 
 if ($outfilename) {
+    #binmode STDOUT, ":utf8";
     $output->reset( ($outfilename ne "-") ? $outfilename : \*STDOUT );
     print LOG "Output to " . $output->name . "\n" if $output->name;
 }
@@ -128,26 +130,36 @@ if (@ARGV > 0) {
         exit 0;
     }
     while (($filename = shift @ARGV)) {
-        my ($sruurl, $z3950host);
-        if ($filename =~ /^http:\/\//) { # SRU (http://...)
-            $sruurl = $filename;
+        my ($baseurl, $z3950host);
+        if ($filename =~ /^http:\/\//) { # SRU or unAPI (http://...)
+            $baseurl = $filename;
         } elsif ($filename =~ /^[^\\:]+:\d+/) { # Z3950 (host:port[/db])
             $z3950host = $filename;
         }
-        if ($sruurl or $z3950host) {
+        if ($baseurl or $z3950host) {
             my $query = shift @ARGV;
             if (!$query) {
-                print SDTERR "query missing!\n";
+                print STDERR "query missing!\n";
             } else {
                 my $remote_parser;
-                if ($sruurl) {
-                    print LOG "SRU query '$query' to $sruurl\n";
-                    my $server = PICA::Source->new( SRU => $sruurl );
+                if ($baseurl && $query =~ /=/) {
+                    print LOG "SRU query '$query' to $baseurl\n";
+                    my $server = PICA::Source->new( SRU => $baseurl );
                     $remote_parser = $server->cqlQuery( $query,
                         # TODO: better pipe this to another parser (RecordParser)
                         Field => $_field_handler,
                         Record => $_record_handler
                     );
+                } elsif ($baseurl) {
+                    print LOG "unAPI query '$query' from $baseurl\n";
+                    my $source = PICA::Source->new( unAPI => $baseurl ); # TODO: document this
+                    my $r = $source->getPPN($query,"gvk"); # TODO: prefix is bad unAPI usage
+                    if ($r) {
+                        $remote_parser = PICA::Parser->parsedata( $r ,
+                            Field => $_field_handler,
+                            Record => $_record_handler
+                        );
+                    }
                 } else {
                     print LOG "Z3950 query '$query' to $z3950host\n";
                     my $server = PICA::Source->new( Z3950 => $z3950host );
@@ -157,7 +169,7 @@ if (@ARGV > 0) {
                         Record => $_record_handler
                     );
                 }
-                $remote_counter += $remote_parser->counter();
+                $remote_counter += $remote_parser->counter() if defined $remote_parser;
             }
         } else {
             print LOG "Reading $filename\n" if !$quiet;
@@ -188,12 +200,12 @@ print LOG "Input records:\t" . ($parser->counter() + $remote_counter) .
       "\n" if !$quiet;
 
 if ($countmode) {
-  print "Frequency of tags in all records:\n";
-  foreach my $tag (sort keys %fieldstat_a) {
-      print "$tag\t" . $fieldstat_a{$tag} . "\t";
-      print $fieldstat_r{$tag};
-      print "\n";
-  }
+    print "Frequency of tags in all records:\n";
+    foreach my $tag (sort keys %fieldstat_a) {
+        print "$tag\t" . $fieldstat_a{$tag} . "\t";
+        print $fieldstat_r{$tag};
+        print "\n";
+    }
 }
 
 
@@ -230,7 +242,7 @@ sub select_field_handler {
     return unless $field->tag() =~ $field_regex;
     if (defined $subfield_select) {
         my @sf = $field->subfield($subfield_select);
-        print join("\n",@sf) . "\n" if @sf;
+        print { $output->{filehandle} } join("\n",@sf) . "\n" if @sf;
     } else {
         $output->writefield($field);
     }
@@ -271,7 +283,7 @@ sub select_record_handler {
 
 =head1 SYNOPSIS
 
-parsepica.pl [options] [file(s) or SRU-Server(s) and queries(s)..]
+parsepica [options] [file(s) or SRU-Server(s) and queries(s)..]
 
 =head1 OPTIONS
 
@@ -282,7 +294,7 @@ parsepica.pl [options] [file(s) or SRU-Server(s) and queries(s)..]
  -output FILE   print all valid records to a given file ('-': STDOUT)
  -xml           output of records in XML
  -quiet         supress logging
- -select        select a specific field or subfield (no XML output possible yet)
+ -select FIELD  select a specific field or subfield (no XML output possible yet)
  -D             read dumpfile format (no newlines)
 
 Not fully implemented yet:

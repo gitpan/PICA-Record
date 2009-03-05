@@ -4,6 +4,12 @@ package PICA::Source;
 
 PICA::Source - Data source that can be queried for PICA+ records
 
+=cut
+
+use strict;
+use utf8;
+our $VERSION = "0.42";
+
 =head1 SYNOPSIS
 
   my $server = PICA::Source->new(
@@ -16,18 +22,14 @@ Instead or in addition to SRU you can use Z39.50 and unAPI.
 
 =cut
 
-use strict;
-use Carp;
-
+use Carp qw(croak);
 use PICA::PlainParser;
 use PICA::SRUSearchParser;
 use LWP::UserAgent;
 
-our $VERSION = "0.40";
-
 =head1 METHODS
 
-=head2 new
+=head2 new ( [ %params ] )
 
 Create a new Server. You can specify a title with C<title> and
 the URL base of an SRU interface with C<SRU>, a Z39.50 server
@@ -46,7 +48,8 @@ sub new {
         unAPI => $params{unAPI} ? $params{unAPI} : undef,
         user => $params{user} ? $params{user} : undef,
         password => $params{password} ? $params{password} : undef,
-        prev_record => undef
+        prev_record => undef,
+        # TODO: pass handler parameter or Parser?
     };
 
     if ($self->{SRU} and not $self->{SRU} =~ /[\?&]$/) {
@@ -56,7 +59,7 @@ sub new {
     bless $self, $class;
 }
 
-=head2 getPPN ( $ppn )
+=head2 getPPN ( $ppn [, $prefix ] )
 
 Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
 Only available for SRU and unAPI at the moment. If both are specified, unAPI
@@ -65,17 +68,20 @@ is used.
 =cut
 
 sub getPPN {
-    my ($self, $ppn) = @_;
+    my ($self, $ppn, $prefix) = @_;
 
     croak("No SRU or unAPI interface defined") unless $self->{SRU} or $self->{unAPI};
     croak("Not a PPN: $ppn") unless $ppn =~ /^[0-9]+[0-9Xx]$/;
 
     my $ua = LWP::UserAgent->new( agent => 'PICA::Source/'.$PICA::Source::VERSION);
 
-    if ( $self->{unAPI} ) {
+    if ( $self->{unAPI} ) { # experimental only!
+        # TODO: this is not good unAPI => change unAPI server
+	# TODO: unapi server does not set encoding header (utf8)
+        my $id = defined $prefix ? "$prefix:ppn:$ppn" : "ppn:$ppn";
         my $url = $self->{unAPI}
                 . ((index($self->{unAPI},'?') == -1) ? '?' : '&')
-                . "format=pp&id=ppn:$ppn";
+                . "format=pp&id=$id";
         print STDERR "URL: $url\n";
         my $request = HTTP::Request->new(GET => $url);
         my $response = $ua->request($request);
@@ -90,6 +96,8 @@ sub getPPN {
         my $query = "pica.ppn\%3D$ppn"; # CQL query
 
         my $url = $self->{SRU} . "query=" . $query . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
+
+        print STDERR "URL: $url\n";
 
         my $request = HTTP::Request->new(GET => $url);
         my $response = $ua->request($request);
@@ -109,7 +117,7 @@ sub getPPN {
     }
 }
 
-=head2 cqlQuery
+=head2 cqlQuery ( $cql [, %handlers ] )
 
 Perform a CQL query (SRU). If only one parameter is given, the full 
 XML response is returned and you can parse it with L<PICA::SRUSearchParser>.
@@ -150,7 +158,7 @@ sub cqlQuery {
     }
 }
 
-=head2 z3950Query
+=head2 z3950Query ( $query [, %handlers ] )
 
 Perform a Z39.50 query via L<ZOOM>.If only one parameter is given, the 
 L<ZOOM::ResultSet> is returned and you can parse it with a L<PICA::PlainParser>:
@@ -256,7 +264,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

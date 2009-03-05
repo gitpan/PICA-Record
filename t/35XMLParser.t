@@ -2,17 +2,12 @@
 
 use strict;
 
-use Test::More tests => 13;
+use Test::More tests => 17;
 
-BEGIN {
-    use_ok( 'PICA::XMLParser' );
-    use_ok( 'PICA::Parser' );
-    use_ok( 'PICA::Record' );
-    use_ok( 'IO::File' );
-}
-
-use PICA::XMLParser;
-use PICA::Parser;
+use_ok( 'PICA::XMLParser' );
+use_ok( 'PICA::Parser' );
+use_ok( 'PICA::Record' );
+use_ok( 'IO::File' );
 
 my @xmldata = <DATA>;              # array
 my $xmldata = join("", @xmldata);  # string
@@ -55,6 +50,23 @@ isa_ok( $record, 'PICA::Record');
 undef $record;
 close XML;
 
+# use as function or as method
+($record) = PICA::XMLParser->parsefile("t/minimal.xml")->records();
+isa_ok($record, "PICA::Record");
+
+$parser = PICA::XMLParser->new();
+($record) = $parser->parsefile("t/minimal.xml")->records();
+isa_ok($record, "PICA::Record");
+
+# use as function or as method
+($record) = PICA::XMLParser->parsedata($xmldata)->records();
+isa_ok($record, "PICA::Record");
+
+$parser = PICA::XMLParser->new();
+($record) = $parser->parsedata($xmldata)->records();
+isa_ok($record, "PICA::Record");
+
+
 # parse from a function
 open XML, $xmlfile;
 PICA::Parser->parsedata( sub {return readline XML;}, 
@@ -78,7 +90,7 @@ ok( $parser->counter == 2, "proceed" );
 __END__
 <?xml version="1.0"?>
 <record>
-  <field tag="021A">
+  <datafield tag="021A">
     <subfield code="0">Test</subfield>
-  </field>
+  </datafield>
 </record>

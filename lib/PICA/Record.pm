@@ -7,16 +7,16 @@ PICA::Record - Perl extension for handling PICA+ records
 =cut
 
 use strict;
-use integer;
 use utf8;
-
 use base qw(Exporter);
-our $VERSION = "0.43";
+our $VERSION = "0.45";
 
 use POSIX qw(strftime);
 use PICA::Field;
 use PICA::Parser;
 use Scalar::Util qw(looks_like_number);
+use URI::Escape;
+use Encode;
 use Carp qw(croak);
 
 =head1 DESCRIPTION
@@ -27,10 +27,10 @@ Module for handling PICA+ records as Perl objects.
 
 =head2 What is PICA+?
 
-PICA+ is the internal data format of the Local Library System (LBS) and
+B<PICA+> is the internal data format of the Local Library System (LBS) and
 the Central Library System (CBS) of OCLC, formerly PICA. Similar library
 formats are the MAchine Readable Cataloging format (MARC) and the
-Maschinelles Austauschformat für Bibliotheken (MAB). In addition to
+Maschinelles Austauschformat f�r Bibliotheken (MAB). In addition to
 PICA+ in CBS there is the cataloging format Pica3 which can losslessly
 be convert to PICA+ and vice versa.
 
@@ -48,6 +48,12 @@ a record store via CWS webcat interface there is L<PICA::Store>.
 You can use PICA::Record for instance to convert between PICA+ and
 PicaXML, to process PICA+ records that you have downloaded with WinIBW 
 or download records in native format via SRU or Z39.50.
+
+=head1 COMMAND LINE USAGE
+
+This module provides the scripts C<parsepica> and C<picawebcat> to
+use most of the functionality on the command line without having
+to deal with Perl code.
 
 =head1 SYNOPSIS
 
@@ -79,6 +85,7 @@ are some additional two-liners:
   PICA::Parser->new->parsefile( \STDIN, Record => sub {
       my $record = shift;
       print $record->to_string() if $record->field('003@');
+      return;
   });
 
   # print record in normalized format
@@ -142,7 +149,8 @@ sub new {
         } elsif (ref($first) eq 'GLOB' or eval { $first->isa("IO::Handle") }) {
             PICA::Parser->parsefile( $first, Limit => 1, Field => sub {
                 my $field = shift;
-                push (@{$self->{_fields}}, $field);
+                push (@{$self->{_fields}}, $field); 
+                return;
             });
         } else {
             $self->append(@_);
@@ -625,23 +633,46 @@ sub normalized() {
     return "\x1D\x0A" . $prefix . join( "", @lines );
 }
 
-=head2 to_xml ( )
+=head2 to_xml ( [ %params ] )
 
-Returns the record in PICA XML format. Make sure to
-have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
+Returns the record in PICA XML format. You can add an XML header with
+header => 1 and a stylesheet with parameter xslt. Otherwise make sure
+to have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
 to get valid PICA XML. See also L<PICA::XMLWriter>.
 
 =cut
 
 sub to_xml {
     my $self = shift;
+    my %params = @_;
     my @xml;
+
+    # TODO: combine in XMLWriter
+    if ($params{header}) {
+        push @xml, "<?xml version='1.0' encoding='UTF-8'?>\n";
+        $params{collection} = 1;
+    }
+    if ($params{xslt}) {
+        my $xslt = $params{xslt};
+        $xslt =~ s/'/&apos/;
+        push @xml, "<?xml-stylesheet type='text/xsl' href='$xslt'?>\n"
+    }
+    if ($params{collection}) {
+        push @xml, "<collection xmlns='info:srw/schema/5/picaXML-v1.0'>\n";
+    }
+
     push @xml, "<record>\n";
     for my $field ( @{$self->{_fields}} ) {
         push @xml, $field->to_xml();
     }
     push ( @xml , "</record>" );
-    return join("", @xml) . "\n";
+
+    if ($params{collection}) {
+        push @xml, "\n</collection>";
+    }
+
+    my $xml = join("", @xml) . "\n";
+    return $xml;
 }
 
 =head2 add_headers ( [ %options ] )
@@ -725,9 +756,8 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-

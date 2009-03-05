@@ -1,11 +1,13 @@
 #!perl -Tw
 
 use strict;
+use utf8;
 
-use Test::More tests => 35;
+use Test::More tests => 36;
 
 use PICA::Field;
 use PICA::Record;
+use IO::File;
 
 # PICA::Record constructor
 my $testrecord = PICA::Record->new(
@@ -148,3 +150,21 @@ close PICA;
 
 $r = PICA::Record->new( $normalized );
 is( $r->all_fields(), 24, "detect and read normalized pica" );
+
+my $file = IO::File->new("t/minimal.pica");
+$record = PICA::Record->new( $file );
+$file->seek(0,0);
+my $minimal = join('',$file->getlines());
+is( $record->to_string(), $minimal, "to_string()" );
+
+# TODO: more testing with minimal.pica / .xml etc.
+
+__END__
+# TODO: test unicode equivalence!
+
+$r = new PICA::Record( new IO::File("t/cjk.pica") );
+my $cjk1 = "我国民事立法的回顾与展望";
+my $cjk2 = $r->subfield('021A$a');
+ok( $cjk1 eq $cjk2, "unicode");
+is( $r->subfield('021A$a'), '我国民事立法的回顾与展望', 'cjk record');
+

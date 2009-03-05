@@ -4,6 +4,12 @@ package PICA::Writer;
 
 PICA::Writer - Write and count PICA+ records and fields
 
+=cut
+
+use strict;
+use utf8;
+our $VERSION = "0.44";
+
 =head1 SYNOPSIS
 
   my $writer = PICA::Writer->new( \*STDOUT );
@@ -26,15 +32,9 @@ This module contains a simple class to write and count PICA+ records and fields
 
 =cut
 
-use strict;
-use warnings;
-use utf8;
-
 use PICA::Record;
 use PICA::XMLWriter;
-use Carp;
-
-our $VERSION = "0.43";
+use Carp qw(croak);
 
 =head1 METHODS
 
@@ -99,9 +99,12 @@ sub reset_handler {
     if ($ishandle) {
         $self->{filename} = "";
         $self->{filehandle} = $fh;
+#        binmode $fh, ":utf8";
     } else {
         $self->{filename} = $fh;
-        $self->{filehandle} = eval { local *FH; open( FH, ">$fh" ) or die; binmode FH, ":utf8"; *FH{IO}; };
+        $self->{filehandle} = eval { local *FH; open( FH, ">$fh" ) or die; 
+	# binmode FH, ":utf8"; 
+      *FH{IO}; };
         if ( $@ ) {
             croak("Failed to open file for writing: $fh");
         }
@@ -139,7 +142,7 @@ sub write {
             $comment .= "\n" if $comment;
             $comment .= '# ' . join("\n# ", split(/\n/,$record)) . "\n";
         } else {
-        	croak("Cannot write object of unknown type (PICA::Record expected)!");
+            croak("Cannot write object of unknown type (PICA::Record expected)!");
         }
     }
 }
@@ -208,10 +211,8 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.
-
-

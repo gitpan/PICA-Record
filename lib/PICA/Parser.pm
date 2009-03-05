@@ -4,6 +4,16 @@ package PICA::Parser;
 
 PICA::Parser - Parse PICA+ data
 
+=cut
+
+use strict;
+use utf8;
+use base qw(Exporter);
+our $VERSION = "0.44";
+
+use Carp qw(croak);
+our @EXPORT_OK = qw(parsefile parsedata);
+
 =head1 SYNOPSIS
 
   use PICA::Parser;
@@ -45,22 +55,27 @@ To parse just one record, use
 
   my ($record) = parsefile($filename, Limit => 1)->records();
 
+By default the parser may emit some error messages to STDOUT 
+but ignore most errors. If you want broken fields not to be 
+ignored, add an error handler with FieldError:
+
+  my $parser = PICA::Parser->new(
+      FieldError => sub { my $msg = shift; return $msg; } 
+  );
+
+Broken record then will be passed to another error handler.
+To suppress all error messages and just ignore records with errors:
+
+  my $parser = PICA::Parser->new(
+      FieldError => sub { return; },
+      RecordError => sub { return; } 
+  }
+
 =head1 DESCRIPTION
 
 This module can be used to parse normalized PICA+ and PICA+ XML.
 The conrete parsers are implemented in L<PICA::PlainParser> and 
 L<PICA::XMLParser>.
-
-=cut
-
-use strict;
-use warnings;
-
-use Carp;
-
-use base qw( Exporter );
-our $VERSION = "0.43";
-our @EXPORT_OK = qw(parsefile parsedata);
 
 =head1 CONSTRUCTOR
 
@@ -71,10 +86,13 @@ parameters will be used as default when calling C<parsefile> or
 C<parsedata>. Note that you do not have to use the constructor to 
 use C<PICA::Parser>. These two methods do the same:
 
-  my $parser = PICA::Parser->new( %params );
-  $parser->parsefile( $file );
-
+  PICA::Parser->new( %params )->parsefile( $file );
   PICA::Parser->parsefile( $file, %params );
+
+And for parsing plain data:
+
+  PICA::Parser->new( %params )->parsedata( $data );
+  PICA::Parser->parsedata( $data, %params );
 
 Common parameters that are passed to the specific parser are:
 
@@ -85,8 +103,10 @@ Common parameters that are passed to the specific parser are:
 Reference to a handler function for parsed PICA+ fields. 
 The function is passed a L<PICA::Field> object and it should
 return it back to the parser. You can use this function as a
-simple filter by returning a modified field. If no 
-L<PICA::Field> object is returned then it will be skipped.
+simple filter by returning a modified field. If undef is 
+returned, the field will be skipped. If a non L<PICA::Field> 
+value is returned, the return value is used as error message
+and the record is marked as broken.
 
 =item Record
 
@@ -94,14 +114,9 @@ Reference to a handler function for parsed PICA+ records. The
 function is passed a L<PICA::Record>. If the function returns
 a record then this record will be stored in an array that is
 passed to C<Collection>. You can use this method as a filter
-by returning a modified record.
-
-=item Error
-
-This handler is used if an error occured while parsing, for instance
-if data does not look like PICA+. By default errors are just ignored.
-
-TODO: Count errors and return the number of errors in the C<errors> method.
+by returning either a (modified) record or undef or an integer.
+If another defined value is returned, it is used as error message
+(broken record) and the record error handler is called.
 
 =item Offset
 
@@ -110,6 +125,22 @@ Skip a given number of records. Default is zero.
 =item Limit
 
 Stop after a given number of records. Non positive numbers equal to unlimited.
+
+=item FieldError
+
+This handler is called with character data of a line and error message 
+when an input line could not be parsed into a L<PICA::Field> object. 
+By default such lines produce an error message on STDOUT but will be 
+ignored. You can provide an error handler that either fixed the line by
+returning a PICA::Field, or returns undef to ignore the error or return
+true to mark the whole record as broken, so the RecordError handler will
+be called afterwards.
+
+=item RecordError
+
+This handler is called with a record object or undef and an error message
+when a broken record was parsed. By default only empty records are marked
+as broken.
 
 =item Dumpformat
 
@@ -123,6 +154,8 @@ If you set the C<Proceed> parameter to a true value, the same parser
 will be reused without reseting counters and read record.
 
 =back
+
+Error handling is only implemented in L<PICA::PlainParser> by now!
 
 =cut
 
@@ -178,8 +211,8 @@ sub parsefile {
         $self;
     } else { # called as a function
         $arg = ($self eq 'PICA::Parser') ? shift : $self;
-        $parser = PICA::Parser->new( @_ );
         croak("Missing argument to parsefile") unless defined $arg;
+        $parser = PICA::Parser->new( @_ );
         $parser->parsefile( $arg );
         $parser;
     }
@@ -187,11 +220,11 @@ sub parsefile {
 
 =head2 parsedata ( $data [, %params ] )
 
-Parses data from a string, array reference, or function and returns
-the C<PICA::Parser> that was used. See C<parsefile> and the C<parsedata>
-method of L<PICA::PlainParser> and L<PICA::XMLParser> for a description
-of parameters. By default L<PICA::PlainParser> is used unless there the
-C<Format> parameter set to C<xml>.
+Parses data from a string, array reference, function, or L<PICA::Record>
+object and returns the C<PICA::Parser> that was used. See C<parsefile>
+and the C<parsedata> method of L<PICA::PlainParser> and L<PICA::XMLParser>
+for a description of parameters. By default L<PICA::PlainParser> is used
+unless there the C<Format> parameter set to C<xml>.
 
   PICA::Parser->parsedata( $picastring, Field => \&field_handler );
   PICA::Parser->parsedata( \@picalines, Field => \&field_handler );
@@ -199,9 +232,7 @@ C<Format> parameter set to C<xml>.
   # called as a function
   my @records = parsedata( $picastring )->records();
 
-If data is a L<PICA::Record> object, it is directly passed to the 
-record handler without re-parsing. See the constructor C<new> for 
-a description of parameters.
+See the constructor C<new> for a description of parameters.
 
 =cut
 
@@ -326,7 +357,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

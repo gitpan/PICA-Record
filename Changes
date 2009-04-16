@@ -1,3 +1,7 @@
+0.46    2009-04-16
+        - added PICA::Field->purged and PICA::Record->appendif
+        - added PICA::Filemap and support of maps in picawebcat
+        - normalize whitespace in subfield values
 0.45    2009-03-05
         - added and improved error handlers in PICA::PlainParser
         - added support of webcat.conf config file in PICA::Store

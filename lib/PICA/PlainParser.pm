@@ -183,7 +183,7 @@ sub parsedata {
             $self->_parsedata($chunk);
             $chunk = &$data();
         }
-    } elsif( UNIVERSAL::isa($data, "PICA::Record") ) {
+    } elsif( UNIVERSAL::isa( $data, "PICA::Record" ) ) {
         my @fields = $data->all_fields();
         foreach (@fields) {
             # TODO: we could improve performance here

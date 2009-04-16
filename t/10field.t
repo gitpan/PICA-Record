@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 31;
+use Test::More tests => 37;
 
 use PICA::Field;
 
@@ -63,13 +63,16 @@ is( $fcopy->normalized(), $normalized, 'copy' );
 
 $field = PICA::Field->new("028A","d" => "Karl", "a" => "Marx");
 isa_ok( $field, 'PICA::Field');
-
 ok( !$field->is_empty(), '!is_empty()' );
+
+$field = PICA::Field->new("028A","d" => "", "a" => "Marx");
+ok( !$field->is_empty(), '!is_empty()' );
+is( $field->purged->to_string, "028A \$aMarx\n", "purged empty field");
 
 $field = PICA::Field->new("028A", "d"=>"", "a"=>"" );
 ok( $field->is_empty(), 'is_empty()' );
-
 is( join('', $field->empty_subfields() ), "da", 'empty_subfields' );
+is( $field->purged, undef, "purged empty field");
 
 # normally fields without subfields should not occur, but if...
 is( $field->to_string(subfields=>'x'), "", "empty field");
@@ -77,6 +80,7 @@ $field->{_subfields} = [];
 ok( $field->is_empty(), 'empty field');
 is( $field->to_string, "", "empty field (to_string)");
 is( $field->to_xml, "", "empty field (to_xml)");
+is( $field->purged, undef, "purged empty field");
 
 $field->tag("028C/01");
 ok( $field->tag eq "028C/01", 'set tag' );
@@ -100,6 +104,12 @@ ok ($sf[0] eq 'xx' && $sf[1] eq 'yy', 'Field->sf (array)');
 $field = PICA::Field->parse('123A $axx$byy$czz');
 @sf = $field->sf('a','c');
 ok ($sf[0] eq 'xx' && $sf[1] eq 'zz', 'Field->sf (multiple)');
+
+# newlines in field values
+$field = PICA::Field->new( '021A', 'a' => "This\nare\n\t\nlines" );
+is( $field->sf('a'), "This are lines", "newline in value (1)");
+is( $field->to_string(), "021A \$aThis are lines\n", "newline in value (2)");
+
 
 __DATA__
 <datafield tag='028A'>

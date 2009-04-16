@@ -113,8 +113,13 @@ sub parsedata {
           $self->{read_records} = [];
       }
 
-      if ( ref($data) eq 'PICA::Record' ) {
-          # TODO: reparse
+      if( UNIVERSAL::isa( $data, 'PICA::Record' ) ) {
+        my @fields = $data->all_fields();
+        foreach (@fields) {
+            # TODO: we could improve performance here
+            # TODO: merge this into PICA::Parser
+            $self->_parseline( $_->to_string() );
+        }
       }
 
       my $parser = new XML::Parser(
@@ -122,7 +127,7 @@ sub parsedata {
       );
 
       if (ref($data) eq 'ARRAY') {
-        $data = join('',@{$data})
+          $data = join('',@{$data})
       } elsif (ref($data) eq 'CODE') {
           my $code = $data;
           $data = "";

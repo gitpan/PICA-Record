@@ -9,53 +9,59 @@ picawebcat - command line interface to L<PICA::Store>
 
 =cut
 
-use PICA::Store 0.4;
 use Getopt::Long 2.33;
 use Pod::Usage;
-use PICA::Parser;
+use PICA::Store 0.4;
+use PICA::Parser qw(parsefile);
+use PICA::Filemap;
 use Data::Dumper;
 
 #binmode STDOUT, ":utf8";
 #binmode STDERR, ":utf8";
 
-our $VERSION = "0.45";
+our $VERSION = "0.47";
 
-my ($soap, $dbsid, $userkey, $password, $language, $simulate);
-my ($help, $man, $version, $command, $from, $move, $quiet);
+my ($soap, $dbsid, $userkey, $password, $language, $simulate, $all);
+my ($help, $man, $version, $command, $quiet, $mapfile, $map, $verbose);
 my $config;
 
-my %messages = (
-    "update" => "updated %s from %s now %s\n",
-    "delete" => "deleted %s\n",
-    "create" => "created %s from %s\n",
-);
+my @commands = ( qw(get create update delete upsert clean add) );
 
 # parse command line parameters
 GetOptions(
+    'all' => \$all,
     'config=s' => \$config,
-    'from=s' => \$from,
     'help|?' => \$help,
     'dbsid=s' => \$dbsid,
     'password=s' => \$password,
     'quiet' => \$quiet,
     'SOAP=s' => \$soap,
-    'simulate' => \$simulate, # TODO: this works, but ugly code
+    'simulate' => \$simulate,
     'userkey=s' => \$userkey,
     'language=s' => \$language,
     'man' => \$man,
-    'move:s' => \$move, # TODO: implement
+    'map:s' => \$mapfile,
     'version' => \$version,
+    'verbose' => \$verbose,
 ) or pod2usage(2);
 
 pod2usage(0) if $help;
 pod2usage(-verbose => 2) if $man;
 pod2usage(-msg => "picawebcat version $VERSION\n", -exitval => 0) if $version;
 
-my @commands = ("get","create","update","delete","upsert");
-$command = shift @ARGV || "/";
+$command = shift @ARGV || "-";
+
+if ($command =~ /^map(.*)$/) {
+    error("please specify a map file as parameter.") unless defined $ARGV[0];
+    error("you can only specify one map file.") if defined $mapfile;
+    $mapfile = shift @ARGV;
+    $command = $1;
+}
+
 my %commands = map { substr($_, 0, length($command)) => $_ } @commands;
 $command = $commands{$command}
-    || error("Command (".join(", ",@commands).") needed. Use -? or -m for help.");
+    || error("please provide a command. Use -? or -m for help.");
+
 
 # read config file and initialize connection
 if ( -f "./webcat.conf"  || -f $ENV{WEBCAT_CONF} || $config ) {
@@ -74,126 +80,192 @@ my $webcat = PICA::Store->new(
 
 error( "Failed to connect!") unless $webcat;
 
-# read items from file.
-# TODO: perform action while reading - also with update/upsert and ID table
-my @items;
-if (defined $from) {
-    my $file;
-    if ($from eq '-') {
-        $file = \*STDIN;
-        message("Reading input files from STDIN");
-    } else {
-        open ($file, "<", $from);
-        message("Reading input files from $from");
-    }
-    error("Failed to open file $from") unless $file;
-    @items = map { chomp; s/^\s+|\s+$//g; $_; } <$file>;
-    @items = grep { $_ ne ""; } @items;
-    close $file unless $from eq '-';
+# read mapfile if given
+if (defined $mapfile) {
+    message( "using map file $mapfile" );
+    $map = PICA::Filemap->new($mapfile);
+    eval { $map->read(); }; # read map if it already exists
+    $map->write() unless $simulate or $command eq "get"; # TODO avoid this
 }
-push @items, @ARGV if @ARGV;
 
-# TODO: if there is an '%' in a file, try to URL-decode
-# TODO: conversion to PICA+ via script instead of directly reading
+message("simulation mode is enabled") if ($simulate);
+
+# TODO: if there is an '%' in a file, try to URL-decode it
+my @items = @ARGV;
 
 # perform action
 if ($command eq "get") {
-    error ("please provide ID(s) to get") unless @items;
+    error ("please provide ID(s) and/or filenames") unless @items or $map;
+    @items = $map->ids(@items) if ($map); # TODO @items not implemented
     foreach my $id (@items) {
         if ($simulate) {
-            print "got record $id\n";
+            message("get $id");
         } else {
             my %result = action("get", $id);
             print $result{record}->to_string();
+            # TODO: support different output formats and output file
         }
     }
 } elsif ($command eq "delete") {
-    error ("please provide an ID") unless @ARGV;
-    foreach my $id (@ARGV) {
-        if ($simulate) {
-            printf($messages{"delete"}, $id);
-        } else {
-            my %result = action("delete", $id);
-            printf($messages{"delete"}, $result{id});
-        }
+    error ("please provide ID(s) and/or filenames") unless @items or $map;
+    @items = $map->ids(@items) if ($map); # TODO @items not implemented
+    foreach my $id (@items) {
+        deleteRecord($id);
     }
 } elsif ($command eq "create") {
-    error ("please provide input file(s) to create") unless @items;
-    my $filename;
-    my $parser = PICA::Parser->new( 
-        Record => sub {
-            my $record = shift;
-            return "empty" if $record->is_empty(); # empty records => error
-            message( "read record from " . $filename );
-            if ($simulate) {
-                printf($messages{"create"}, "ID", $filename);
-            } else {
-                my %result = action("create", $record);
-                printf($messages{"create"}, $result{id}, $filename);
-            }
-        },
-        FieldError => sub { return shift; }, # don't ignore field errors
-        RecordError => sub {
-            print STDERR "Ignoring invalid record in $filename\n";
-        },
-        Proceed => 1
-    );
-    foreach (@items) {
-        $filename = $_;
-        $parser->parsefile( $filename );
-    }
+    error ("please provide input file(s) to create") unless @items or $map;
+    @items = grep { not $map->file2id($_) } $map->files( @items ) if $map;
+    map { createRecord( $_ ); } @items;
     # TODO: summarize number of records and errors
 } elsif ($command eq "update") {
-    my $id = shift @ARGV || error ("please provide an ID");
-    my $filename = shift @ARGV || error ("please provide an input file");
-
-    my @records = PICA::Parser->parsefile( $filename )->records();
-    error ("input file must contain exactely one record") unless @records == 1;
-
-    my $version = shift @ARGV;
-    if ($simulate) {
-        printf($messages{update}, "ID", $filename, "VERSION")
-    } else {
-        if (!defined $version) {
-            my %result = $webcat->get( $id );
-            error( $result{errorcode}, $result{errormessage} ) 
-                if ( defined $result{errorcode} );
-            $version = $result{version};
+    error ("please provide ID(s) and/or filenames") unless @items or $map;
+    my %id2file;
+    if ($map) { # update map
+        my @files = $map->files(@items);
+        foreach my $file ( @files ) {
+            my $id = $map->file2id( $file );
+            $id2file{$id} = $file if $id;
         }
-        my %result = action("update", $id, shift @records, $version );
-        printf($messages{update},  $result{id}, $filename, $result{version})
+    } else { # directly update one record
+        my $id = shift @ARGV || error ("please provide an ID");
+        my $filename = shift @ARGV || error ("please provide an input file");
+        $id2file{$id} = $filename;
+    }
+    foreach my $id (keys %id2file) {
+        updateRecord( $id2file{$id}, $id ) if defined $id2file{$id};
     }
 } elsif ($command eq "upsert") {
-    error ("please provide ID(s) to get") unless @items;
-    if ($simulate) {
-        print "upsert\n";  # TODO: more information
-    } else {
-        foreach (@items) {
-            my $filename = $_;
-            my $id = $filename;
-            $id =~ s/.*\/([^\/]+)$/$1/; # filename without path
-
-            my @records = PICA::Parser->parsefile( $filename )->records();
-            error ("input file must contain exactely one record") unless @records == 1;
-            my $record = shift @records;
-
-            my %result = $webcat->get( $id );
-            if ($result{version}) {
-                my %result = action("update", $id, $record, $result{version} );
-                printf($messages{update},  $result{id}, $filename, $result{version});
-            } else {
-                %result = action("create", $record);
-                printf($messages{"create"}, $result{id}, $filename);
-            }
+    error ("please provide a map") unless $map;
+    @items = $map->files( @items );
+    foreach my $item (@items) {
+        if ( defined $map->id2file( $item ) ) {
+            updateRecord( $map->id2file($item), $item );
+        } elsif ( defined $map->file2id( $item ) ) {
+            updateRecord( $item, $map->file2id($item) );
+        } else {
+            createRecord( $item );
         }
     }
+} elsif ($command eq "clean") {
+    error("please provide a map") unless $map;
+    my @files = $map->clean(@items);
+    message("removed %d non existing files from the map", scalar @files)
+        if @files;
+} elsif ($command eq "add") {
+    error("please provide a map") unless $map;
+    error("please provide files to add") unless @items;
+    my @files = $map->add(@items);
+    message("added %d files to the map", scalar @files) if @files;    
 }
 
-# perform action and print return value
+# update map file (TODO: only on change)
+$map->write() if $map and $command ne "get" and not $simulate;
+
+exit;
+
+# delete one record (by given id)
+sub deleteRecord {
+    my $id = shift;
+    if (not $simulate) {
+        my %result = action("delete", $id);
+        if (not %result) {
+            message("failed to delete %s", $id);
+            return;
+        }
+        $map->delete($id) if ($map);
+    }
+    message("deleted %s", $id);
+}
+
+# Create one record from a file (TODO: add multiple from one file)
+sub createRecord {
+    my ($filename) = @_;
+
+    my $record = readRecord( $filename );
+    if (not $record) {
+        message("failed to read record in %s, ignore it", $filename);
+        return;
+    }
+
+    my $id = "<ID>";
+    if (not $simulate) {
+        my %result = action("create", $record);
+        if (not %result) {
+            message("failed to create from %s", $filename);
+            return;
+        }
+        $id = $result{id};
+        $map->create($filename, $id);
+    }
+    message("created %s from %s", $id, $filename);
+}
+
+# Get a record (by given filename)
+sub readRecord {
+    my $filename = shift;
+
+    my $record = eval {  # TODO: simplify this
+        my ($record) = parsefile( $filename, Limit => 1,
+            FieldError => sub { my $msg = shift; return $msg; },
+            RecordError => sub { return; }
+        )->records(); 
+        $record;
+    };
+    if (not $record) {
+        return; # TODO: error message?
+    }
+
+    message( "read record from " . $filename ) if $verbose; 
+    return $record;
+}
+
+# Update one record and print messages, update map file etc.
+sub updateRecord {
+    my ($filename, $id) = @_;
+
+    if ( not $all and $map and not $map->outdated($filename) ) {
+        message("%s (%s) is up to date", $filename, $id);
+        return;
+    }
+
+    my $record = readRecord( $filename );
+    if (not $record) {
+        message("failed to update %s from %s", $id, $filename);
+        return;
+    }
+
+    my $version = "<VERSION>";
+    if (not $simulate) {
+        $version = shift @ARGV;
+        if (!defined $version) {
+            my %result = $webcat->get( $id );
+            if ( defined $result{errorcode} ) {
+                warning( $result{errorcode}, $result{errormessage} );
+                message("failed to update %s from %s", $id, $filename);
+                return;
+            }
+            $version = $result{version};
+        }
+        my %result = action("update", $id, $record, $version );
+        if (not %result) {
+            message("failed to update %s from %s", $id, $filename);
+            return;
+        }
+        $map->update($filename,$id) if ($map);
+        ($id, $version) = ($result{id}, $result{version});
+    }    
+    message("updated %s from %s now %s", $id, $filename, $version);
+}
+
+
+# perform action (get/create/delete/update) and return result or undef
 sub action {
     my ($command, @params) = @_;
     my %result = $webcat->$command( @params);
-    error( $result{errorcode}, $result{errormessage} ) if defined $result{errorcode};
+    if (defined $result{errorcode}) {
+        warning( $result{errorcode}, $result{errormessage} );
+        return;
+    }
     return %result;
 }
 
@@ -209,10 +281,20 @@ sub error {
     }
 }
 
+# print error message/code and do not exit
+sub warning {
+    my ($errorcode, $errormessage) = @_;
+    if (defined $errormessage) {
+        print STDERR "ERROR $errorcode: $errormessage\n";
+    } else {
+        print STDERR "$errorcode\n";
+    }
+}
+
 # print status message unless quiet mode
 sub message {
     my $message = shift;
-    print "$message\n" unless $quiet;
+    printf ("$message\n", @_) unless $quiet;
 }
 
 __END__
@@ -223,18 +305,32 @@ picawebcat [options] <command>
 
    Commands:
      get    <id(s)>
-     create <file(s)>
-     update <id> <file> [<version>]
-     delete <id>
-     upsert <file(s)>
+     create <recordfile(s)>
+     update <id> <recordfile> [<version>]
+     delete <id(s)>
+     upsert <recordfile(s)>
+     add
+     clean
+     mapget    <mapfile> [<id(s) and/or recordfile(s)>]
+     mapcreate <mapfile> [<recordfile(s)>]
+     mapupdate <mapfile> [<id(s) and/or recordfile(s)>]
+     mapdelete <mapfile> [<id(s) and/or recordfile(s)>]
+     mapupsert <mapfile> [<id(s) and/or recordfile(s)>]
+     mapclean  <mapfile>
+     mapadd    <mapfile> <recordfile(s)>
+
+   mapcreate/mapupdate/mapdelete are equivalent to the commands
+   create/update/delete with a given map file (option -map).
 
    Options:
+     -all                on update: update all records, also not outdated records
      -config    <file>   set config file (see description with -m)
      -dbsid     <dbsdi>  set database id
      -from      <file>   read ids or files from a file (empty lines ignored)
      -help               brief help message
      -language  <lang>   set language code
      -man                full documentation
+     -map       <file>   set map file
      -password  <pwd>    set password
      -quiet              no additional output
      -SOAP      <url>    set SOAP interface base URL
@@ -266,15 +362,39 @@ By default the script first looks whether the environment variable
 WEBCAT_CONF points to a config file, otherwise whether a file named 
 "webcat.conf" located in the current directory exists. The config file
 can contain key=value pairs of dbsid, SOAP, userkey, password, language.
-
 Command line parameters override settings in a config file.
+
+=head2 Map files
+
+A map file is a convenient way if you regularly change records via webcat.
+
+  mapcreate <mapfile> 
+  mapcreate <mapfile> <recordfile(s)>
+
+  mapupdate <mapfile>
+  mapupdate <mapfile> <id(s) and/or recordfile(s)>
+
+  mapdelete <mapfile> 
+  mapdelete <mapfile> <id(s) and/or recordfile(s)>
+
+  mapget <mapfile> [ <id(s) and/or recordfile(s)> ]
 
 =head2 Examples
 
-  webcat get 000000477
-  webcat delete 000000477
-  webcat create myrecord.pica
-  webcat update 000000477 myrecord.pica
-  webcat -f records.list create > creation.log 2> creation.err
+  picawebcat get 000000477
+  picawebcat delete 000000477
+  picawebcat create myrecord.pica
+  picawebcat update 000000477 myrecord.pica
+  picawebcat mapcreate records.list > creation.log 2> creation.err
+
+=head2 Notes
+
+If you permform an action on multiple files, the whole list of files is read
+before action is performed. In a later version we could implement online action
+while reading the input files.
+
+At the moment only PICA+ files (PICA+ or PICA XML) are supported. We could
+provide a way to directly transform other metadata formats to PICA+ before
+storing them.
 
 =cut

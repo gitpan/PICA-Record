@@ -9,7 +9,7 @@ PICA::Record - Perl extension for handling PICA+ records
 use strict;
 use utf8;
 use base qw(Exporter);
-our $VERSION = "0.45";
+our $VERSION = "0.46";
 
 use POSIX qw(strftime);
 use PICA::Field;
@@ -30,7 +30,7 @@ Module for handling PICA+ records as Perl objects.
 B<PICA+> is the internal data format of the Local Library System (LBS) and
 the Central Library System (CBS) of OCLC, formerly PICA. Similar library
 formats are the MAchine Readable Cataloging format (MARC) and the
-Maschinelles Austauschformat f�r Bibliotheken (MAB). In addition to
+Maschinelles Austauschformat für Bibliotheken (MAB). In addition to
 PICA+ in CBS there is the cataloging format Pica3 which can losslessly
 be convert to PICA+ and vice versa.
 
@@ -45,15 +45,26 @@ that contain fields (L<PICA::Field>). To fetch records from databases
 via SRU or Z39.50 there is the interface L<PICA::Source> and to access
 a record store via CWS webcat interface there is L<PICA::Store>.
 
-You can use PICA::Record for instance to convert between PICA+ and
-PicaXML, to process PICA+ records that you have downloaded with WinIBW 
-or download records in native format via SRU or Z39.50.
+You can use PICA::Record for instance to:
+
+=over 4
+
+=item *
+convert between PICA+ and PicaXML
+=item *
+process PICA+ records that you have downloaded with WinIBW 
+=item *
+download records in native format via SRU or Z39.50
+=item*
+store PICA+ records in a database
+
+=back
 
 =head1 COMMAND LINE USAGE
 
 This module provides the scripts C<parsepica> and C<picawebcat> to
 use most of the functionality on the command line without having
-to deal with Perl code.
+to deal with Perl code. Have a look at the documentation of this scripts.
 
 =head1 SYNOPSIS
 
@@ -484,16 +495,17 @@ You can also append multiple fields with one call:
         '037A', 'a' => '2nd note',
     );
 
-Please not that passed L<PICA::Field> objects are not be copied but directly
+Please note that passed L<PICA::Field> objects are not be copied but directly
 used:
 
     my $field = PICA::Field->new('037A','a' => 'My note');
     $record->append( $field );
     $field->replace( 'a' => 'Your note' ); # Also changes $record's field!
 
-You can avoid this by cloning fields:
+You can avoid this by cloning fields or by using the appendif method:
 
     $record->append( $field->copy() );
+    $record->appendif( $field );
 
 You can also append copies of all fields of another record:
 
@@ -505,6 +517,7 @@ The append method returns the number of fields appended.
 
 sub append {
     my $self = shift;
+    # TODO: this method can be simplified by use of ->new (see appendif)
 
     my $c = 0;
 
@@ -543,6 +556,31 @@ sub append {
     }
 
     return $c;
+}
+
+=head2 appendif ( ...fields or records... )
+
+Optionally appends one or more fields to the end of the record. Parameters can
+be L<PICA::Field> objects or parameters that are passed to C<PICA::Field->new>.
+
+In contrast to the append method this method always copies values, it ignores
+empty subfields and empty fields (that are fields without subfields or with
+empty subfields only), and it returns the resulting PICA::Record object.
+
+For instance this command will not add a field if C<$country> is undef or C<"">:
+
+  $r->appendif( "119@", "a" => $country );
+
+=cut
+
+sub appendif {
+    my $self = shift;
+    my $append = PICA::Record->new( @_ );
+    for my $field ( $append->all_fields ) {
+        $field = $field->purged();
+        push @{ $self->{_fields} }, $field if $field;
+    }
+    $self;
 }
 
 =head2 replace ( $tag, $field | @fieldspec )
@@ -678,8 +716,8 @@ sub to_xml {
 =head2 add_headers ( [ %options ] )
 
 Add header fields to a L<PICA::Record>. You must specify two named parameters
-(eln and satus). This method is experimental. There is no test whether the 
-header fields already exist.
+(C<eln> and C<status>). This method is experimental. There is no test whether 
+the header fields already exist.
 
 =cut
 
@@ -745,10 +783,10 @@ sub _get_regex {
 =head1 SEE ALSO
 
 At CPAN there are the modules L<MARC::Record>, L<MARC>, and L<MARC::XML> 
-for MARC records. The deprecated module L<Net::Z3950::Record> had a 
-subclass L<Net::Z3950::Record::MAB> for MAB records. You should now 
-better use L<Net::Z3950::ZOOM> which is also needed if you query Z39.50
-servers with L<PICA::Source>.
+for MARC records and L<Encode::MAB2> for MAB records. The deprecated module
+L<Net::Z3950::Record> also had a subclass L<Net::Z3950::Record::MAB> for MAB 
+records. You should now better use L<Net::Z3950::ZOOM> which is also needed
+if you query Z39.50 servers with L<PICA::Source>.
 
 =head1 AUTHOR
 

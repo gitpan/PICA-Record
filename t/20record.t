@@ -3,7 +3,7 @@
 use strict;
 use utf8;
 
-use Test::More tests => 36;
+use Test::More tests => 42;
 
 use PICA::Field;
 use PICA::Record;
@@ -69,6 +69,16 @@ is( $record->subfield('028A','9'), '117060275', "Field value" );
 $field->update('9'=>'12345');
 is( $record->subfield('028A','9'), '12345', "Field value modified" );
 
+# appendif
+$record = PICA::Record->new();
+$record->appendif('037A','a' => undef);
+is( scalar $record->all_fields(), 0 , "Record->appendif()" );
+$record->appendif('037A','a' => 123);
+is( scalar $record->all_fields(), 1 , "Record->appendif()" );
+$record->appendif('028A','9' => undef, 'd'=>'Max');
+is( scalar $record->all_fields(), 2 , "Record->appendif()" );
+is( $record->to_string(), "037A \$a123\n028A \$dMax\n" , "Record->appendif()" );
+
 $record = PICA::Record->new();
 $record->append(
     '037A', 'a' => '1st note',
@@ -80,7 +90,7 @@ is( scalar $record->all_fields(), 2 , "Record->append()" );
 my $recordclone = PICA::Record->new($record);
 is( scalar $recordclone->all_fields(), 2 , "PICA::Record clone constructor" );
 $record->delete_fields('037A');
-is( scalar $recordclone->all_fields(), 2 , "PICA::Record clone a new object" );
+is( scalar $recordclone->all_fields(), 2 , "PICA::Record cloned a new object" );
 
 
 ### field()
@@ -156,6 +166,11 @@ $record = PICA::Record->new( $file );
 $file->seek(0,0);
 my $minimal = join('',$file->getlines());
 is( $record->to_string(), $minimal, "to_string()" );
+
+# newlines in field values
+$record = PICA::Record->new( '021A', 'a' => "This\nare\n\t\nlines" );
+is( $record->sf('021A$a'), "This are lines", "newline in value (1)" );
+is( $record->to_string(), "021A \$aThis are lines\n", "newline in value (2)" );
 
 # TODO: more testing with minimal.pica / .xml etc.
 

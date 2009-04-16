@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 41;
+use Test::More tests => 43;
 
 use PICA::Parser qw(parsefile parsedata);
 use PICA::PlainParser;
@@ -68,12 +68,18 @@ isa_ok( $record, 'PICA::Record' );
 undef $record;
 
 # parse from a function
-open PICA, $plainpicafile;
-PICA::Parser->parsedata( sub {return readline PICA;}, Record => \&handle_record );
+open PICA2, "<", $plainpicafile;
+PICA::Parser->parsedata( sub {return readline PICA2;}, Record => \&handle_record );
+close PICA2;
 isa_ok( $record, 'PICA::Record' );
+is( scalar $record->all_fields(), 26, 'parse from function' );
 
-# TODO: parse PICA::Record object
-# ...
+# parse a PICA::Record (by clone constructor)
+my $recordclone = $record;
+undef $record;
+PICA::Parser->parsedata( $recordclone, Record => \&handle_record );
+$recordclone->delete_fields('....');
+is( scalar $record->all_fields(), 26 , "parse another PICA::Record" );
 
 # parse dump format
 my $writer = PICA::Writer->new();

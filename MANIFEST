@@ -15,6 +15,7 @@ lib/PICA/Record.pm
 lib/PICA/Source.pm
 lib/PICA/SRUSearchParser.pm
 lib/PICA/Store.pm
+lib/PICA/Filemap.pm
 lib/PICA/Writer.pm
 lib/PICA/XMLParser.pm
 lib/PICA/XMLWriter.pm
@@ -28,6 +29,7 @@ t/35XMLParser.t
 t/40xmlwriter.t
 t/42SRUSearchParser.t
 t/50store.t
+t/60filemap.t
 t/minimal.pica
 t/minimal.xml
 t/cjk.pica

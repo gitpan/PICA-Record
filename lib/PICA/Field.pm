@@ -10,7 +10,7 @@ use strict;
 use utf8;
 
 use base qw(Exporter);
-our $VERSION = "0.45";
+our $VERSION = "0.46";
 
 use Carp qw(croak);
 our @EXPORT = qw(parse_pp_tag);
@@ -183,6 +183,7 @@ sub parse($) {
         $code = substr($code, 1);
         $value = shift @sfields;
         $value =~ s/\$\$/\$/g if $sf eq '$';
+        $value =~ s/\s+/ /gm;
         push(@subfields, ($code, $value));
     }
 
@@ -263,10 +264,12 @@ sub subfield {
 
     for ( my $i=0; $i < @data; $i+=2 ) {
         next unless $data[$i] =~ $codes;
+        my $value = $data[$i+1];
+        $value =~ s/\s+/ /gm;
         if ( wantarray() ) {
-            push( @list,  $data[$i+1] );
+            push( @list,  $value );
         } else {
-            return $data[$i+1];
+            return $value;
         }
     }
 
@@ -306,17 +309,18 @@ sub content {
     return @list;
 }
 
-=head2 add ( $code, $text [, $code, $text ...] )
+=head2 add ( $code, $value [, $code, $value ...] )
 
 Adds subfields to the end of the subfield list.
+Whitespace in subfield values is normalized.
 
     $field->add( 'c' => '1985' );
 
-Returns the number of subfields added.
+Returns the number of subfields added. 
 
 =cut
 
-sub add(@) {
+sub add {
     my $self = shift;
     my $nfields = @_ / 2;
 
@@ -326,12 +330,15 @@ sub add(@) {
     for my $i ( 1..$nfields ) {
         my $offset = ($i-1)*2;
         my $code = $_[$offset];
+        my $value = $_[$offset+1];
+        $value = defined $value ? "$value" : "";
+        $value =~ s/\s+/ /gm;
 
         croak( "Subfield code \"$code\" is not a valid subfield code" )
             if !($code =~ SUBFIELD_CODE_REGEXP);
-    }
 
-    push( @{$self->{_subfields}}, @_ );
+        push( @{$self->{_subfields}}, $code, $value );
+    }
 
     return $nfields;
 }
@@ -368,17 +375,19 @@ sub update {
 
     while ( @_ ) {
         my $code = shift;
-        my $val = shift;
+        my $value = shift;
 
         croak( "Subfield code \"$code\" is not a valid subfield code" )
             if !($code =~ SUBFIELD_CODE_REGEXP);
 
-            my $found = 0;
+        $value =~ s/\s+/ /mg;
+
+        my $found = 0;
 
         ## update existing subfield
         for ( my $i=0; $i<@data; $i+=2 ) {
             if ($data[$i] eq $code) {
-                $data[$i+1] = $val;
+                $data[$i+1] = $value;
             $found = 1;
             $changes++;
             last;
@@ -387,7 +396,7 @@ sub update {
 
         ## append new subfield
         if ( !$found ) {
-            push( @data, $code, $val );
+            push( @data, $code, $value );
             $changes++;
         }
     }
@@ -443,7 +452,7 @@ Test whether there are no subfields or all subfields are empty.
 
 =cut
 
-sub is_empty() {
+sub is_empty {
     my $self = shift;
 
     my @data = @{$self->{_subfields}};
@@ -453,6 +462,38 @@ sub is_empty() {
     }
 
     return 1;
+}
+
+=head2 purged ( )
+
+Remove a copy of this field with empty subfields
+removed or undef if the whole field is empty.
+
+=cut
+
+sub purged {
+    my $self = shift;
+
+    my @subfields;
+    my $code;
+    foreach (@{$self->{_subfields}}) {
+        if (defined $code) {
+            push @subfields, ($code, $_) if defined $_ and $_ ne "";
+            undef $code;
+        } else {
+            $code = $_;
+        }
+    }
+
+    return unless @subfields;
+
+    my $copy = bless {
+        _tag => $self->{_tag},
+        _occurrence => $self->{_occurrence},
+        _subfields => \@subfields
+    }, ref($self);
+
+    return $copy;
 }
 
 =head2 normalized ( [$subfields] )
@@ -506,10 +547,10 @@ sub to_string() {
     for my $i ( 1..$nfields ) {
         my $offset = ($i-1)*2;
         my $code = $subs->[$offset];
-        my $text = $subs->[$offset+1];
+        my $value = $subs->[$offset+1];
         if (!$subfields || $code =~ /^[$subfields]$/) {
-            $text =~ s/\$/\$\$/g if $startsubfield eq '$';
-            push( @subs, $code.$text ) 
+            $value =~ s/\$/\$\$/g if $startsubfield eq '$';
+            push( @subs, $code.$value ) 
         }
     } # for
 

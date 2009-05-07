@@ -9,7 +9,7 @@ PICA::Record - Perl extension for handling PICA+ records
 use strict;
 use utf8;
 use base qw(Exporter);
-our $VERSION = "0.46";
+our $VERSION = "0.47";
 
 use POSIX qw(strftime);
 use PICA::Field;
@@ -122,7 +122,7 @@ PICA records from a file, see L<PICA::Parser>, to load records from a SRU
 or Z39.50 server, see L<PICA::Source>. 
 
 If you provide a file handle or L<IO::Handle>, the first record is read from
-it. The following lines have same result:
+it. Each of the following three lines has the same result:
 
   $record = PICA::Record->new( IO::Handle->new("< $filename") );
   ($record) = PICA::Parser->parsefile( $filename, Limit => 1 )->records(),

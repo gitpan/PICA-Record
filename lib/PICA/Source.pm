@@ -8,17 +8,22 @@ PICA::Source - Data source that can be queried for PICA+ records
 
 use strict;
 use utf8;
-our $VERSION = "0.42";
+our $VERSION = "0.47";
 
 =head1 SYNOPSIS
 
   my $server = PICA::Source->new(
-      title => "My server",
       SRU => "http://my.server.org/sru-interface.cgi"
   );
   my $record = $server->getPPN('1234567890');
+  $server->cqlQuery("pica.tit=Hamster")->count();
 
-Instead or in addition to SRU you can use Z39.50 and unAPI.
+  $result = $server->cqlQuery("pica.tit=Hamster", Limit => 15 );
+  $result = $server->z3950Query('@attr 1=4 microformats');
+
+  $record = $server->getPPN("1234567890");
+
+Instead or in addition to SRU you can use Z39.50 and unAPI (experimental).
 
 =cut
 
@@ -31,9 +36,9 @@ use LWP::UserAgent;
 
 =head2 new ( [ %params ] )
 
-Create a new Server. You can specify a title with C<title> and
-the URL base of an SRU interface with C<SRU>, a Z39.50 server
-with C<Z3950> and an unAPI base url with C<unAPI>.
+Create a new Server. You can specify an SRU interface with C<SRU>, 
+a Z39.50 server with C<Z3950> and an unAPI base url with C<unAPI>.
+Optional parameters include C<user> and C<password> for authentification.
 
 =cut
 
@@ -42,14 +47,12 @@ sub new {
     $class = ref $class || $class;
 
     my $self = {
-        title => $params{title} ? $params{title} : "Untitled",
         SRU => $params{SRU} ? $params{SRU} : undef,
         Z3950 => $params{Z3950} ? $params{Z3950} : undef,
         unAPI => $params{unAPI} ? $params{unAPI} : undef,
         user => $params{user} ? $params{user} : undef,
         password => $params{password} ? $params{password} : undef,
         prev_record => undef,
-        # TODO: pass handler parameter or Parser?
     };
 
     if ($self->{SRU} and not $self->{SRU} =~ /[\?&]$/) {
@@ -59,7 +62,7 @@ sub new {
     bless $self, $class;
 }
 
-=head2 getPPN ( $ppn [, $prefix ] )
+=head2 getPPN ( $ppn )
 
 Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
 Only available for SRU and unAPI at the moment. If both are specified, unAPI
@@ -68,21 +71,18 @@ is used.
 =cut
 
 sub getPPN {
-    my ($self, $ppn, $prefix) = @_;
+    my ($self, $id) = @_;
 
     croak("No SRU or unAPI interface defined") unless $self->{SRU} or $self->{unAPI};
-    croak("Not a PPN: $ppn") unless $ppn =~ /^[0-9]+[0-9Xx]$/;
 
     my $ua = LWP::UserAgent->new( agent => 'PICA::Source/'.$PICA::Source::VERSION);
 
     if ( $self->{unAPI} ) { # experimental only!
-        # TODO: this is not good unAPI => change unAPI server
-	# TODO: unapi server does not set encoding header (utf8)
-        my $id = defined $prefix ? "$prefix:ppn:$ppn" : "ppn:$ppn";
+        # TODO: unapi server does not set encoding header (utf8)?
         my $url = $self->{unAPI}
                 . ((index($self->{unAPI},'?') == -1) ? '?' : '&')
                 . "format=pp&id=$id";
-        print STDERR "URL: $url\n";
+        #print STDERR "URL: $url\n";
         my $request = HTTP::Request->new(GET => $url);
         my $response = $ua->request($request);
         if ($response->is_success) {
@@ -93,90 +93,71 @@ sub getPPN {
             croak("unAPI request failed: $url");
         }
     } else {
-        my $query = "pica.ppn\%3D$ppn"; # CQL query
-
-        my $url = $self->{SRU} . "query=" . $query . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
-
-        print STDERR "URL: $url\n";
-
-        my $request = HTTP::Request->new(GET => $url);
-        my $response = $ua->request($request);
-        if ($response->is_success) {
-            my $xml = $response->decoded_content();
-            # create SRUSearchParser only once because of memory leak
-            if (!$self->{sruparser}) {
-                $self->{sruparser} = PICA::SRUSearchParser->new(
-                    Record=>sub { $self->{prev_record} = shift; }
-                );
-            }
-            $self->{sruparser}->parseResponse($xml);
-            return $self->{prev_record};
-        } else {
-            croak("SRU Request failed: $url");
-        }
-    }
+        my $result = $self->cqlQuery( "pica.ppn=$id", Limit => 1 );
+        my ($record) = $result->records();
+        return $record;
+    } # TODO: use z3950
 }
 
-=head2 cqlQuery ( $cql [, %handlers ] )
+=head2 cqlQuery ( $cql [ $parser | %params | ] )
 
-Perform a CQL query (SRU). If only one parameter is given, the full 
-XML response is returned and you can parse it with L<PICA::SRUSearchParser>.
-
-If you supply an additional hash with Record and Field handlers
-(see L<PICA::Parser>) this handlers are used. Afterwards the parser
-is returned.
+Perform a CQL query (SRU) and return the L<PICA::XMLParser> object
+that was used to parse the resulting records. You can pass an existing
+Parser or parser parameters as listed at L<PICA::Parser>.
 
 =cut
 
 sub cqlQuery {
-    my ($self, $cql, %handlers) = @_;
+    my ($self, $cql) = @_;
 
     croak("No SRU interface defined") unless $self->{SRU};
+
+    my $xmlparser = UNIVERSAL::isa( $_[2], "PICA::XMLParser" ) 
+                  ? $_[2] : PICA::XMLParser->new( @_ );
+    my $sruparser = PICA::SRUSearchParser->new( $xmlparser );
+
     my $ua = LWP::UserAgent->new( agent => 'PICA::Source/' . $PICA::Source::VERSION);
-    $cql = url_encode($cql); #url_unicode_encode($cql);
 
     my $options = "";
-    my $url = $self->{SRU} . "query=" . $cql . $options . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
-    # print "$url\n"; # TODO: logging
+    $cql = url_encode($cql); #url_unicode_encode($cql);
+    my $baseurl = $self->{SRU} . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
 
-    # TODO: implement a query loop for long result sets
-    my $request = HTTP::Request->new(GET => $url);
-    my $response = $ua->request($request);
-    if ($response->is_success) {
+    my $startRecord = 1;
+    while(1) {
+        my $options = "&startRecord=$startRecord";
+        my $url = $baseurl . "&query=" . $cql . $options;
+
+        # print "$url\n"; # TODO: logging
+
+        my $request = HTTP::Request->new(GET => $url);
+        my $response = $ua->request( $request );
+        croak("SRU Request failed $url") unless $response->is_success;
+
         my $xml = $response->decoded_content();
-        # TODO: the SRUSearchParser may not be free'd (memory leak)?
-        # TODO: Supply a PICA::SRUSearchParser or another PICA::Parser (?)
-        if (%handlers) {
-            my $parser = PICA::SRUSearchParser->new( %handlers ); # Record=>sub { my $record = shift; print "##\n";}  );
-            $parser->parseResponse($xml);
-            return $parser;
-        } else {
-            return $xml;
-        }
-    } else {
-        croak("SRU Request failed: $url");
+        $xmlparser = $sruparser->parse($xml);
+
+        # print "numberOfRecords " . $sruparser->numberOfRecords() . "\n";
+        # print "resultSetId " . $sruparser->resultSetId()  . "\n";
+        # print "current counter " . $xmlparser->counter() . "\n";  
+
+        return $xmlparser unless $sruparser->currentNumber(); # zero results
+        $startRecord += $sruparser->currentNumber();
+        return $xmlparser if $sruparser->numberOfRecords() < $startRecord;
+        return $xmlparser if $xmlparser->finished();
     }
 }
 
-=head2 z3950Query ( $query [, %handlers ] )
+=head2 z3950Query ( $query [, $plainparser | %params ] )
 
-Perform a Z39.50 query via L<ZOOM>.If only one parameter is given, the 
-L<ZOOM::ResultSet> is returned and you can parse it with a L<PICA::PlainParser>:
-
-    my $n = $rs->size();
-    for my $i (0..$n-1) {
-        $parser->parsedata($rs->record($i)->raw());
-    }
-
-If you supply an additional hash with Record and Field handlers
-(see L<PICA::Parser>) this handlers are used. Afterwards the parser
-is returned.
+Perform a Z39.50 query via L<ZOOM>. The resulting records are read with
+a L<PICA::PlainParser> that is returned.
 
 =cut
 
 sub z3950Query {
     my ($self, $query, %handlers) = @_;
 
+    eval { require ZOOM; require ZOOM::Options; require ZOOM::Connection; };
     croak("Please load package ZOOM to use Z39.50!")
         unless defined $INC{'ZOOM.pm'};
     croak("No Z3950 interface defined") unless $self->{Z3950};
@@ -198,24 +179,24 @@ sub z3950Query {
         croak("Z39.50 error " . $@->code(), ": ", $@->message());
     }
 
-    if (%handlers) {
-        my $parser = PICA::PlainParser->new( %handlers, Proceed=>1 );
-        my $n = $rs->size();
-        for my $i (0..$n-1) {
-            my $raw;
-            eval {
-                $raw = $rs->record($i)->raw();
-            };
-            if ($@) {
-                croak("Z39.50 error " . $@->code(), ": ", $@->message());
-            }
-            #print "$raw\n";
-            $parser->parsedata($raw);
+    %handlers = () unless %handlers;
+    $handlers{Proceed} = 1;
+
+    my $parser = PICA::PlainParser->new( %handlers );
+    my $n = $rs->size();
+    for my $i (0..$n-1) {
+        my $raw;
+        eval {
+            $raw = $rs->record($i)->raw();
+        };
+        if ($@) {
+            croak("Z39.50 error " . $@->code(), ": ", $@->message());
         }
-        return $parser;
-    } else {
-        return $rs;
+        #print "$raw\n";
+        $parser->parsedata($raw);
+        return $parser if $parser->finished();
     }
+    return $parser;
 }
 
 =head1 UTILITY FUNCTIONS

@@ -195,7 +195,7 @@ sub createRecord {
             return;
         }
         $id = $result{id};
-        $map->create($filename, $id);
+        $map->create($filename, $id) if $map;
     }
     message("created %s from %s", $id, $filename);
 }

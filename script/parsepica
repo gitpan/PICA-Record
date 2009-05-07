@@ -8,7 +8,7 @@ parsepica - parse PICA+ data and print summary information
 
 use strict;
 
-our $VERSION = '0.21';
+our $VERSION = '0.22';
 
 # include PICA packages
 use PICA::Record;
@@ -61,11 +61,13 @@ $xmlmode = 1 if $outfilename =~ /\.xml$/;
 # Output stream
 my $output = $xmlmode ? PICA::XMLWriter->new() : PICA::Writer->new();
 
+$outfilename = "-" if ($xmlmode and not $outfilename);
+
 if ($outfilename) {
     #binmode STDOUT, ":utf8";
     $output->reset( ($outfilename ne "-") ? $outfilename : \*STDOUT );
     print LOG "Output to " . $output->name . "\n" if $output->name;
-}
+} 
 
 # init input file list if specified
 if ($inputlistfile) { 
@@ -83,7 +85,7 @@ my $_record_handler = \&record_handler;
 
 # select mode
 my $field_regex;
-my $subfield_select;
+my $subfield_select = "";
 
 if ($select) {
     my ($tag, $subfield) = ("","");
@@ -101,7 +103,7 @@ if ($select) {
     undef $_record_handler;
 
     if (!$quiet) {
-        if ($subfield_select) {
+        if ($subfield_select ne "") {
             print LOG "Selecting subfield: $select\n";
         } else {
             print LOG "Selecting field: $select\n";
@@ -218,9 +220,9 @@ sub field_handler {
     if ($countmode) {
         my $tag = $field->tag;
         if (defined $fieldstat_a{$tag}) {
-          $fieldstat_a{$tag}++;
+            $fieldstat_a{$tag}++;
         } else {
-          $fieldstat_a{$tag} = 1;
+            $fieldstat_a{$tag} = 1;
         }
         $fieldstat_e{$tag} = 1;
     }
@@ -240,12 +242,16 @@ sub select_field_handler {
 
     my $field = shift;
     return unless $field->tag() =~ $field_regex;
-    if (defined $subfield_select) {
-        my @sf = $field->subfield($subfield_select);
+
+     if ($subfield_select ne "") {
+        my @sf = $field->subfield( $subfield_select );
+        # TODO: print subfield if output format is XML (?)
         print { $output->{filehandle} } join("\n",@sf) . "\n" if @sf;
     } else {
         $output->writefield($field);
     }
+
+    return undef;
 }
 
 # default record handler
@@ -271,15 +277,6 @@ sub record_handler {
     $output->write( "Record " . $parser->counter(), $record);
 }
 
-# selecting record handler
-sub select_record_handler {
-    my $record = shift;
-
- # TODO
- #   foreach (@sf) {
- #       print "$_\n"
- #   }
-}
 
 =head1 SYNOPSIS
 
@@ -321,15 +318,15 @@ grep, but grep does not really parse and check for wellformedness.
 
 =over 4
 
-=item parsepica.pl picadata -o checkedrecords
+=item parsepica picadata -o checkedrecords
 
 Read records from 'picadata' and print parseable records to 'checkedrecords'.
 
-=item parsepica.pl picadata -s 021A -o - -q
+=item parsepica picadata -s 021A -o - -q
 
 Select all fields '021A' from 'picadata' and write to STDOUT.
 
-=item parsepica.pl http://gso.gbv.de/sru/DB=2.1/ pica.isb=3-423-31039-1
+=item parsepica http://gso.gbv.de/sru/DB=2.1/ pica.isb=3-423-31039-1
 
 Get records with ISBN 3-423-31039-1 via SRU.
 
@@ -341,11 +338,11 @@ Error handling needs to be implemented to collect broken records.
 
 Examples to implement:
 
-parsepica.pl -b errors picadata
+parsepica -b errors picadata
 
 Parse records in C<picadata>. The number of records will be reported.
 
-parsepica.pl -out checked -quiet picadata.gz
+parsepica -out checked -quiet picadata.gz
 
 Parse records in C<picadata.gz>. Print records that are wellformed 
 to C<checked> and the other records to C<errors>. Supress any messages. 

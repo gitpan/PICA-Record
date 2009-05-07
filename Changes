@@ -1,3 +1,6 @@
+0.47    2009-05-??
+        - rewrote PICA::SRUResponseParser and changed PICA::Source
+        - cqlQuery and z3950Query of PICA::Source now return a PICA::Parser
 0.46    2009-04-16
         - added PICA::Field->purged and PICA::Record->appendif
         - added PICA::Filemap and support of maps in picawebcat

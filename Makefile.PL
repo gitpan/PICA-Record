@@ -10,7 +10,7 @@ use ExtUtils::MakeMaker;
     PMLIBDIRS       => [ qw( lib/ ) ],
     AUTHOR          => 'Jakob Voss <jakob.voss@gbv.de>',
     PREREQ_PM       => {
-        'XML::Parser' => '2.30',
+        'XML::Parser' => '2.32',
         'LWP::UserAgent' => '2.0',
         'URI::Escape' => '1.35',
         'SOAP::Lite' => '0.71',

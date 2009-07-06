@@ -8,14 +8,17 @@ PICA::Record - Perl extension for handling PICA+ records
 
 use strict;
 use utf8;
+
 use base qw(Exporter);
-our $VERSION = "0.47";
+our $VERSION = '0.48';
+our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 use POSIX qw(strftime);
 use PICA::Field;
 use PICA::Parser;
 use Scalar::Util qw(looks_like_number);
 use URI::Escape;
+use XML::Writer;
 use Encode;
 use Carp qw(croak);
 
@@ -50,21 +53,30 @@ You can use PICA::Record for instance to:
 =over 4
 
 =item *
+
 convert between PICA+ and PicaXML
+
 =item *
+
 process PICA+ records that you have downloaded with WinIBW 
+
 =item *
+
 download records in native format via SRU or Z39.50
-=item*
+
+=item *
+
 store PICA+ records in a database
 
 =back
 
-=head1 COMMAND LINE USAGE
+=head1 CLIENTS AND EXAMPLES
 
-This module provides the scripts C<parsepica> and C<picawebcat> to
-use most of the functionality on the command line without having
+This module includes and installs the scripts C<parsepica> and C<picawebcat>.
+They provide most functionality on the command line without having
 to deal with Perl code. Have a look at the documentation of this scripts.
+More examples are includes in the examples directory if this module - maybe
+the application you need it already included, so have a look!
 
 =head1 SYNOPSIS
 
@@ -99,8 +111,9 @@ are some additional two-liners:
       return;
   });
 
-  # print record in normalized format
+  # print record in normalized format and in HTML
   print $record->normalized();
+  print $record->to_html();
 
   # write some records in XML to a file
   my $writer = PICA::Writer->new( $filename, format => 'xml' );
@@ -314,6 +327,7 @@ sub subfield {
         }
     }
 
+    return $list[0] unless wantarray;
     return @list;
 } # subfield()
 
@@ -353,6 +367,32 @@ sub values {
 
     return @list;
 } # values()
+
+=head2 ppn ( )
+
+Get the PICA Produktionsnummer (PPN) of this record (field 003@, subfield 0). This
+is equivalent to C<$self->subfield('003@$0')> but it always returns a scalar or undef.
+
+=cut
+
+sub ppn {
+    my $self = shift;
+    my $ppn = $self->subfield('003@$0');
+    return $ppn;
+}
+
+=head2 epn ( )
+
+Get zero or more EPNs (item numbers) of this record, which is field 203@/.., subfield 0.
+Returns the first EPN (or undef) in scalar context or a list in array context. Each copy 
+record (get them with method copy_records) should have only one EPN.
+
+=cut
+
+sub epn {
+  my $self = shift;
+  return $self->subfield('203@/..$0');
+}
 
 =head2 main_record ( )
 
@@ -595,7 +635,7 @@ sub replace {
     my $self = shift;
     my $tag = shift;
 
-    croak("Not a valid tag: $tag") unless parse_pp_tag($tag);
+    croak("Not a valid tag: $tag") unless PICA::Field::parse_pp_tag($tag);
 
     my $replace;
 
@@ -671,46 +711,77 @@ sub normalized() {
     return "\x1D\x0A" . $prefix . join( "", @lines );
 }
 
-=head2 to_xml ( [ %params ] )
+=head2 to_xml ( [ $xmlwriter | %params ] )
 
-Returns the record in PICA XML format. You can add an XML header with
-header => 1 and a stylesheet with parameter xslt. Otherwise make sure
-to have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
-to get valid PICA XML. See also L<PICA::XMLWriter>.
+Write the record to an L<XML::Writer> or return an XML string of the record.
+If you pass an existing XML::Writer object, the record will be written with it
+and nothing is returned. Otherwise the passed parameters are used to create a
+new XML writer. Unless you specify an XML writer or an OUTPUT parameter, the
+resulting XML is returned as string. By default the PICA-XML namespaces with
+namespace prefix 'pica' is included. In addition to XML::Writer this methods
+knows the 'header' parameter that first adds the XML declaration and the 'xslt'
+parameter that adds an XSLT stylesheet.
 
 =cut
 
 sub to_xml {
     my $self = shift;
-    my %params = @_;
-    my @xml;
+    my $writer = $_[0];
+    my ($string, $sref);
 
-    # TODO: combine in XMLWriter
-    if ($params{header}) {
-        push @xml, "<?xml version='1.0' encoding='UTF-8'?>\n";
-        $params{collection} = 1;
-    }
-    if ($params{xslt}) {
-        my $xslt = $params{xslt};
-        $xslt =~ s/'/&apos/;
-        push @xml, "<?xml-stylesheet type='text/xsl' href='$xslt'?>\n"
-    }
-    if ($params{collection}) {
-        push @xml, "<collection xmlns='info:srw/schema/5/picaXML-v1.0'>\n";
+    if (not UNIVERSAL::isa( $writer, 'XML::Writer' )) {
+        my %params = @_;
+        if (not defined $params{OUTPUT}) {
+            $sref = \$string;
+            $params{OUTPUT} = $sref;
+        }
+        $writer = PICA::Writer::xmlwriter( %params );
     }
 
-    push @xml, "<record>\n";
+    $self->write_xml( $writer );
+
+    return defined $sref ? $$sref : undef;
+}
+
+=head2 write_xml ( $writer )
+
+Write the record to a L<XML::Writer> object.
+
+=cut
+
+sub write_xml {
+    my ($self, $writer) = @_;
+
+    if (UNIVERSAL::isa( $writer, 'XML::Writer::Namespaces' )) {
+        $writer->startTag( [$PICA::Record::XMLNAMESPACE, 'record'] );
+    } else {
+        $writer->startTag( 'record' );
+    }
     for my $field ( @{$self->{_fields}} ) {
-        push @xml, $field->to_xml();
+        $field->to_xml( $writer );
     }
-    push ( @xml , "</record>" );
+    $writer->endTag(); # record
+}
 
-    if ($params{collection}) {
-        push @xml, "\n</collection>";
+=head2 to_html ( [ %options ] )
+
+Returns a HTML representation of the record for browser display. See also
+the C<pica2html.xsl> script to generate a more elaborated HTML view from
+PICA-XML.
+
+=cut
+
+sub to_html  {
+    my $self = shift;
+    my %options = @_;
+
+    my @html = ("<div class='record'>\n");
+    for my $field ( @{$self->{_fields}} ) {
+        push @html, $field->to_html( %options );
     }
+    push @html, "</div>";
 
-    my $xml = join("", @xml) . "\n";
-    return $xml;
+    return join("", @html) . "\n";
 }
 
 =head2 add_headers ( [ %options ] )

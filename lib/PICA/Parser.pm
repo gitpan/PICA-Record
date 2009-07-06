@@ -9,7 +9,7 @@ PICA::Parser - Parse PICA+ data
 use strict;
 use utf8;
 use base qw(Exporter);
-our $VERSION = "0.44";
+our $VERSION = "0.45";
 
 use Carp qw(croak);
 our @EXPORT_OK = qw(parsefile parsedata);
@@ -141,10 +141,6 @@ be called afterwards.
 This handler is called with a record object or undef and an error message
 when a broken record was parsed. By default only empty records are marked
 as broken.
-
-=item Dumpformat
-
-If set to true, parse dumpformat (no newlines).
 
 =item Proceed
 

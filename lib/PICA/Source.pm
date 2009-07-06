@@ -8,7 +8,7 @@ PICA::Source - Data source that can be queried for PICA+ records
 
 use strict;
 use utf8;
-our $VERSION = "0.47";
+our $VERSION = "0.48";
 
 =head1 SYNOPSIS
 
@@ -23,7 +23,7 @@ our $VERSION = "0.47";
 
   $record = $server->getPPN("1234567890");
 
-Instead or in addition to SRU you can use Z39.50 and unAPI (experimental).
+Instead or in addition to SRU you can use Z39.50, PSI, and unAPI (experimental).
 
 =cut
 
@@ -37,8 +37,9 @@ use LWP::UserAgent;
 =head2 new ( [ %params ] )
 
 Create a new Server. You can specify an SRU interface with C<SRU>, 
-a Z39.50 server with C<Z3950> and an unAPI base url with C<unAPI>.
-Optional parameters include C<user> and C<password> for authentification.
+a Z39.50 server with C<Z3950>, an unAPI base url with C<unAPI> or a
+raw PICA PSI interface with c<PSI>. Optional parameters include
+C<user> and C<password> for authentification.
 
 =cut
 
@@ -50,6 +51,7 @@ sub new {
         SRU => $params{SRU} ? $params{SRU} : undef,
         Z3950 => $params{Z3950} ? $params{Z3950} : undef,
         unAPI => $params{unAPI} ? $params{unAPI} : undef,
+        PSI => $params{PSI} ? $params{PSI} : undef,
         user => $params{user} ? $params{user} : undef,
         password => $params{password} ? $params{password} : undef,
         prev_record => undef,
@@ -57,6 +59,9 @@ sub new {
 
     if ($self->{SRU} and not $self->{SRU} =~ /[\?&]$/) {
         $self->{SRU} .= ($self->{SRU} =~ /\?/) ? '&' : '?';
+    }
+    if ($self->{PSI}) {
+        $self->{PSI} =~ s/\/$//;
     }
 
     bless $self, $class;
@@ -73,24 +78,32 @@ is used.
 sub getPPN {
     my ($self, $id) = @_;
 
-    croak("No SRU or unAPI interface defined") unless $self->{SRU} or $self->{unAPI};
+    croak("No SRU, PSI or unAPI interface defined")
+        unless $self->{SRU} or $self->{unAPI} or $self->{PSI};
 
     my $ua = LWP::UserAgent->new( agent => 'PICA::Source/'.$PICA::Source::VERSION);
 
-    if ( $self->{unAPI} ) { # experimental only!
-        # TODO: unapi server does not set encoding header (utf8)?
-        my $url = $self->{unAPI}
-                . ((index($self->{unAPI},'?') == -1) ? '?' : '&')
-                . "format=pp&id=$id";
-        #print STDERR "URL: $url\n";
+    if ( $self->{PSI} or $self->{unAPI} ) {
+        my $url;
+
+        if ( $self->{PSI} ) {
+            $url = $self->{PSI} . "/PLAIN=ON/CHARSET=UTF8/PLAINTTLCHARSET=UTF8/URLENCODE=Y/PPN?PPN=$id";
+        } else {
+            my $url = $self->{unAPI}
+                    . ((index($self->{unAPI},'?') == -1) ? '?' : '&')
+                    . "format=pp&id=$id";
+            # TODO: unapi server does not set encoding header (utf8)?
+        }
+
         my $request = HTTP::Request->new(GET => $url);
         my $response = $ua->request($request);
         if ($response->is_success) {
             my $data = $response->decoded_content();
+            $data = url_decode($data) if ($self->{PSI});
             my $record = PICA::Record->new( $data );
             return $record;
         } else {
-            croak("unAPI request failed: $url");
+            croak("HTTP request failed: $url");
         }
     } else {
         my $result = $self->cqlQuery( "pica.ppn=$id", Limit => 1 );
@@ -199,34 +212,64 @@ sub z3950Query {
     return $parser;
 }
 
+=head2 baseURL
+
+Return the base URL (if specified) or the empty string.
+
+=cut
+
+sub baseURL {
+    my $self = shift;
+
+    return $self->{PSI} if $self->{PSI};
+    return $self->{unAPI} if $self->{unAPI};
+    return $self->{SRU} if $self->{SRU};
+
+    return "";
+}
+
 =head1 UTILITY FUNCTIONS
+
+The following methods are based on L<CGI::Utils> by Don Owens.
 
 =head2 url_encode
 
 Returns the fully URL-encoded version of the given string.
 It does not convert space characters to '+' characters.
-This method is based on L<CGI::Utils> by Don Owens.
 
 =cut
 
 sub url_encode {
-    my $url = shift;
-    $url =~ s{([^A-Za-z0-9_\.\*])}{sprintf("%%%02x", ord($1))}eg;
-    return $url;
+    my $str = shift;
+    $str =~ s{([^A-Za-z0-9_\.\*])}{sprintf("%%%02x", ord($1))}eg;
+    return $str;
+}
+
+=head2 url_decode
+
+Returns the fully URL-decoded version of the given string.
+
+=cut
+
+sub url_decode {
+    my $str = shift;
+    $str =~ tr/+/ /;
+    $str =~ s|%([A-Fa-f0-9]{2})|chr(hex($1))|eg;
+    return $str;
 }
 
 =head2 url_unicode_encode
 
 Returns the fully URL-encoded version of the given string as
 unicode characters.  It does not convert space characters to 
-'+' characters. This method is based on L<CGI::Utils> by Don Owens.
+'+' characters.
 
 =cut
 
 sub url_unicode_encode {
-    my $url = shift;
-    $url =~ s{([^A-Za-z0-9_\.\*])}{sprintf("%%u%04x", ord($1))}eg;
-    return $url;
+    my $str = shift;
+    $str =~ s{([^A-Za-z0-9_\.\*])}{sprintf("%%u%04x", ord($1))}eg;
+    return $str;
 }
 
 1;

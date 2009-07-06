@@ -16,14 +16,14 @@ use PICA::Field;
 use PICA::Parser;
 use PICA::Writer;
 use PICA::Source;
-use PICA::XMLWriter;
 
 # include other packages
 use Getopt::Long;
 use Pod::Usage;
 
-my ($outfilename, $logfile, $inputlistfile, $dumpformat, $verbosemode);
-my ($quiet, $help, $man, $select, $xmlmode, $loosemode, $countmode);
+my ($outfilename, $logfile, $inputlistfile, $verbose);
+my ($quiet, $help, $man, $select, $xmlmode, $loosemode, $countmode, $pretty);
+my ($unapimode);
 my ($limit, $offset);
 my %fieldstat_a; # all
 my %fieldstat_e; # exist?
@@ -33,14 +33,15 @@ GetOptions(
     "output:s" => \$outfilename,   # print valid records to a file
     "log:s" => \$logfile,          # print messages to a file
     "files:s" => \$inputlistfile,  # read names of input files from a file
+    "pretty" => \$pretty,
     "quiet" => \$quiet,            # suppress status messages
     "help|?" => \$help,            # show help message
     "man" => \$man,                # full documentation
     "select=s" => \$select,        # select a special field/subfield
     "count" => \$countmode,
     "limit=i" => \$limit,
-    "D" => \$dumpformat,
-    "v" => \$verbosemode,
+    "unapi" => \$unapimode,
+    "verbose" => \$verbose,
     #"loose" => \$loosemode,        # loose parsing
     "xml" => \$xmlmode
 ) or pod2usage(2);
@@ -51,23 +52,20 @@ pod2usage(-verbose => 2) if $man;
 if ($logfile and $logfile ne "-") {
     open LOG, ">$logfile" 
         or die("Error opening $logfile\n");
-} elsif( $logfile eq "-" or !$quiet) {
+} elsif( not $quiet and ($logfile eq "-" or $verbose) ) {
     *LOG = *STDOUT;
+} else {
+    open LOG, '>/dev/null';
+
 }
 
-# XML mode by default if output file ends with .xml
-$xmlmode = 1 if $outfilename =~ /\.xml$/;
+# Output writer
+$outfilename = "-" unless defined $outfilename;
+print LOG "Output to $outfilename\n" if $outfilename ne "-";
+my @p = ($outfilename ne "-" ? $outfilename : \*STDOUT);
+push @p, ('format' => 'XML') if $xmlmode;
+my $writer = PICA::Writer->new( @p, pretty => $pretty );
 
-# Output stream
-my $output = $xmlmode ? PICA::XMLWriter->new() : PICA::Writer->new();
-
-$outfilename = "-" if ($xmlmode and not $outfilename);
-
-if ($outfilename) {
-    #binmode STDOUT, ":utf8";
-    $output->reset( ($outfilename ne "-") ? $outfilename : \*STDOUT );
-    print LOG "Output to " . $output->name . "\n" if $output->name;
-} 
 
 # init input file list if specified
 if ($inputlistfile) { 
@@ -90,8 +88,8 @@ my $subfield_select = "";
 if ($select) {
     my ($tag, $subfield) = ("","");
 
-    if ( index($select, '$') > 3 ) {
-        ($tag, $subfield) = split(/\$/,$select);
+    if ( $select =~ /^...+[\$_]/ ) {
+        ($tag, $subfield) = split(/[\$_]/,$select);
     } else {
         $tag = $select;
     }
@@ -102,20 +100,18 @@ if ($select) {
     $_field_handler = \&select_field_handler;
     undef $_record_handler;
 
-    if (!$quiet) {
-        if ($subfield_select ne "") {
-            print LOG "Selecting subfield: $select\n";
-        } else {
-            print LOG "Selecting field: $select\n";
-        }
+    if ($subfield_select ne "") {
+        print LOG "Selecting subfield: $select\n";
+    } else {
+        print LOG "Selecting field: $select\n";
     }
 }
 
 my $remote_counter = 0;
 
 my %options;
-%options = ('Dumpformat'=>1) if $dumpformat;
 $options{Limit} = $limit if defined $limit;
+$options{Proceed} = 1;
 
 # init parser
 my $parser = PICA::Parser->new(
@@ -153,15 +149,17 @@ if (@ARGV > 0) {
                         Record => $_record_handler
                     );
                 } elsif ($baseurl) {
-                    print LOG "unAPI query '$query' from $baseurl\n";
-                    my $source = PICA::Source->new( unAPI => $baseurl ); # TODO: document this
-                    my $r = $source->getPPN($query,"gvk"); # TODO: prefix is bad unAPI usage
-                    if ($r) {
-                        $remote_parser = PICA::Parser->parsedata( $r ,
-                            Field => $_field_handler,
-                            Record => $_record_handler
-                        );
+                    my $r;
+                    if ($unapimode) {
+                        print LOG "unAPI query '$query' from $baseurl\n";
+                        my $source = PICA::Source->new( unAPI => $baseurl ); # TODO: document this
+                        $r = $source->getPPN($query,"gvk"); # TODO: prefix is bad unAPI usage
+                    } else {
+                        print LOG "PSI get PPN '$query' from $baseurl\n";
+                        my $source = PICA::Source->new( PSI => $baseurl ); # TODO: document this
+                        $r = $source->getPPN($query);
                     }
+                    $parser->parsedata( $r ) if $r;
                 } else {
                     print LOG "Z3950 query '$query' to $z3950host\n";
                     my $server = PICA::Source->new( Z3950 => $z3950host );
@@ -174,7 +172,7 @@ if (@ARGV > 0) {
                 $remote_counter += $remote_parser->counter() if defined $remote_parser;
             }
         } else {
-            print LOG "Reading $filename\n" if !$quiet;
+            print LOG "Reading $filename\n";
             $parser->parsefile($filename);
         }
     }
@@ -183,23 +181,23 @@ if (@ARGV > 0) {
         chomp;
         next if $_ eq "";
         $filename = $_;
-        print LOG "Reading $filename\n" if !$quiet;
+        print LOG "Reading $filename\n";
         $parser->parsefile($filename);
     }
 } else {
-    print LOG "Reading standard input\n" if !$quiet;
+    print LOG "Reading standard input\n";
     $parser->parsefile( \*STDIN ); 
 }
 
 # Finish
-$output->end_document() if $xmlmode;
+$writer->end();
 
 # Print summary
 # TODO: Input fields: ...
 print LOG "Input records:\t" . ($parser->counter() + $remote_counter) .
-      "\nOutput records:\t" . $output->counter() .
-      "\nOutput fields:\t" . $output->fields() .
-      "\n" if !$quiet;
+      "\nOutput records:\t" . $writer->counter() .
+      "\nOutput fields:\t" . $writer->fields() .
+      "\n";
 
 if ($countmode) {
     print "Frequency of tags in all records:\n";
@@ -233,7 +231,7 @@ sub field_handler {
 # flushing field handler
 #sub flush_field_handler {
 #    my $field = shift;
-#    $output->writefield( $field );
+#    $writer->writefield( $field );
 #}
 
 # selecting field handler
@@ -246,17 +244,18 @@ sub select_field_handler {
      if ($subfield_select ne "") {
         my @sf = $field->subfield( $subfield_select );
         # TODO: print subfield if output format is XML (?)
-        print { $output->{filehandle} } join("\n",@sf) . "\n" if @sf;
+        print { $writer->{filehandle} } join("\n",@sf) . "\n" if @sf;
     } else {
-        $output->writefield($field);
+        $writer->write($field);
     }
 
     return undef;
 }
 
-# default record handler
+# default record handler (TODO: directly use a PICA::Writer object)
 sub record_handler {
     my $record = shift;
+    $writer->write( $record ); 
 
     if ($countmode) {
         foreach my $tag (keys %fieldstat_e) {
@@ -269,12 +268,9 @@ sub record_handler {
         %fieldstat_e = ();
     }
 
-    # TODO
-    if ($verbosemode) {
+    if ($verbose) {
         print LOG $parser->counter() ."\n" unless ($parser->counter() % 100);
     }
-
-    $output->write( "Record " . $parser->counter(), $record);
 }
 
 
@@ -290,9 +286,9 @@ parsepica [options] [file(s) or SRU-Server(s) and queries(s)..]
  -input FILE    file with input files on each line ('-': STDIN)
  -output FILE   print all valid records to a given file ('-': STDOUT)
  -xml           output of records in XML
+ -pretty        pretty output (useful for PICA XML)
  -quiet         supress logging
  -select FIELD  select a specific field or subfield (no XML output possible yet)
- -D             read dumpfile format (no newlines)
 
 Not fully implemented yet:
  -sru SRU       fetch records via SRU. command line arguments are cql

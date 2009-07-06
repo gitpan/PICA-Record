@@ -10,9 +10,13 @@ use strict;
 use utf8;
 
 use base qw(Exporter);
-our $VERSION = "0.46";
+our $VERSION = "0.48";
 
 use Carp qw(croak);
+use XML::Writer;
+use PICA::Record;
+use PICA::Writer;
+
 our @EXPORT = qw(parse_pp_tag);
 
 use constant SUBFIELD_INDICATOR => "\x1F"; # 31
@@ -266,13 +270,14 @@ sub subfield {
         next unless $data[$i] =~ $codes;
         my $value = $data[$i+1];
         $value =~ s/\s+/ /gm;
-        if ( wantarray() ) {
+        if ( wantarray ) {
             push( @list,  $value );
         } else {
             return $value;
         }
     }
 
+    return $list[0] unless wantarray;
     return @list;
 }
 
@@ -565,45 +570,123 @@ sub to_string() {
            $endfield;
 }
 
-=head2 to_xml ( )
+=head2 to_xml ( [ $xmlwriter | %params ] )
 
-Returns the field in XML format:
-
-  <datafield tag='....' occurrence='..'>
-    <subfield code='.'>....</subfield>
-    ...
-  </datafield>
-
-Make sure to have set the default namespace ('info:srw/schema/5/picaXML-v1.0')
-to get valid PICA XML. See also L<PICA::XMLWriter>.
+Write the field to an L<XML::Writer> or return an XML string of the field.
+If you pass an existing XML::Writer object, the field will be written with it
+and nothing is returned. Otherwise the passed parameters are used to create a
+new XML writer. Unless you specify an XML writer or an OUTPUT parameter, the
+resulting XML is returned as string. By default the PICA-XML namespaces with
+namespace prefix 'pica' is included. In addition to XML::Writer this methods
+knows the 'header' parameter that first adds the XML declaration.
 
 =cut
 
 sub to_xml {
     my $self = shift;
+    my $writer = $_[0];
+    my ($string, $sref);
 
-    my $xml = "<datafield tag='" . $self->{_tag} . "'";
-    $xml .= " occurrence='" . $self->{_occurrence} . "'" if defined $self->{_occurrence};
-    $xml .= ">\n";
+    if (not UNIVERSAL::isa( $writer, 'XML::Writer' )) {
+        my %params = @_;
+        if (not defined $params{OUTPUT}) {
+            $sref = \$string;
+            $params{OUTPUT} = $sref;
+        }
+        $writer = PICA::Writer::xmlwriter( %params );
+    }
+
+    $self->write_xml( $writer );
+
+    return defined $sref ? $$sref : undef;
+}
+
+
+=head2 write_xml ( $writer )
+
+Write the field to a L<XML::Writer> object.
+
+=cut
+
+sub write_xml {
+    my ($self, $writer) = @_;
+
+    my ($datafield, $subfield);
+
+    if (UNIVERSAL::isa( $writer, 'XML::Writer::Namespaces' )) {
+        $datafield = [$PICA::Record::XMLNAMESPACE, 'datafield'];
+        $subfield  = [$PICA::Record::XMLNAMESPACE, 'subfield'];
+    } else {
+        $datafield = 'datafield';
+        $subfield = 'subfield';    
+    }
+
+    my %attr = ('tag' =>  $self->{_tag});
+    $attr{occurrence} = $self->{_occurrence} if defined $self->{_occurrence};
+
+    $writer->startTag( $datafield, %attr );
 
     my $subs = $self->{_subfields};
     my $nfields = @$subs / 2;
 
-    return "" unless $nfields; # field without subfields
+    if ($nfields) {
+        for my $i ( 1..$nfields ) {
+            my $offset = ($i-1)*2;
+            $writer->startTag( $subfield, code =>  $subs->[$offset] );
+            $writer->characters(  $subs->[$offset+1] );
+            $writer->endTag(); # subfield
+        }
+    }
 
+    $writer->endTag(); # datafield
+}
+
+=head2 to_html ( [ %options ] )
+
+Returns a HTML representation of the field for browser display. See also
+the C<pica2html.xsl> script to generate a more elaborated HTML view from
+PICA-XML.
+
+=cut
+
+sub to_html  {
+    my $self = shift;
+    my %options = @_;
+
+    # CSS classes (TODO: customize)
+    my $field = 'field';
+    my $tag = 'tag';
+    my $tagcode = 'tagcode';
+    my $occurrence = 'occurrence';
+    my $sfcode = 'sfcode';
+    my $sfindicator = 'sfindicator';
+
+    my $html = "<div class='$field'><span class='$tag'>" 
+             . "<span class='$tagcode'>" . $self->{_tag} . "</span>";
+    if (defined $self->{_occurrence}) {
+        $html .= "/<span class='$occurrence'>"
+               . $self->{_occurrence} . "</span>";
+    } else {
+        # TODO: in monospaced mode only
+        # $html .= "&#xA0;&#xA0;&#xA0;";
+    }
+    $html .= "</span> "; # tag
+
+    my $subs = $self->{_subfields};
+    my $nfields = @$subs / 2;
+    if ($nfields) {
     for my $i ( 1..$nfields ) {
         my $offset = ($i-1)*2;
         my $code = $subs->[$offset];
         my $text = $subs->[$offset+1];
-        $xml .= "  <subfield code='$code'>";
+        $html .= "<span class='$sfindicator'>\$</span>"
+               . "<span class='$sfcode'>$code</span>";
         $text =~ s/&/&amp;/g;
         $text =~ s/</&lt;/g;
-        $xml .= $text; # TODO: character encoding (?)
-        $xml .= "</subfield>\n";
+        $html .= $text; # TODO: character encoding (?)
     }
-    $xml .= "</datafield>\n";
-
-    return $xml;
+    }
+    return $html . "</div>\n";
 }
 
 =head1 STATIC METHODS
@@ -614,7 +697,7 @@ Tests whether a string can be used as a tag/occurrence specifier. A tag
 indicator consists of a 'type' (00-99) and an 'indicator' (A-Z and @),
 both conflated as the 'tag', and an optional occurrence (00-99). This
 method returns a list of two values: occurrence and tag (this order!).
-This method can be used to parse and test tag specifiers this way:
+It can be used to parse and test tag specifiers this ways:
 
   ($occurrence, $tag) = parse_pp_tag( $t );
   parse_pp_tag( $t ) or print STDERR "Not a valid tag: $t\n";
@@ -625,7 +708,7 @@ sub parse_pp_tag {
     my $tag = shift;
 
     my ($tagno, $occurrence) = split ('/', $tag);
-    undef $tagno unless $tagno =~ FIELD_TAG_REGEXP;
+    undef $tagno unless defined $tagno and $tagno =~ FIELD_TAG_REGEXP;
     undef $occurrence unless defined $occurrence and $occurrence =~ FIELD_OCCURRENCE_REGEXP;
 
     return ($occurrence, $tagno);
@@ -637,7 +720,7 @@ __END__
 
 =head1 SEE ALSO
 
-This module is mainly based on L<MARC::Field> by Andy Lester.
+This module was inspired by L<MARC::Field> by Andy Lester.
 
 =head1 AUTHOR
 

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                PICA-Record
-version:             0.47
+version:             0.48
 abstract:            Perl extension for handling PICA+ records
 license:             ~
 author:              
@@ -9,12 +9,14 @@ generated_by:        ExtUtils::MakeMaker version 6.42
 distribution_type:   module
 requires:     
     Config::Simple:                4.58
+    Encode:                        2.33
     IO::File:                      1.11
     LWP::UserAgent:                2.0
     Scalar::Util:                  1.18
     SOAP::Lite:                    0.71
     URI::Escape:                   1.35
     XML::Parser:                   2.32
+    XML::Writer:                   0.605
 meta-spec:
     url:     http://module-build.sourceforge.net/META-spec-v1.3.html
     version: 1.3

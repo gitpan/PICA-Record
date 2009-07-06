@@ -3,7 +3,7 @@
 use strict;
 use utf8;
 
-use Test::More tests => 42;
+use Test::More tests => 49;
 
 use PICA::Field;
 use PICA::Record;
@@ -64,6 +64,12 @@ $record->append(
 );
 is( scalar $record->all_fields(), 4 , "Record->append()" );
 
+is( $record->ppn(), undef, "ppn() not existing" );
+is( $record->epn(), undef, "epn() not existing" );
+
+my @missing = $record->epn();
+is_deeply( \@missing, [], "epn() not existing" );
+
 # use the same object of provided
 is( $record->subfield('028A','9'), '117060275', "Field value" );
 $field->update('9'=>'12345');
@@ -120,7 +126,7 @@ my @s = $record->subfield(0,'....$a');
 is( scalar @s, 3, "subfield() with limit zero");
 @s = $record->subfield(2,'....$a');
 is( scalar @s, 2, "subfield() with limit");
-
+is( $record->subfield('123$x'), undef, "subfield() not exist" );
 
 ### delete_fields
 my $r = PICA::Record->new($record);
@@ -143,15 +149,17 @@ is( $record->subfield('010@$a'), 'ger', "replace field");
 $record->replace('010@', 'a' => 'fra');
 is( $record->subfield('010@$a'), 'fra', "replace field");
 
-### parse WinIBW output
-use PICA::Parser;
+### parse WinIBW output : TODO
+if (0) {
+  use PICA::Parser;
 
-PICA::Parser->parsefile( "t/winibwsave.example", Record => sub { $record = shift; } );
-isa_ok( $record, 'PICA::Record' );
+  PICA::Parser->parsefile( "t/winibwsave.example", Record => sub { $record = shift; } );
+  isa_ok( $record, 'PICA::Record' );
 
-# test bibliographic()
-my $main = $record->main_record();
-isa_ok( $main, 'PICA::Record' );
+  # test bibliographic()
+  my $main = $record->main_record();
+  isa_ok( $main, 'PICA::Record' );
+}
 
 ### parse normalized by autodetection
 open PICA, "t/bib.pica"; # TODO: bib.pica is bytestream, not character-stream!
@@ -172,9 +180,23 @@ $record = PICA::Record->new( '021A', 'a' => "This\nare\n\t\nlines" );
 is( $record->sf('021A$a'), "This are lines", "newline in value (1)" );
 is( $record->to_string(), "021A \$aThis are lines\n", "newline in value (2)" );
 
-# TODO: more testing with minimal.pica / .xml etc.
+($record) = PICA::Parser->parsefile("t/graveyard.pica")->records();
+is( scalar $record->all_fields(), 62, "parsed graveyard.pica" );
+my $ppn = $record->ppn();
+my @ppns = $record->ppn();
+
+is( $ppn, '588923168', "ppn() as scalar" );
+is_deeply( \@ppns, ['588923168'], "ppn() as array" );
+
+my $epn = $record->epn();
+my @epns = $record->epn();
+
+is( $epn, 917400194, "epn() as scalar" );
+is_deeply( \@epns, [917400194,923091475,923091483,923091491], "epn() as array" );
 
 __END__
+
+# TODO: test to_xml
 # TODO: test unicode equivalence!
 
 $r = new PICA::Record( new IO::File("t/cjk.pica") );

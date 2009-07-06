@@ -18,7 +18,6 @@ lib/PICA/Store.pm
 lib/PICA/Filemap.pm
 lib/PICA/Writer.pm
 lib/PICA/XMLParser.pm
-lib/PICA/XMLWriter.pm
 t/01distribution.t
 t/10field.t
 t/12subfield.t
@@ -26,7 +25,7 @@ t/15parse_pp_tag.t
 t/20record.t
 t/30parser.t
 t/35XMLParser.t
-t/40xmlwriter.t
+t/40writer.t
 t/42SRUSearchParser.t
 t/50store.t
 t/60filemap.t
@@ -35,10 +34,13 @@ t/minimal.xml
 t/cjk.pica
 t/kochbuch.pica
 t/record.xml
+t/graveyard.pica
+t/graveyard.xml
 t/searchRetrieveResponse-1.xml
 t/winibwsave.example
 t/dumpformat
 t/holdings.t
 t/bgb.example
 t/bib.pica
+pica-xml-v1-0.xsd
 META.yml                                 Module meta-data (added by MakeMaker)

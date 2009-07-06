@@ -17,6 +17,8 @@ use ExtUtils::MakeMaker;
         'Scalar::Util' => '1.18',
         'Config::Simple' => '4.58',
         'IO::File' => '1.11',
+        'Encode' => '2.33',
+        'XML::Writer' => '0.605'
     },
     EXE_FILES       => [ 'script/parsepica', 'script/picawebcat' ],
     dist            => {

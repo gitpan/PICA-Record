@@ -8,7 +8,7 @@ PICA::PlainParser - Parse normalized PICA+
 
 use strict;
 use utf8;
-our $VERSION = "0.40";
+our $VERSION = "0.45";
 
 =head1 SYNOPSIS
 
@@ -60,8 +60,6 @@ sub new {
         broken_field_handler => defined $params{FieldError} ? $params{FieldError} : undef,
         broken_record_handler => defined $params{RecordError} ? $params{RecordError} : undef,
 
-        dumpformat => $params{Dumpformat}, # TODO: remove this parameters
-
         proceed => $params{Proceed} ? $params{Proceed} : 0,
         limit  => ($params{Limit} || 0) * 1,
         offset  => ($params{Offset} || 0) * 1,
@@ -88,17 +86,18 @@ C<Collection>) and options (C<EmptyRecords>). If you supply a filename
 with extension C<.gz> then it is extracted while reading with C<zcat>,
 if the extension is C<.zip> then C<unzip> is used to extract.
 
-This method temporarily changes the end-of-line character if parsing in
-dumpformat is requested.
-
 =cut
 
 sub parsefile {
     my ($self, $file) = @_;
 
-    if (ref($file) eq "GLOB" or eval { $file->isa("IO::Handle") }) {
+    if ( ref($file) eq 'GLOB' ) {
+        $self->{filehandle} = IO::Handle->new_from_fd($file,"r")
+            or croak("failed to use IO::Handle");
         $self->{filename} = "";
+    } elsif ( UNIVERSAL::isa($file, 'IO::Handle') ) {
         $self->{filehandle} = $file;
+        $self->{filename} = "";
     } else {
         $self->{filename} = $file;
 
@@ -106,13 +105,8 @@ sub parsefile {
         $fh = "zcat $fh |" if $fh =~ /\.gz$/;
         $fh = "unzip -p $fh |" if $fh =~ /\.zip$/;
 
-        $self->{filehandle} = eval { 
-            my $handle; open( $handle, "<", $fh )
-                or die "failed to open file $file"; 
-            # binmode $fh, ":utf8"; ?
-            $handle;
-        };
-        croak($@) if $@;
+        $self->{filehandle} = IO::File->new($file, '<:utf8')
+            or croak("failed to open file $file");
     }
 
     if ( ! $self->{proceed} ) {
@@ -123,33 +117,48 @@ sub parsefile {
     $self->{active} = 0;
     $self->{record} = undef;
 
-    # dumpformat used \x1E instead of newlines
-    if ($self->{dumpformat}) {
+    my $dumpformat = 0;
+    my $line = readline( $self->{filehandle} );
+    if ($line =~ /\x1E/) { # dumpformat useds \x1E instead of newlines
+
         my $EOL = $/;
         $/ = chr(0x1E);
         my $id = "";
 
-        while (my $line = readline( $self->{filehandle} )) {
+        my @linebuf = split( /\x1E/, $line );
+        
+        do {
             last if ($self->finished());
-
-            $line =~ /^\x1D?([^\s]+)/;
-            if (PICA::Field::parse_pp_tag($1)) {
-                $self->_parseline($line);
-            } else {
-                if ( !defined $id or "$id" ne "$1" ) { 
-                    $self->_parseline("");
+            if (@linebuf) {
+                $line = shift @linebuf;
+                if (defined $line and not @linebuf) {
+                    $line .= readline( $self->{filehandle} );
                 }
-                $id = $1;
+            } else {
+                $line = readline( $self->{filehandle} );
             }
-        }
+            if ( defined $line ) {
+                $line =~ /^\x1D?([^\s]*)/;
+                if (PICA::Field::parse_pp_tag($1)) {
+                    $self->_parseline($line);
+                } else {
+#print "!!!!!1\n" if $line =~ /\x1D/;
+                    if ( "$id" ne "$1" ) { 
+#print "L: $line\n";
+                        $self->_parseline(""); # next record
+                    }
+                    $id = $1;
+                }
+            }
+        } while(defined $line);
 
         $/ = $EOL;
-    } else {
-        while (my $line = readline( $self->{filehandle} )) {
-            last if ($self->finished());
 
+    } else {
+        do {
+            last if ($self->finished());
             $self->_parseline($line);
-        }
+        } while( $line = readline( $self->{filehandle} ) );
     }
 
     $self->handle_record() unless $self->finished(); # handle last record
@@ -184,9 +193,9 @@ sub parsedata {
             $chunk = &$data();
         }
     } elsif( UNIVERSAL::isa( $data, "PICA::Record" ) ) {
+        # re-parse the record (could obviously be speed up by dropping tests)
         my @fields = $data->all_fields();
         foreach (@fields) {
-            # TODO: we could improve performance here
             $self->_parseline( $_->to_string() );
         }
     } else {
@@ -330,7 +339,7 @@ sub broken_record {
     if ($self->{broken_record_handler}) {
         return $self->{broken_record_handler}( $msg, $record );
     }
-    return if $record && $record->is_empty();
+    return if UNIVERSAL::isa( $record, 'PICA::Record' ) && $record->is_empty();
     print STDERR "$msg\n" if defined $msg;
     return;
 }
@@ -362,8 +371,13 @@ sub handle_record {
 
     if (not defined $broken) {
         if ($self->{record_handler}) {
-            $record = $self->{record_handler}( $record );
-            $record = undef if $record =~ /^-?\d+$/;            
+            if (UNIVERSAL::isa($self->{record_handler}, 'PICA::Writer')) {
+                $self->{record_handler}->write( $record );
+                #$record = TODO allow here!
+            } else {
+                $record = $self->{record_handler}( $record );
+                $record = undef if $record =~ /^-?\d+$/;            
+            }
         }
         if (defined $record) {
             if ( UNIVERSAL::isa( $record, 'PICA::Record' ) ) {

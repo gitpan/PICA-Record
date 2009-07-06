@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 43;
+use Test::More tests => 46;
 
 use PICA::Parser qw(parsefile parsedata);
 use PICA::PlainParser;
@@ -10,6 +10,7 @@ use PICA::XMLParser;
 use PICA::Record;
 use PICA::Writer;
 use IO::File;
+use Encode;
 
 my $record;
 my $plainpicafile = "t/kochbuch.pica";
@@ -83,16 +84,27 @@ is( scalar $record->all_fields(), 26 , "parse another PICA::Record" );
 
 # parse dump format
 my $writer = PICA::Writer->new();
-$parser = PICA::Parser->new( Dumpformat => 1, Record => sub { $writer->write( shift ); } );
+$parser = PICA::Parser->new( Record => sub { 
+    my $record = shift;
+    $writer->write( $record ); 
+    return $record;
+} );
 $parser->parsefile("t/dumpformat");
-is( $writer->counter(), 3, 'parse dumpformat (records)' );
+is( $writer->counter(), 3, 'parse dumpformat (records) - writer' );
+is( $parser->counter(), 3, 'parse dumpformat (records) - parser' );
 is( $writer->fields(), 92, 'parse dumpformat (fields)' );
+$writer->reset();
+
+# parse dumpformat (from file)
+$parser->parsefile("t/bib.pica");
+is ($writer->fields(), 24, 'parse dumpformat (from file)' );
 
 # parse from IO::Handle
 use IO::File;
 my $fh = new IO::File("< t/dumpformat");
-$parser->parsefile( $fh, Record => \&handle_record );
-is( $writer->counter, 3, 'parse dumpformat (records)' );
+$parser = PICA::Parser->new();
+$parser->parsefile( $fh );
+is( $parser->counter, 3, 'parse dumpformat (records)' );
 
 # check proceed mode and non-proceed mode
 $parser = PICA::Parser->new( Proceed => 0 );
@@ -170,6 +182,16 @@ sub test_parsedata {
     is( $visited, 2, "changed handler at call of parsefile");
     is( $parser->counter(), 1 , "ignore Proceed when calling parsedata");
 }
+
+# use PICA::Writer as record handler
+my $file = "t/cjk.pica";
+open FILE, $file;
+my $data = join( "", <FILE> );
+close FILE;
+my $s;
+$writer = PICA::Writer->new( \$s );
+$parser = PICA::Parser->new( Record => $writer )->parsefile($file);
+is ( encode_utf8($s), "$data\n", 'PICA::Writer as record handler');
 
 
 my @records;

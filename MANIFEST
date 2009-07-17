@@ -8,6 +8,10 @@ script/pica2html.xsl
 examples/picasru.pl
 examples/gbvholdings.pl
 examples/pica2bibtex.pl
+examples/picawiki.pl
+examples/picawiki.soap.pl
+examples/soapserver.pl
+examples/.htaccess
 lib/PICA/Field.pm
 lib/PICA/Parser.pm
 lib/PICA/PlainParser.pm
@@ -18,6 +22,9 @@ lib/PICA/Store.pm
 lib/PICA/Filemap.pm
 lib/PICA/Writer.pm
 lib/PICA/XMLParser.pm
+lib/PICA/SQLiteStore.pm
+lib/PICA/SOAPServer.pm
+lib/PICA/SOAPClient.pm
 t/01distribution.t
 t/10field.t
 t/12subfield.t
@@ -29,6 +36,8 @@ t/40writer.t
 t/42SRUSearchParser.t
 t/50store.t
 t/60filemap.t
+t/70sqlitestore.t
+t/teststore.pl
 t/minimal.pica
 t/minimal.xml
 t/cjk.pica
@@ -39,7 +48,6 @@ t/graveyard.xml
 t/searchRetrieveResponse-1.xml
 t/winibwsave.example
 t/dumpformat
-t/holdings.t
 t/bgb.example
 t/bib.pica
 pica-xml-v1-0.xsd

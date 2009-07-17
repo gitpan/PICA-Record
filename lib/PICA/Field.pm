@@ -10,7 +10,7 @@ use strict;
 use utf8;
 
 use base qw(Exporter);
-our $VERSION = "0.48";
+our $VERSION = "0.49";
 
 use Carp qw(croak);
 use XML::Writer;
@@ -194,7 +194,7 @@ sub parse($) {
     return $self->new($tagno, @subfields);
 }
 
-=head2 tag ( [$tag] )
+=head2 tag ( [ $tag ] )
 
 Returns the PICA+ tag and occurrence of the field. Optionally sets tag (and occurrence) to a new value.
 
@@ -213,6 +213,34 @@ sub tag {
     }
 
     return $self->{_tag} . ($self->{_occurrence} ?  ("/" . $self->{_occurrence}) : "");
+}
+
+=head2 occurrence ( [ $occurrence ] )
+
+Returns the ocurrence or undef. Optionally sets the ocurrence to a new value.
+
+=cut
+
+sub occurrence {
+    my $self = shift;
+    my $occurrence = shift;
+
+    if (defined $occurrence) {
+        croak unless $occurrence >= 0 and $occurrence <= 99;
+        $self->{_occurrence} = sprintf("%02d", $occurrence);
+    }
+
+    return $self->{_occurrence};
+}
+
+=head2 occ ( [ $occurrence ] )
+
+Short for of method occurrence.
+
+=cut
+
+sub occ {
+    return shift->occurrence( @_ );
 }
 
 =head2 level ( )
@@ -451,13 +479,13 @@ sub empty_subfields {
     return @list;
 }
 
-=head2 is_empty ( )
+=head2 empty ( )
 
 Test whether there are no subfields or all subfields are empty.
 
 =cut
 
-sub is_empty {
+sub empty {
     my $self = shift;
 
     my @data = @{$self->{_subfields}};
@@ -467,6 +495,16 @@ sub is_empty {
     }
 
     return 1;
+}
+
+=head2 is_empty ( )
+
+Alias for method empty (deprecated).
+
+=cut
+
+sub is_empty {
+    return shift->empty;
 }
 
 =head2 purged ( )

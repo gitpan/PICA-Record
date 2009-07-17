@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 49;
+use Test::More tests => 53;
 
 use PICA::Field;
 use XML::Writer;
@@ -35,6 +35,7 @@ $field = PICA::Field->new( $picamarc );
 is( $field->normalized(), $normalized, 'new with picamarc');
 
 my $xml = join('',<DATA>);
+$xml =~ s/\n$//m;
 is( $field->to_xml(), $xml, 'to_xml()');
 
 $xml =~ s/pica:/foo:/g;
@@ -110,6 +111,7 @@ is( $fcopy->normalized(), $normalized, 'copy' );
 $field = PICA::Field->new("028A","d" => "Karl", "a" => "Marx");
 isa_ok( $field, 'PICA::Field');
 ok( !$field->is_empty(), '!is_empty()' );
+ok( !$field->empty(), '!empty()' );
 
 $field = PICA::Field->new("028A","d" => "", "a" => "Marx");
 ok( !$field->is_empty(), '!is_empty()' );
@@ -117,6 +119,7 @@ is( $field->purged->to_string, "028A \$aMarx\n", "purged empty field");
 
 $field = PICA::Field->new("028A", "d"=>"", "a"=>"" );
 ok( $field->is_empty(), 'is_empty()' );
+ok( $field->empty(), 'empty()' );
 is( join('', $field->empty_subfields() ), "da", 'empty_subfields' );
 is( $field->purged, undef, "purged empty field");
 
@@ -131,6 +134,10 @@ is( $field->purged, undef, "purged empty field");
 
 $field->tag("028C/01");
 ok( $field->tag eq "028C/01", 'set tag' );
+is( $field->occurrence, '01', 'get occurrence' );
+
+$field->occurrence(2);
+is( $field->occ, '02', 'set occurrence' );
 
 $field = PICA::Field->new( '021A', 'a' => 'Get a $, loose a $!', 'b' => 'test' );
 my $enc = '021A $aGet a $$, loose a $$!$btest';

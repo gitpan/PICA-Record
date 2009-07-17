@@ -71,7 +71,7 @@ sub new {
 
 Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
 Only available for SRU and unAPI at the moment. If both are specified, unAPI
-is used.
+is used. You should check whether the returned object is empty or not.
 
 =cut
 

@@ -10,7 +10,7 @@ use strict;
 use utf8;
 
 use base qw(Exporter);
-our $VERSION = '0.48';
+our $VERSION = '0.49';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 use POSIX qw(strftime);
@@ -407,20 +407,20 @@ sub main_record {
   return PICA::Record->new(@fields);
 }
 
-=head2 local_records ( )
+=head2 holdings ( )
 
 Get a list of local records (holdings, level 1 and 2).
 Returns an array of L<PICA::Record> objects.
 
 =cut
 
-sub local_records {
+sub holdings {
   my $self = shift;
 
   my @holdings = ();
   my @fields = ();
   my $prevtag;
-
+  
   foreach my $f (@{$self->{_fields}}) {
     next unless $f->tag =~ /^[^0]/;
 
@@ -438,15 +438,25 @@ sub local_records {
   return @holdings;
 }
 
+=head2 local_records ( )
 
-=head2 copy_records ( )
-
-Get the copy records (level 2, all tags starting with '2').
-Returns an array of L<PICA::Record> objects.
+Alias for method holdings (deprecated).
 
 =cut
 
-sub copy_records {
+sub local_records {
+    return shift->holdings(@_);
+}
+
+=head2 items ( )
+
+Get an array of L<PICA::Record> objects with fields of each copy/item
+included in the record. Copy records are located at level 2 (tags starting
+with '2') and differ by tag occurrence.
+
+=cut
+
+sub items {
   my $self = shift;
 
   my @copies = ();
@@ -468,19 +478,40 @@ sub copy_records {
   return @copies;
 }
 
-=head2 is_empty ( )
+=head2 copy_records ( )
+
+Alias for method items (deprecated).
+
+=cut
+
+sub copy_records {
+    return shift->items(@_);
+}
+
+=head2 empty ( )
 
 Return true if the record is empty (no fields or all fields empty)
 
 =cut
 
-sub is_empty() {
+sub empty() {
     my $self = shift;
     foreach my $field (@{$self->{_fields}}) {
-        return 0 if !$field->is_empty();
+        return 0 if !$field->empty;
     }
     return 1;
 }
+
+=head2 is_empty ( )
+
+Aloas for method empty (deprecated).
+
+=cut
+
+sub is_empty {
+    return shift->empty;
+}
+
 
 =head2 delete_fields ( <tagspec(s)> )
 
@@ -535,8 +566,8 @@ You can also append multiple fields with one call:
         '037A', 'a' => '2nd note',
     );
 
-Please note that passed L<PICA::Field> objects are not be copied but directly
-used:
+Please note that passed L<PICA::Field> objects are not be copied but 
+directly used:
 
     my $field = PICA::Field->new('037A','a' => 'My note');
     $record->append( $field );
@@ -664,6 +695,8 @@ not relevant but sorted fields may be helpful for viewing records.
 
 sub sort() {
     my $self = shift;
+
+    # TODO: sort holdings independently!
 
     @{$self->{_fields}} = sort {$a->tag() cmp $b->tag()} @{$self->{_fields}};
 }

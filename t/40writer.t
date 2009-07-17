@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 12;
+use Test::More tests => 13;
 use Encode;
 use File::Temp qw(tempfile);
 use XML::Writer;
@@ -88,13 +88,11 @@ $w->write( $record )->end();
 
 is( file2string($filename), $xmldata, "format => 'xml' (implicit, pretty)" );
 
-if (0) { # TODO!
-  $s="";
-  $w = PICA::Writer->new( \$s, format => 'xml' );
-  PICA::Parser->parsefile( "t/graveyard.pica", Record => $w );
-  $w->end();
-  is ("$s", file2string("t/graveyard.xml"), "default XML conversion");
-}
+$s="";
+$w = PICA::Writer->new( \$s, format => 'xml' );
+PICA::Parser->parsefile( "t/graveyard.pica", Record => $w );
+$w->end();
+is ("$s", file2string("t/graveyard.xml"), "default XML conversion");
 
 
 __END__

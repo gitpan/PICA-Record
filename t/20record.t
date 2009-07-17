@@ -3,7 +3,7 @@
 use strict;
 use utf8;
 
-use Test::More tests => 49;
+use Test::More tests => 60;
 
 use PICA::Field;
 use PICA::Record;
@@ -29,10 +29,15 @@ my $normalized = "\x1D\x0A\x1E028A \x1F9117060275\x1FdMartin\x1FaSchrettinger\x0
 # create a new record (empty)
 my $record = new PICA::Record();
 isa_ok( $record, 'PICA::Record');
+ok( $record->empty, 'empty record' );
+ok( $record->is_empty, 'empty record' );
 
 # append a field
 $record->append($field);
 is( $record->normalized(), $normalized, 'Record->normalized()');
+ok( !$record->empty, 'not empty record' );
+ok( !$record->is_empty, 'not empty record' );
+
 
 # directly pass a field to new()
 $record = PICA::Record->new($field);
@@ -193,6 +198,24 @@ my @epns = $record->epn();
 
 is( $epn, 917400194, "epn() as scalar" );
 is_deeply( \@epns, [917400194,923091475,923091483,923091491], "epn() as array" );
+
+### holdings
+
+$record = PICA::Record->new( IO::File->new("t/bgb.example") );
+
+my @holdings = $record->holdings();
+is( scalar @holdings, 56, 'holdings' );
+my @a = $record->local_records;
+is( scalar @a, scalar @holdings, 'local_records' );
+
+my @copies = $record->items();
+ok( scalar @copies == 336, 'items' );
+@a = $record->copy_records;
+is( scalar @a, scalar @copies, 'copy_records' );
+
+ok( scalar $holdings[0]->items() == 1, "items (1)");
+ok( scalar $holdings[4]->items() == 2, "items (2)");
+ok( scalar $holdings[5]->items() == 26, "items (26)");
 
 __END__
 

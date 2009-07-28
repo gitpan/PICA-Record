@@ -7,7 +7,6 @@ PICA::Writer - Write and count PICA+ records and fields
 =cut
 
 use strict;
-use utf8;
 our $VERSION = "0.48";
 
 =head1 DESCRIPTION
@@ -46,6 +45,7 @@ and fields is counted so you can also use the class as a simple counter.
 
 use PICA::Record;
 use XML::Writer;
+use PICA::Parser;
 use IO::Handle;
 use IO::Scalar;
 use IO::File;
@@ -100,9 +100,10 @@ sub output {
         $self->{io} = undef;
     } elsif ( ref($output) eq 'GLOB' ) {
         $self->{io} = $output;
-        #binmode $self->{io}, ":utf8";
-    } elsif (UNIVERSAL::isa('IO::Handle', $output)) {
+        PICA::Parser::enable_binmode_encoding( $self->{io} );
+    } elsif ( UNIVERSAL::isa('IO::Handle', $output) ) {
         $self->{io} = $output;
+        PICA::Parser::enable_binmode_encoding( $self->{io} );
     } elsif ( ref($output) eq 'SCALAR' ) {
         $self->{io} = IO::Scalar->new( $output );
     } else {
@@ -346,7 +347,7 @@ sub xmlwriter {
     $params{NAMESPACES} = 1 unless defined $params{NAMESPACES};
     if (not defined $params{PREFIX_MAP} or 
         not defined $params{PREFIX_MAP}->{ $PICA::Record::XMLNAMESPACE }) {
-        $params{PREFIX_MAP} = { $PICA::Record::XMLNAMESPACE => 'pica'};
+        $params{PREFIX_MAP} = { $PICA::Record::XMLNAMESPACE => 'pica' };
     }
     my $writer = XML::Writer->new( %params );
     $writer->xmlDecl('UTF-8') if $params{header};
@@ -365,7 +366,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

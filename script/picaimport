@@ -1,0 +1,199 @@
+#!/usr/bin/perl
+
+=head1 NAME
+
+picawebcat - Import or delete PICA+ records in a L<PICA::Store>
+
+=cut
+
+use warnings;
+use strict;
+use utf8;
+
+our $VERSION = '0.20';
+
+=head1 SYNOPSIS
+
+  picawebcat [options] [file]*
+
+=head1 OPTIONS
+
+ -config FILE   read configuration from a file (default: picastore.conf)
+ -from FILE     read files to import from a file (default: - for STDIN)
+ -out FILE      print import information to a file (default: - for STDIN)
+ -help          brief help message
+ -move          remove imported files on success
+ -delete        delete records instead of importing them
+ -force         do not ask before deleting
+ -ppn           use the PPN of a record if no PPN is given for updating
+ -quiet         suppress additional status messages and output
+
+=head1 DESCRIPTION 
+
+This script can be used to import or delete PICA records in a L<PICA::Store>,
+for instance via webcat (L<PICA::SOAPClient>) or into a SQLite database
+(L<PICA::SQLiteStore>). 
+
+To define the connection you must provide a config file via the -config
+parameter or the PICASTORE environment variable - or name it picastore.conf
+and put it in the current directory. The config file can contain all 
+parameters that may be provided to the L<PICA::Store> constructor.
+At least there must be one of the following parameters:
+
+  webcat = URL
+  SQLite = FILE
+
+Other known configuration parameters include dbsid, userkey, password,
+and language.
+
+=cut
+
+use PICA::Record qw(getrecord);
+use PICA::Parser;
+use PICA::Store;
+use PICA::Source;
+use Getopt::Long;
+use Pod::Usage;
+use IO::File;
+use Data::Dumper;
+
+my ($configfile, $outfile, $fromfile, $move, $help, $quiet, $ppnmode, $delete, $force);
+
+GetOptions(
+    'config:s' => \$configfile,
+    'from:s' => \$fromfile, 
+    'out:s' => \$outfile,
+    'move' => \$move,
+    'delete' => \$delete,
+    'ppn'  => \$ppnmode,
+    'force' => \$force,
+    'help|?' => \$help,
+    'quiet' => \$quiet,
+) or pod2usage(2);
+pod2usage(1) if $help;
+
+pod2usage("Please provide EITHER files OR -from option")
+    if defined $fromfile and @ARGV;
+
+$fromfile = '-' unless defined $fromfile or @ARGV;
+
+$outfile = "-" unless defined $outfile;
+if ( $outfile eq '-' ) {
+    *OUT = *STDOUT;
+} else {
+    print "Resulting mappings are written to $outfile\n" unless $quiet;
+    open OUT, ">$outfile" or die("Failed to open $outfile");
+}
+
+my $store = PICA::Store->new( config => $configfile );
+
+# TODO; print some information about this store
+
+*handle = $delete ? *record_delete : *record_import;
+
+if (@ARGV) {
+    if ( $delete ) {
+        betterask("Do you really want to delete " . @ARGV . " records?");
+    } else {
+        print "Importing " . @ARGV . " records\n" unless $quiet;
+    }
+    while (@ARGV) {
+        handle(shift);
+    }
+} else {
+    betterask("Do you really want to delete records?") if $delete;
+    if ( $fromfile eq "-" ) {
+        print "Please provide a filename or PPN and filename (seperated by space) each line!\n"
+            unless $quiet;
+        while(<STDIN>) {
+            chomp;
+            exit if $_ eq '';
+            handle($_);
+        }
+    } else {
+        print "Reading from $fromfile\n" unless $quiet;
+        open FROM, $fromfile or die("Error opening $fromfile");
+        while(<FROM>) {
+            chomp;
+            handle($_);
+        }
+    }
+}
+
+sub betterask {
+    return if $force;
+    print $_[0] . " Then type 'Y'!\n";
+    my $answer = readline(STDIN);
+    exit unless $answer =~ /^y$/i;
+}
+
+sub record_import {
+    my $file = shift;
+    my $ppn;
+
+    if ( $file =~ /^([0-9]+[0-9X])\s+(.+)$/i ) {
+        ($ppn, $file) = ($1, $2);
+    }
+
+    # ignore blank lines
+    return unless defined $file and $file ne '';
+
+    my (%result, $cmd, $op);
+
+    my $record = getrecord( $file );
+
+    if ( not $record or $record->empty ) {
+        print STDERR "Failed to read PICA+ record from $file\n";
+        return;
+    }
+
+    $ppn = $record->ppn if not $ppn and $ppnmode;
+
+    if ( $ppn ) {
+        $cmd = "update";
+        %result = $store->update( $ppn, $record );
+    } else {
+        $cmd = "create";
+        %result = $store->create( $record );
+    }
+
+    if ( $result{id} ) {
+        print OUT $result{id} . " " . $file . "\n";
+        unlink $file if $move;
+    } else {
+        my $err = $result{errormessage};
+        $err =~ s/\n/ /gm;
+        print STDERR "failed to $cmd $file: $err\n";
+    }    
+}
+
+sub record_delete {
+    my $line = shift;
+    return unless defined $line and $line ne '';
+
+    my ($ppn, $file);
+    if ( $line =~ /^([0-9]*[0-9X])(\s+(.+))?$/i ) {
+        ($ppn, $file) = ($1, $3);
+    } else {
+        print STDERR "This is not a valid PPN: $line\n";
+        return;
+    }
+
+    my %result = $store->delete( $ppn );
+
+    if ( $result{id} ) {
+        print OUT $result{id} . "\n"; # TODO support download on delete
+    } else {
+        my $err = $result{errormessage};
+        $err =~ s/\n/ /gm;
+        print STDERR "failed to delete $ppn: $err\n";
+    }    
+}
+
+=head1 AUTHOR
+
+Jakob Voss C<< jakob.voss@gbv.de >>
+
+=head1 LICENSE
+
+This script is published as Public Domain. Feel free to reuse as you like!

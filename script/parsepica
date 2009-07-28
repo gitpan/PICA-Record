@@ -182,7 +182,7 @@ if (@ARGV > 0) {
         next if $_ eq "";
         $filename = $_;
         print LOG "Reading $filename\n";
-        $parser->parsefile($filename);
+        my ($record) = PICA::Parser->parsefile( $filename, Limit => 1)->records;
     }
 } else {
     print LOG "Reading standard input\n";
@@ -244,7 +244,7 @@ sub select_field_handler {
      if ($subfield_select ne "") {
         my @sf = $field->subfield( $subfield_select );
         # TODO: print subfield if output format is XML (?)
-        print { $writer->{filehandle} } join("\n",@sf) . "\n" if @sf;
+        print { $writer->{io} } join("\n",@sf) . "\n" if @sf;
     } else {
         $writer->write($field);
     }

@@ -7,10 +7,11 @@ PICA::Record - Perl extension for handling PICA+ records
 =cut
 
 use strict;
-use utf8;
 
 use base qw(Exporter);
-our $VERSION = '0.49';
+our @EXPORT_OK = qw(getrecord);
+
+our $VERSION = '0.50';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 use POSIX qw(strftime);
@@ -20,11 +21,8 @@ use Scalar::Util qw(looks_like_number);
 use URI::Escape;
 use XML::Writer;
 use Encode;
-use Carp qw(croak);
-
-=head1 DESCRIPTION
-
-Module for handling PICA+ records as Perl objects.
+use PerlIO;
+use Carp qw(croak confess);
 
 =head1 INTRODUCTION
 
@@ -70,7 +68,35 @@ store PICA+ records in a database
 
 =back
 
-=head1 CLIENTS AND EXAMPLES
+=head1 DESCRIPTION
+
+PICA::Record is a module for handling PICA+ records as Perl objects.
+
+=head2 On character encoding
+
+Character encoding is an issue of permanent confusion both in library 
+databases and in Perl. PICA::Record treats character encoding the 
+following way: 
+
+Internally all strings are stored as Perl strings. If you directly 
+read from or write to a file that you specify by filename only, the
+file will be opened with binmode utf8, so the content will be decoded
+or encoded in UTF-8 Unicode encoding.
+
+If you read from or write to a handle (for instance a file that you
+have already opened), binmode utf8 will also be enabled unless you
+have already specified another encoding layer:
+
+  open FILE, "<$filename";
+  $record = getrecord( \*FILE1 ); # implies binmode FILE, ":utf8"
+
+  open FILE, "<$filename";
+  binmode FILE,':encoding(iso-8859-1)';
+  $record = getrecord( \*FILE ); # does not imply binmode FILE, ":utf8"
+
+If you read or write from Perl strings, UTF-8 is never implied.
+
+=head2 Clients and examples
 
 This module includes and installs the scripts C<parsepica> and C<picawebcat>.
 They provide most functionality on the command line without having
@@ -94,6 +120,9 @@ are some additional two-liners:
 
   # read all records from a file
   my @records = PICA::Parser->new->parsefile( $filename )->records();
+
+  # read one record from a file (if 'getrecord' has been exported)
+  my $record = getrecord( $filename );
 
   # read one record from a string
   my ($record) =  PICA::Parser->parsedata( $picadata, Limit => 1)->records();
@@ -119,6 +148,39 @@ are some additional two-liners:
   my $writer = PICA::Writer->new( $filename, format => 'xml' );
   $writer->write( @records );
 
+=cut
+
+# private method to append a field
+my $append_field = sub {
+    my ($self, $field) = @_;
+    # confess('append_failed') unless ref($field) eq 'PICA::Field';
+    if ( $field->tag eq '003@' ) {
+        $self->{_ppn} = $field->sf('0');
+        if ( $self->field('003@') ) {
+            $self->replace( '003@', $field );
+            return;
+        }
+    }
+    push(@{ $self->{_fields} }, $field);
+};
+
+# private method to compile and cache a regular expression
+my %field_regex;
+my $get_regex = sub {
+    my $reg = shift;
+
+    my $regex = $field_regex{ $reg };
+
+    if (!defined $regex) {
+        # Compile & stash
+        $regex = qr/^$reg$/;
+        $field_regex{ $reg } = $regex;
+    }
+
+    return $regex;
+};
+
+
 =head1 METHODS
 
 =head2 new ( [ ...data... | $filehandle ] )
@@ -135,27 +197,33 @@ PICA records from a file, see L<PICA::Parser>, to load records from a SRU
 or Z39.50 server, see L<PICA::Source>. 
 
 If you provide a file handle or L<IO::Handle>, the first record is read from
-it. Each of the following three lines has the same result:
+it. Each of the following four lines has the same result:
 
   $record = PICA::Record->new( IO::Handle->new("< $filename") );
   ($record) = PICA::Parser->parsefile( $filename, Limit => 1 )->records(),
-  open (F, "<", $plainpicafile); $record = PICA::Record->new( \*F ); close F;
+  open (F, "<:utf8", $plainpicafile); $record = PICA::Record->new( \*F ); close F;
+  $record = getrecord( $filename );
 
 =cut
 
 sub new {
     my $class = shift;
-    my $first = $_[0];
 
     $class = ref($class) || $class; # Handle cloning
     my $self = bless {
-        _fields => []
+        _fields => [],
+        _ppn => undef
     }, $class;
 
-    # pass croak without including Record.pm at the stack trace
-    local $Carp::CarpLevel = 1;
+    return $self unless @_;
 
-    if ($first) {
+    my $first = $_[0];
+
+    if (defined $first) {
+
+        # pass croak without including Record.pm at the stack trace
+        local $Carp::CarpLevel = 1;
+
         if ($#_ == 0 and ref(\$first) eq 'SCALAR') {
             my @lines = split("\n", $first);
             my @l2 = split("\x1E", $first);
@@ -168,17 +236,18 @@ sub new {
                 next if $line =~ /^\s*$/;   # skip empty lines
 
                 my $field = PICA::Field->parse($line);
-                push (@{$self->{_fields}}, $field) if $field;
+                $append_field->( $self, $field ) if $field;
             }
-        } elsif (ref($first) eq 'GLOB' or eval { $first->isa("IO::Handle") }) {
+        } elsif (ref($first) eq 'GLOB' or eval { $first->isa('IO::Handle') }) {
             PICA::Parser->parsefile( $first, Limit => 1, Field => sub {
-                my $field = shift;
-                push (@{$self->{_fields}}, $field); 
+                $append_field->( $self, shift ); 
                 return;
             });
         } else {
             $self->append(@_);
         }
+    } else {
+        croak('Undefined parameter in PICA::Record->new');
     }
 
     return $self;
@@ -209,7 +278,7 @@ sub all_fields() {
     return @{$self->{_fields}};
 }
 
-=head2 field ( [ $limit, ] $tagspec(s) )
+=head2 field ( [ $limit, ] { $field }+ ) or f ( ... )
 
 Returns a list of C<PICA::Field> objects with tags that
 match the field specifier, or in scalar context, just
@@ -229,8 +298,6 @@ of response size, for instance two get only two fields:
 
 =cut
 
-my %field_regex;
-
 sub field {
     my $self = shift;
     my $limit = looks_like_number($_[0]) ? shift : 0;
@@ -240,7 +307,7 @@ sub field {
     my @list = ();
 
     for my $tag ( @specs ) {
-        my $regex = _get_regex($tag);
+        my $regex = $get_regex->($tag);
 
         for my $maybe ( $self->all_fields ) {
             if ( $maybe->tag() =~ $regex ) {
@@ -256,37 +323,31 @@ sub field {
     return @list;
 } # field()
 
-=head2 f ( $tagspec(s) )
+# Shortcut
+*f = \&field;
 
-Shortcut for method C<field>.
+=head2 subfield ( [ $limit, ] { [ $field, $subfield ] | $fullspec }+ ) or sf ( ... )
 
-=cut
-
-sub f {
-    return field(@_);
-}
-
-=head2 subfield ( [ $limit, ] [ $tagspec , $subfield ] | $spec )
-
-Shortcut method for getting just the subfield's value of a tag (see L<PICA::Field>). 
-Returns a list of subfield values that match or in scalar context, just the 
-first matching subfield.
+Shortcut method to get subfield values. Returns a list of subfield values 
+that match or in scalar context, just the first matching subfield or undef.
+Fields and subfields can be specified in several ways. You may use wildcards
+in the field specifications.
 
 These are equivalent (in scalar context):
 
   my $title = $pica->field('021A')->subfield('a');
   my $title = $pica->subfield('021A','a');
 
-You may also specify both field and subfield seperated by '$'.
-Don't forget to quote the dollar sign!
+You may also specify both field and subfield seperated by '$'
+(don't forget to quote the dollar sign) or '_'.
 
   my $title = $pica->subfield('021A$a');
   my $title = $pica->subfield("021A\$a");
-  my $title = $pica->subfield("021A$a"); # this won't work!
+  my $title = $pica->subfield("021A$a"); # $ not escaped
+  my $title = $pica->subfield("021A_a"); # _ instead of $
 
-If either the field or subfield can't be found, C<undef> is returned.
-
-You may also use wildcards like in C<field()> and the C<subfield()> method of L<PICA::Field>:
+You may also use wildcards like in the C<field()> method of PICA::Record
+and the C<subfield()> method of L<PICA::Field>:
 
   my @values = $pica->subfield('005A', '0a');    # 005A$0 and 005A$a
   my @values = $pica->subfield('005[AIJ]', '0'); # 005A$0, 005I$0, and 005J$0
@@ -296,33 +357,46 @@ of response size, for instance two get only two fields:
 
   my ($f1, $f2) = $record->subfield( 2, '028B/..$a' );
 
+Zero or negative limit values are ignored.
+
 =cut
 
 sub subfield {
     my $self = shift;
     my $limit = looks_like_number($_[0]) ? shift : 0;
-    my ($tag, $subfield) = @_;
-    return unless defined $tag;
-
-    ($tag, $subfield) = split(/\$/,$tag) unless defined $subfield;
-    croak("No subfields specified in '$tag'") if !defined $subfield;
+    return unless defined $_[0];
 
     my @list = ();
 
-    my $tag_regex = _get_regex($tag);
-    for my $f ( $self->all_fields ) {
-        if ( $f->tag() =~ $tag_regex ) {
-            my @s = $f->subfield($subfield);
-            if (@s) {
-                return shift @s unless wantarray;
-                if ($limit > 0) {
-                    if (scalar @s >= $limit) {
-                        push @list, @s[0..($limit-1)];
-                        return @list;
+    while (@_) {
+        my $tag = shift;
+        my $subfield;
+    
+        croak "Not a field or full pattern: $tag" 
+            unless $tag =~ /^([^\$_]{3,})([\$_]([^\$_]+))?/;
+        if (defined $2) {
+            ($tag, $subfield) = ($1, $3);
+        } else {
+            $subfield = shift;
+        }
+
+        croak("Missing subfield for $tag") unless defined $subfield;
+
+        my $tag_regex = $get_regex->($tag);
+        for my $f ( $self->all_fields ) {
+            if ( $f->tag() =~ $tag_regex ) {
+                my @s = $f->subfield($subfield);
+                if (@s) {
+                    return shift @s unless wantarray;
+                    if ($limit > 0) {
+                        if (scalar @s >= $limit) {
+                            push @list, @s[0..($limit-1)];
+                            return @list;
+                        }
+                        $limit -= scalar @s;
                     }
-                    $limit -= scalar @s;
+                    push( @list, @s );
                 }
-                push( @list, @s );
             }
         }
     }
@@ -331,54 +405,34 @@ sub subfield {
     return @list;
 } # subfield()
 
-=head2 sf ( [ $tagspec , $subfield ] | $spec )
+# Shortcut
+*sf = \&subfield;
 
-Shortcut for method C<subfield>.
+=head2 values ( [ $limit ] { [ $field, $subfield ] | $fullspec }+ )
 
-=cut
-
-sub sf {
-    return subfield(@_);
-}
-
-=head2 values ( )
-
-Shortcut method to get subfield values of multiple fields and subfields. The fields and subfields 
-are specified in a list of strings, for instance:
-
-  my @titles = $pica->values( '021A$a', '025@$a', '026C$a');
-
-This method always returns an array.
-
-You may also use wildcards in the field specifications, see C<subfield()> and C<field()>.
+Same as C<subfield> but always returns an array.
 
 =cut
 
 sub values {
     my $self = shift;
+    my @values = $self->subfield( @_ );
+    return @values;
+}
 
-    my @list = ();
+=head2 ppn ( [ $ppn ] )
 
-    foreach my $spec (@_) {
-        croak("Not a field/tag-specification: $spec") if (!(index($spec, '$') > 3));
-        my @results = $self->subfield($spec);
-        push (@list, @results);
-    }
-
-    return @list;
-} # values()
-
-=head2 ppn ( )
-
-Get the PICA Produktionsnummer (PPN) of this record (field 003@, subfield 0). This
-is equivalent to C<$self->subfield('003@$0')> but it always returns a scalar or undef.
+Get or set the identifier (PPN) of this record (field 003@, subfield 0).
+This is equivalent to C<$self->subfield('003@$0')> and always returns a 
+scalar or undef.
 
 =cut
 
 sub ppn {
     my $self = shift;
-    my $ppn = $self->subfield('003@$0');
-    return $ppn;
+    $append_field->( $self, PICA::Field->new('003@', '0' => $_[0]) ) 
+        if defined $_[0];
+    return $self->{_ppn};
 }
 
 =head2 epn ( )
@@ -392,6 +446,23 @@ record (get them with method copy_records) should have only one EPN.
 sub epn {
   my $self = shift;
   return $self->subfield('203@/..$0');
+}
+
+=head2 occurrence ( ) or occ ( )
+
+Returns the occurrence of the first field of this record. 
+This is only useful if the first field has an occurrence.
+
+=cut
+
+sub occurrence {
+    my $self = shift;
+    return unless $self->{_fields}->[0];
+    return $self->{_fields}->[0]->occurrence;
+}
+
+sub occ {
+    return shift->occurrence;
 }
 
 =head2 main_record ( )
@@ -528,11 +599,12 @@ sub delete_fields {
     my $c = 0;
 
     for my $tag ( @specs ) {
-        my $regex = _get_regex($tag);
+        my $regex = $get_regex->($tag);
 
         my $i=0;
         for my $maybe ( $self->all_fields ) {
             if ( $maybe->tag() =~ $regex ) {
+                $self->{_ppn} = undef if $maybe->tag() eq '003@';
                 splice( @{$self->{_fields}}, $i, 1);
                 $c++;
             } else {
@@ -595,14 +667,14 @@ sub append {
     while (@_) {
         # Append a field (whithout creating a copy)
         while (@_ and ref($_[0]) eq 'PICA::Field') {
-            push(@{ $self->{_fields} }, shift);
+            $append_field->( $self, shift );
             $c++;
         }
         # Append a whole record (copy all its fields)
         while (@_ and ref($_[0]) eq 'PICA::Record') {
             my $record = shift;
             for my $field ( $record->all_fields ) {
-                push(@{ $self->{_fields} }, $field->copy );
+                $append_field->( $self, $field->copy );
                 $c++;
             }
         }
@@ -618,8 +690,7 @@ sub append {
                 # pass croak without including Record.pm at the stack trace
                 local $Carp::CarpLevel = 1;
 
-                my $field = PICA::Field->new( @params );
-                push(@{ $self->{_fields} }, $field);
+                $append_field->( $self, PICA::Field->new( @params ) );
 
                 $c++;
             }
@@ -649,7 +720,7 @@ sub appendif {
     my $append = PICA::Record->new( @_ );
     for my $field ( $append->all_fields ) {
         $field = $field->purged();
-        push @{ $self->{_fields} }, $field if $field;
+        $append_field->( $self, $field ) if $field;
     }
     $self;
 }
@@ -666,7 +737,8 @@ sub replace {
     my $self = shift;
     my $tag = shift;
 
-    croak("Not a valid tag: $tag") unless PICA::Field::parse_pp_tag($tag);
+    croak("Not a valid tag: $tag")
+        unless PICA::Field::parse_pp_tag($tag);
 
     my $replace;
 
@@ -676,11 +748,12 @@ sub replace {
         $replace = PICA::Field->new($tag, @_);
     } 
 
-    my $regex = _get_regex($tag);
+    my $regex = $get_regex->($tag);
 
     for my $field ( $self->all_fields ) {
         if ( $field->tag() =~ $regex ) {
-            $field->replace($replace);
+            $self->{_ppn} = $replace->sf('0') if $replace->tag eq '003@';
+            $field->replace( $replace );
             return;
         }
     }
@@ -860,26 +933,20 @@ sub add_headers {
     $self->append( "002@", '0' => $status );
 }
 
-=head1 INTERNAL METHDOS
+=head1 FUNCTIONS
 
-=head2 _get_regex ( $reg )
+=head2 getrecord ( $filename )
 
-Get a complied regular expression.
+Read one record from a file. Returns a non-empty PICA::Record
+object or undef.
 
 =cut
 
-sub _get_regex {
-    my $reg = shift;
-
-    my $regex = $field_regex{ $reg };
-
-    if (!defined $regex) {
-        # Compile & stash
-        $regex = qr/^$reg$/;
-        $field_regex{ $reg } = $regex;
-    }
-
-    return $regex;
+sub getrecord {
+    my $file = shift;
+    my ($record) = PICA::Parser->parsefile( $file, Limit => 1 )->records();
+    return unless $record and not $record->empty;
+    return $record;
 }
 
 1;
@@ -898,7 +965,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

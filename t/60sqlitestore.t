@@ -22,9 +22,8 @@ isa_ok( $store, "PICA::SQLiteStore", "new PICA::SQLiteStore $dbfilename" );
 require "./t/teststore.pl";
 teststore( $store );
 
-# TODO: Should the history really be empty because of deletions ?
-my $history = $store->history();
-ok( ref($history) eq "ARRAY", "history" );
+my $deletions = $store->deletions;
+ok( scalar @$deletions, "has deletions" );
 
 # reconnect via config file
 $store->{dbh}->disconnect;
@@ -33,11 +32,11 @@ my ($configfile, $configfilename) = tempfile();
 print $configfile "SQLite=$dbfilename\n";
 close $configfile;
 
-$store = PICA::SQLiteStore->new( config => $configfilename, rebuild => 0 );
+$store = PICA::SQLiteStore->new( config => $configfilename );
 isa_ok( $store, "PICA::SQLiteStore", "reconnect via config file" );
 
-my $h2 = $store->history();
-is( scalar @$h2, scalar @$history, "still same history: " . @$history );
+my $d2 = $store->deletions;
+is( scalar @$d2, scalar @$deletions, "still same deletions" );
 
 # additional SQLiteStore tests
 
@@ -69,18 +68,16 @@ is_deeply ( $pn, {}, "prevnext (0)" );
 
 $record = PICA::Record->new('028A $0Hello');
 $store->update( $id, $record, $version );
-$history = $store->history($id);
+my $history = $store->history($id);
 $rc = $store->recentchanges();
 is_deeply( $history, $rc, "history==recent changes (2)" );
 
 #print Dumper($store->history($id));
 #print Dumper($rc);
 
-$store->{dbh}->disconnect;
-
 # TODO: contributions
 # TODO: deletions (check that a version is inserted)
-
+# TODO: history including deletions (?)
 __END__
 
 # TODO: require SQLite 3.3 (?)

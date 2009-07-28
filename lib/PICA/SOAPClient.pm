@@ -8,15 +8,15 @@ PICA::SOAPClient - L<PICA::Store> via SOAP access (aka 'webcat')
 
 use strict;
 use warnings;
-use utf8;
 
-our $VERSION = "0.4";
+our $VERSION = "0.43";
 
 use PICA::Record;
 use PICA::Store;
-#use SOAP::Lite +trace => 'debug';
+use SOAP::Lite; # +trace => 'debug';
 use SOAP::Lite;
 use Carp qw(croak);
+use Encode qw(encode_utf8);
 
 our @ISA=qw(PICA::Store);
 
@@ -73,25 +73,17 @@ sub new {
     my ($soap, %params) = (@_ % 2) ? (@_) : (undef, @_);
     $params{SOAP} = $soap if defined $soap;
 
-    if (exists $params{config}) {
-        if (!defined $params{config}) {
-            if ($ENV{WEBCAT_CONF}) {
-                 $params{config} = $ENV{WEBCAT_CONF};
-            } elsif ( -f "./webcat.conf" ) {
-                 $params{config} = "./webcat.conf";
-            }
-        }
-        $PICA::Store::readconfigfile->( \%params );
-    }
+    $PICA::Store::readconfigfile->( \%params )
+        if exists $params{config} or exists $params{conf};
 
-    croak "Missing SOAP base url" unless defined $params{SOAP};
-    croak "Missing dbsid" unless defined $params{dbsid};
-    croak "Missing userkey" unless defined $params{userkey};
+    croak "Missing SOAP base url (webcat)" unless defined $params{webcat};
+    $params{dbsid} = "" unless defined $params{dbsid};
+    $params{userkey} = "" unless defined $params{userkey};
     $params{language} = "en" unless defined $params{language};
     $params{password} = "" unless defined $params{password};
 
     $soap = SOAP::Lite->uri('http://www.gbv.de/schema/webcat-1.0')
-                      ->proxy($params{SOAP});
+                      ->proxy($params{webcat});
     # ->encoding('utf-8')
     # ->on_fault(sub{})
 
@@ -141,7 +133,7 @@ sub create {
     my $sf = $record->subfield('002@$0');
     $rectype = $self->{"rectype_entry"} if ($sf && $sf =~ /^T/); # authority record
 
-    my $recorddata = $record->to_string();
+    my $recorddata = encode_utf8( $record->to_string );
 
     return $self->_soap_query( "create",
         SOAP::Data->name( "record" )->type( string => $recorddata ),
@@ -163,7 +155,7 @@ sub update {
     my ($self, $id, $record, $version) = @_;
     croak('update needs a PICA::Record object') unless ref($record) eq 'PICA::Record';
 
-    my $recorddata = $record->to_string();
+    my $recorddata = encode_utf8( $record->to_string );
 
     return $self->_soap_query( "update",
         SOAP::Data->name("ppn")->type( string => $id ),
@@ -236,7 +228,7 @@ sub _soap_query {
         chomp $result{errormessage};
     } else {
         $result{id} = $response->valueof("//ppn") if defined $response->valueof("//ppn");
-        $result{record} = PICA::Record->new($response->valueof("//record")) 
+        $result{record} = PICA::Record->new( $response->valueof("//record") ) 
             if defined $response->valueof("//record");
         $result{version} = $response->valueof("//version")
             if defined $response->valueof("//version");

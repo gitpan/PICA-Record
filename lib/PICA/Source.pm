@@ -7,7 +7,6 @@ PICA::Source - Data source that can be queried for PICA+ records
 =cut
 
 use strict;
-use utf8;
 our $VERSION = "0.48";
 
 =head1 SYNOPSIS
@@ -274,21 +273,13 @@ sub url_unicode_encode {
 
 1;
 
-__END__
-
-=head1 TODO
-
-Better error handling is needed, for instance of the server is 
-"System temporarily unavailable". PICA::SRUSearchParser should 
-only be created once.
-
 =head1 AUTHOR
 
 Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

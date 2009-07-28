@@ -7,9 +7,8 @@ PICA::SRUSearchParser - Parse a SRU response in XML and extract PICA+ records.
 =cut
 
 use strict;
-use utf8;
 
-our $VERSION = "0.47";
+our $VERSION = "0.48";
 
 =head1 SYNOPSIS
 
@@ -64,11 +63,11 @@ and return the L<PICA::XMLParser> object that has been used.
 sub parse {
     my ($self, $document) = @_;
     my $sruparser = XML::Parser->new(
-       Handlers => {    # memory leak
+       Handlers => {    # TODO: memory leak (?)
           Start => sub {$self->StartTag(@_)},
           End   => sub {$self->EndTag(@_)},
           Char  => sub {$self->Text(@_)}
-#          # TODO: Init and Final are never called. Do we need them?
+#         # TODO: Init and Final are never called. Do we need them?
        }
     );
     $self->{currentNumber} = 0;
@@ -186,7 +185,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

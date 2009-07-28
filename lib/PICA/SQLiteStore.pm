@@ -7,7 +7,7 @@ PICA::SQLiteStore - Store L<PICA::Record>s in a SQLite database with versioning
 =cut
 
 use strict;
-our $VERSION = "0.1.1";
+our $VERSION = "0.1.2";
 
 use PICA::Record;
 use PICA::Store;
@@ -19,7 +19,7 @@ our @ISA=qw(PICA::Store);
 
 =head1 METHODS
 
-=head2 new ( [ SQLite => ] $filename [, %options ] )
+=head2 new ( [ SQLite => ] $filename [, %params ] )
 
 Create a new or connect to an existing SQLite database.
 
@@ -27,22 +27,28 @@ Create a new or connect to an existing SQLite database.
 
 sub new {
     my $class = shift;
-    my ($filename, %options) = (@_ % 2) ? (@_) : (undef, @_);
+    my ($filename, %params) = (@_ % 2) ? (@_) : (undef, @_);
 
-    $PICA::Store::readconfigfile->( \%options ) if defined $options{config};
+    $PICA::Store::readconfigfile->( \%params )
+        if exists $params{config} or exists $params{conf};
 
-    $filename = $options{SQLite} unless defined $filename;
+    $filename = $params{SQLite} unless defined $filename;
 
     croak("filename for SQLite database not specified") unless defined $filename;
 
-    my $rebuild = $options{rebuild};
+    my $rebuild = $params{rebuild};
     # TODO: option to use PPN as ID !
 
     my $dbh = DBI->connect( "dbi:SQLite:dbname=$filename","","",
         { AutoCommit => 0, RaiseError => 1 } );
+    $dbh->{unicode} = 1;
 
     croak("SQLite database connection failed: $filename: " . DBD->errstr) unless $dbh;
 
+    #$dbh::DESCTROY = DESTROY {
+    #    my $sth = shift;
+    #    $sth->finish if $sth->FETCH('Active');
+    #}
 
     # tables and triggers
     my %tables = (
@@ -146,7 +152,7 @@ ORDER BY version DESC LIMIT ?
 WHERE rev_id=arc_latest ORDER BY arc_latest DESC LIMIT ? OFFSET ?
     });
     $self->{contributions} = $dbh->prepare(q{SELECT
-rev_id AS version, rev_ppn AS ppn, rev_user AS user, rev_timestamp AS timestamp, rev_is_new AS is_new, rev_deleted AS deleted FROM revision
+rev_id AS version, rev_ppn AS ppn, rev_user AS user, rev_timestamp AS timestamp, rev_is_new AS is_new, rev_deleted AS s FROM revision
 WHERE rev_user=? ORDER BY version DESC LIMIT ? OFFSET ? 
     });
 
@@ -174,7 +180,6 @@ sub get {
             $stm = $self->{get_record};
             $stm->execute( $id );
         }
-        #$self->{dbh}->commit;
         my $hashref = $stm->fetchrow_hashref;
         croak( $version ? "version $version" : $id) unless $hashref;
         $hashref->{record} = PICA::Record->new( $hashref->{record} );
@@ -190,7 +195,6 @@ sub get {
     if ($@) {
         # TODO: remove line number
         %result = ( errorcode => 1, errormessage => "get failed: $@" );
-        eval { $self->{dbh}->rollback };
     }
     return %result;
 }
@@ -212,13 +216,14 @@ sub create {
     my %result = eval {
         my $recorddata = $record->to_string();
         $self->{insert_record}->execute( $recorddata, $self->{user} );
-        $self->{dbh}->commit;
         my $version = $self->{dbh}->func('last_insert_rowid');
         $self->get( undef, $version );
     };
     if ($@) {
         %result = ( errorcode => 1, errormessage => "create failed: $@" );
-        eval { $self->{dbh}->rollback };
+        $self->{dbh}->rollback;
+    } else {
+        $self->{dbh}->commit;
     }
     return %result;
 }
@@ -246,12 +251,13 @@ sub update {
             # TODO (version is ignored so far)
         }
         $self->{update_record}->execute( $id, $record->to_string(), $self->{user} );
-        $self->{dbh}->commit;
         $self->get( $id );    
     };
     if ($@) {
         %result = ( errorcode => 1, errormessage => "update failed: $@" );
-        eval { $self->{dbh}->rollback };
+        $self->{dbh}->rollback;
+    } else {
+        $self->{dbh}->commit;
     }
     return %result;
 }
@@ -271,12 +277,13 @@ sub delete {
         # TODO: create a new version
         $self->{update_record}->execute( $id, "", $self->{user} );
         $self->{delete_record}->execute( $id );
-        $self->{dbh}->commit;
         ( 'id' => $id );
     };
     if ($@) {
         %result = ( errorcode => 1, errormessage => "delete failed: $@" );
-        eval { $self->{dbh}->rollback };
+        $self->{dbh}->rollback;
+    } else {
+        $self->{dbh}->commit;
     }
     return %result;
 }
@@ -395,13 +402,13 @@ sub contributions {
     };
 }
 
-=head2 deleted ( $offset, $limit )
+=head2 deletions ( $offset, $limit )
 
 Get a list of deleted records.
 
 =cut
 
-sub deleted {
+sub deletions {
     my ($self, $offset, $limit) = @_;
 
     $offset = 0 unless $offset;
@@ -414,6 +421,19 @@ sub deleted {
         return $result;
     };
 }
+
+=head2 DESTROY (destructor)
+
+Disconnect the database before exit. This method is only called 
+automatically as destructor, so don't call it explicitely!
+
+=cut
+
+sub DESTROY {
+    my $self = shift;
+    $self->{dbh}->disconnect;
+}
+
 
 1;
 

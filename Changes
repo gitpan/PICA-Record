@@ -1,3 +1,11 @@
+0.50    2009-07-28
+        - rewrote picaimport to replace picawebcat, removed Filemap
+        - added getrecord method to parse one single record from file
+        - clarified utf8 encoding/decoding and other encodings
+        - _ and $ both allowed to query subfields
+        - Combined values() and subfields() method in PICA::Record
+        - added support of Namespaces in XMLParser
+        - added PPN semantic check (only one per record)
 0.49    2009-07-17 
         - added SQLiteStore, SOAPServer, SOAPClient and first buggy PICA+Wiki
         - added missing method PICA::Field->occ[urrence]

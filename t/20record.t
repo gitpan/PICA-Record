@@ -3,10 +3,10 @@
 use strict;
 use utf8;
 
-use Test::More tests => 60;
+use Test::More tests => 75;
 
 use PICA::Field;
-use PICA::Record;
+use PICA::Record qw(getrecord);
 use IO::File;
 
 # PICA::Record constructor
@@ -97,12 +97,19 @@ $record->append(
 );
 is( scalar $record->all_fields(), 2 , "Record->append()" );
 
+# values
+is_deeply( [ $record->values('037A$a') ], [ '1st note', '2nd note' ], 'values' );
+is_deeply( [ $record->values('037A_a') ], [ '1st note', '2nd note' ], 'values' );
+
 # clone constructor
 my $recordclone = PICA::Record->new($record);
 is( scalar $recordclone->all_fields(), 2 , "PICA::Record clone constructor" );
 $record->delete_fields('037A');
 is( scalar $recordclone->all_fields(), 2 , "PICA::Record cloned a new object" );
 
+# occurrence
+$record = PICA::Record->new( '233A/03', 'x' => 'foo' );
+is( $record->occ, '03', 'occurrence' );
 
 ### field()
 $record = $testrecord;
@@ -126,12 +133,26 @@ is( scalar @fields, 1 , "Record->field() with limit one" );
 is( scalar @fields, 2 , "Record->field() with limit high" );
 
 ### subfield()
-is( $record->subfield('009P/03$0'), "http", "subfield()");
+is( $record->subfield('009P/03$0'), "http", "subfield() \$");
+is( $record->subfield('009P/03_0'), "http", "subfield() _");
 my @s = $record->subfield(0,'....$a');
 is( scalar @s, 3, "subfield() with limit zero");
-@s = $record->subfield(2,'....$a');
+@s = $record->subfield(2,'...._a');
 is( scalar @s, 2, "subfield() with limit");
 is( $record->subfield('123$x'), undef, "subfield() not exist" );
+
+### values
+# my @titles = $pica->values( '021A$a', '025@$a', '026C$a');
+my @v = $record->values( '0[01]..(/..)?', '0a' );
+is_deeply( \@v, [ 'http', 'eng' ], 'values (1)' );
+@v = $record->values( 2, '010@_a', '111@', 'x', '037A_a' );
+is_deeply( \@v, [ 'eng', 'foo' ], 'values (2)' );
+@v = $record->values( 3, '010@_a', '111@', 'x', '037A_a' );
+is_deeply( \@v, [ 'eng', 'foo', '1st note' ], 'values (3)' );
+@v = $record->values( '010@', 'a', '111@', 'x' );
+is_deeply( \@v, [ 'eng', 'foo' ], 'values (4)' );
+@v = $record->values( '010@', 'a', '111@$x' );
+is_deeply( \@v, [ 'eng', 'foo' ], 'values (5)' );
 
 ### delete_fields
 my $r = PICA::Record->new($record);
@@ -154,18 +175,6 @@ is( $record->subfield('010@$a'), 'ger', "replace field");
 $record->replace('010@', 'a' => 'fra');
 is( $record->subfield('010@$a'), 'fra', "replace field");
 
-### parse WinIBW output : TODO
-if (0) {
-  use PICA::Parser;
-
-  PICA::Parser->parsefile( "t/winibwsave.example", Record => sub { $record = shift; } );
-  isa_ok( $record, 'PICA::Record' );
-
-  # test bibliographic()
-  my $main = $record->main_record();
-  isa_ok( $main, 'PICA::Record' );
-}
-
 ### parse normalized by autodetection
 open PICA, "t/bib.pica"; # TODO: bib.pica is bytestream, not character-stream!
 $normalized = join( "", <PICA> );
@@ -180,18 +189,38 @@ $file->seek(0,0);
 my $minimal = join('',$file->getlines());
 is( $record->to_string(), $minimal, "to_string()" );
 
+# parse non-existing file
+$record = eval { PICA::Record->new( IO::File->new('xxx') ); };
+ok( $@ && !$record, 'failed to read from not-existing file' );
+
 # newlines in field values
 $record = PICA::Record->new( '021A', 'a' => "This\nare\n\t\nlines" );
-is( $record->sf('021A$a'), "This are lines", "newline in value (1)" );
+is( $record->sf('021A$a'), "This are lines", "newline in value (1, \$)" );
+is( $record->sf('021A_a'), "This are lines", "newline in value (1, _)" );
 is( $record->to_string(), "021A \$aThis are lines\n", "newline in value (2)" );
 
-($record) = PICA::Parser->parsefile("t/graveyard.pica")->records();
+# also test getrecord
+$record = getrecord("t/graveyard.pica");
 is( scalar $record->all_fields(), 62, "parsed graveyard.pica" );
-my $ppn = $record->ppn();
-my @ppns = $record->ppn();
 
-is( $ppn, '588923168', "ppn() as scalar" );
-is_deeply( \@ppns, ['588923168'], "ppn() as array" );
+### PPN
+
+my $ppn = $record->ppn();
+is( $ppn, '588923168', "ppn (plain)" );
+
+$ppn = $record->subfield('003@_0');
+is( $ppn, '588923168', "ppn as subfield" );
+
+$ppn = '123456789';
+is( $record->ppn($ppn), $ppn, 'set ppn' );
+
+$record->append('003@','0'=>'588923168');
+my @ppn = $record->subfield('003@_0');
+is_deeply( \@ppn, [ '588923168' ], 'only one PPN' );
+
+$record->replace('003@','0'=>'123456789');
+is( $record->ppn, '123456789', 'replace PPN' );
+
 
 my $epn = $record->epn();
 my @epns = $record->epn();
@@ -217,14 +246,26 @@ ok( scalar $holdings[0]->items() == 1, "items (1)");
 ok( scalar $holdings[4]->items() == 2, "items (2)");
 ok( scalar $holdings[5]->items() == 26, "items (26)");
 
+### UTF8 and encodings
+my $cjk = "我国民事立法的回顾与展望";
+$record = new PICA::Record( new IO::File("t/cjk.pica") );
+is( $record->sf('021A_a'), $cjk, 'CJK record' );
+
+
+
 __END__
+
+### parse WinIBW output : TODO
+if (0) {
+  use PICA::Parser;
+
+  PICA::Parser->parsefile( "t/winibwsave.example", Record => sub { $record = shift; } );
+  isa_ok( $record, 'PICA::Record' );
+
+  # test bibliographic()
+  my $main = $record->main_record();
+  isa_ok( $main, 'PICA::Record' );
+}
 
 # TODO: test to_xml
 # TODO: test unicode equivalence!
-
-$r = new PICA::Record( new IO::File("t/cjk.pica") );
-my $cjk1 = "我国民事立法的回顾与展望";
-my $cjk2 = $r->subfield('021A$a');
-ok( $cjk1 eq $cjk2, "unicode");
-is( $r->subfield('021A$a'), '我国民事立法的回顾与展望', 'cjk record');
-

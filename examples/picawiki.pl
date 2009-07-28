@@ -33,42 +33,16 @@ my $error = $@;
 my $PICAWIKI_VERSION = "0.1.0";
 
 my $baseurl = url(-full => 0);
-my $title = "PICA+Wiki";
-my $css = <<CSS;
-body { font-size:small; font-family:sans-serif; margin:0; padding:0; height:100%; }
-#page-base { height:5em; }
-#head-pase { height:5em; margin-left:12em; margin-top:-5em; }
-#content { margin-left:12em; padding:1em; line-height:1.5em; border: 1px solid #0AD; }
-#head { position:absolute; right:0; top:0; width:100%; }
-#bodyContent { }
-#panel { left:0; position:absolute; top:4em; width:12em; }
-div.portal { padding: 0; }
-div.portal h5 { color:#666666; font-size:118%; font-weight:normal; margin:0; padding:2em 0 0 1.25em; }
-div.portal div { margin:0 0 0 1.25em; padding-top:0.5em; }
-div.portal div ul { list-style: none; margin:0; padding:0; }
-div.portal div ul li { margin:0; overflow:hidden; padding:0; 0 0.5em; }
-#personal { position:absolute; right:0.75em; top:0; }
-#left-navigation { left:12em; position:absolute; top:3em; }
-#left-navigation ul { list-style: none; height:100%; padding:0; margin:0; }
-#left-navigation ul li {
-float: left;
-  margin: 0.2em 0em;
-  padding: 0em 1em 0em 1em;
- display:block; 
-}
-#title { padding: 0.5em; display:block; height:3em; width:12em; }
-#title h1 { font-size: 188%; font-weight: bold; }
-div.error { border: 1px solid #a00; padding: 0.5em; color: #a00; background: #fcc; margin-bottom: 1em;}
-h2 { padding-bottom: 0.25em; margin: 0; border-bottom: 1px solid #0AD; }
-pre { background: #eee; font-size: 150%; padding: 0.5em; border: 1px dotted #aaa; } 
-CSS
- 
+my $title = "PICA+Wiki"; 
 my $ppn = param('ppn');
 my $cmd = param('cmd');
 my $record = param('record');
 my $version = param('version');
 my $submit = param('submit');
 my $cancel = param('cancel');
+
+my $offset = param('offset') || 0;
+my $limit = param('limit') || 30;
 
 my $user = $ENV{REMOTE_ADDR} or "0";
 $store->access( userkey => $user ) if defined $user;
@@ -81,7 +55,7 @@ $cmd = '' if ($error);
 print header({type => 'text/html', charset => 'utf-8'});
 print start_html(
     -encoding => 'utf-8',
-    -style=>{-code=>$css},
+    -style=> 'picawiki.css',
     title=>$title,
 );
 
@@ -165,6 +139,38 @@ if ($cmd eq 'viewrecord') {
 
 print div({class=>'error'},$error) if $error;
 
+
+sub version_line {
+    my ($line, $item) = @_;
+
+    my %del = $item->{deleted} ? (class=>'deleted') : ();
+    
+    if ($line =~ /{TIMESTAMP_LINK}/) {
+        my $timestamp = a( { href=>"$baseurl?version=" . $item->{version}, %del }, $item->{timestamp} );
+        $line =~ s/{TIMESTAMP_LINK}/$timestamp/g;
+    }
+    if ($line =~ /{PPN_LINK}/) {
+        my $link = a( { href=>"$baseurl?ppn=" . $item->{ppn}, , %del }, "Datensatz " . $item->{ppn} );
+        $line =~ s/{PPN_LINK}/$link/g;
+    }
+    if ($line =~ /{IS_NEW}/) {
+        my $new = $item->{is_new} ? ' <b>neu</b> ' : '';
+        $line =~ s/{IS_NEW}/$is_new/g;
+    }
+    if ($line =~ /{IS_DELETED}/) {
+        my $text = $item->{deleted} ? ' <b>gelöscht</b> ' : '';
+        $line =~ s/{IS_DELETED}/$text/g;
+    }
+    if ($line =~ /{BY_USER}/) {
+        my $by_user = " von " . a({ href=>"$baseurl?user=".$item->{user} }, $item->{user});
+        $by_user = '' if not $item->{user};
+        $line =~ s/{BY_USER}/$by_user/g;
+    }
+    $line = "<li>$line</li>";
+    return $line;
+}
+
+
 if ($cmd eq 'editrecord') {
     my %rec;
     if ($ppn and not $version) {
@@ -212,21 +218,16 @@ if ($cmd eq 'editrecord') {
 
 } elsif ($cmd eq 'history' and $ppn) {
     print h2("Versionen von Datensatz $ppn");
-    $history = $store->history($ppn);
+    $history = $store->history($ppn, $offset, $limit);
     print "<ul>";
     foreach my $item (@$history) {
-        print "<li>";
-        print a( { href=>"$baseurl?version=" . $item->{version} }, $item->{timestamp} );
-        print " <b>neu</b>" if ($item->{is_new}); # should only be one of this two
-        print " <b>gelöscht</b>" if ($item->{deleted});
-        print " von " . a({ href=>"$baseurl?user=".$item->{user} }, $item->{user});
-        print "</li>";
+        print version_line('{TIMESTAMP_LINK} {IS_NEW}{IS_DELETED} {BY_USER}', $item);
     }
     print "</ul>";
     # print Dumper($history);
 } elsif ($cmd eq 'contributions') {
     print h2("Bearbeitungen von $c_user");
-    $revisions = $store->contributions($c_user);
+    $revisions = $store->contributions($c_user, $offset, $limit);
     print div("Es liegen keine Bearbeitungen dieses Accounts vor.") unless @$revisions;
     print "<ul>";
     foreach my $item (@$revisions) {
@@ -241,20 +242,13 @@ if ($cmd eq 'editrecord') {
     print "</ul>";    
 } elsif ($cmd eq 'recentchanges') {
     print h2("Letzte Änderungen");
-    $rc = $store->recentchanges();
+    $rc = $store->recentchanges($offset, $limit);
     if (!@$rc) {
         print div("Es liegen keine Änderungen vor.");
     }
     print "<ul>"; # TODO: Gelöschte Datensätze markieren!
     foreach my $item (@$rc) {
-        print "<li>";
-        print a( { href=>"$baseurl?version=" . $item->{version} }, $item->{timestamp} );
-        print " ";
-        print a( { href=>"$baseurl?ppn=" . $item->{ppn} }, "Datensatz " . $item->{ppn} );
-        print " <b>neu</b>" if ($item->{is_new});
-        print " <b>gelöscht</b>" if ($item->{deleted});
-        print " von " . a({ href=>"$baseurl?user=".$item->{user} }, $item->{user});
-        print "</li>";
+        print version_line('{TIMESTAMP_LINK} {PPN_LINK} {IS_NEW}{IS_DELETED} {BY_USER}', $item);
     }
     print "</ul>";
     # print Dumper($rc);    
@@ -268,16 +262,11 @@ if ($cmd eq 'editrecord') {
     print '</div>';
 } elsif ($cmd eq 'deleted') {
     print h2("Gelöschte Datensätze");
-    my $del = $store->deleted();
+    my $del = $store->deletions($offset, $limit);
     if (@$del) {
         print "<ul>";
         foreach my $item (@$del) {
-            print "<li>";
-            print a( { href=>"$baseurl?version=" . $item->{version} }, $item->{timestamp} );
-            print " ";
-            print a( { href=>"$baseurl?ppn=" . $item->{ppn} }, "Datensatz " . $item->{ppn} );
-            print " <b>gelöscht</b> von " . a({ href=>"$baseurl?user=".$item->{user} }, $item->{user});
-            print "</li>";
+            print version_line('{TIMESTAMP_LINK} {PPN_LINK} {IS_NEW}{IS_DELETED} {BY_USER}', $item);
         }
         print "</ul>";
     } else {

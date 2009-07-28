@@ -7,9 +7,8 @@ PICA::Parser - Parse PICA+ data
 =cut
 
 use strict;
-use utf8;
 use base qw(Exporter);
-our $VERSION = "0.45";
+our $VERSION = "0.48";
 
 use Carp qw(croak);
 our @EXPORT_OK = qw(parsefile parsedata);
@@ -37,7 +36,7 @@ our @EXPORT_OK = qw(parsefile parsedata);
   $parser->parsedata( $picadata );
   print $parser->counter() . " records read.\n";
 
-You can also C<parsedata> and C<parsefile>:
+You can also export C<parsedata> and C<parsefile>:
 
   use PICA::Parser qw(parsefile);
 
@@ -51,11 +50,17 @@ constructs like
 
   my @records = parsefile($filename)->records();
 
-To parse just one record, use
+To parse just one record you can use the special method
+getrecord which can be exported by PICA::Record:
 
-  my ($record) = parsefile($filename, Limit => 1)->records();
+  use PICA::Record qw(getrecord);
+  my $record = getrecord( $file );
 
-By default the parser may emit some error messages to STDOUT 
+Another method is to limit the parser to one record:
+
+  my ($record) = PICA::Parser->parsefile( $file, Limit => 1 )->records();
+
+A PICA::Parser may emit some error messages to STDOUT 
 but ignore most errors. If you want broken fields not to be 
 ignored, add an error handler with FieldError:
 
@@ -289,6 +294,21 @@ sub counter {
 
 =head1 INTERNAL METHODS
 
+=head2 enable_binmode_encoding ( $handle )
+
+Enable :utf8 layer for a given filehandle unless it or some other 
+encoding has already been enabled. You should not need this method.
+
+=cut
+
+sub enable_binmode_encoding {
+    my $fh = shift;
+    foreach my $layer ( PerlIO::get_layers( $fh ) ) {
+        return if $layer =~ /^encoding|^utf8/;
+    }
+    binmode $fh, ':utf8';
+}
+
 =head2 _getparser ( [ %params] )
 
 Internal method to get a new parser of the internal parser of this object.
@@ -353,7 +373,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

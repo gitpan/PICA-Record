@@ -7,8 +7,8 @@ PICA::PlainParser - Parse normalized PICA+
 =cut
 
 use strict;
-use utf8;
-our $VERSION = "0.45";
+
+our $VERSION = "0.48";
 
 =head1 SYNOPSIS
 
@@ -92,10 +92,9 @@ sub parsefile {
     my ($self, $file) = @_;
 
     if ( ref($file) eq 'GLOB' ) {
-        $self->{filehandle} = IO::Handle->new_from_fd($file,"r")
-            or croak("failed to use IO::Handle");
+        $self->{filehandle} = $file;
         $self->{filename} = "";
-    } elsif ( UNIVERSAL::isa($file, 'IO::Handle') ) {
+    } elsif ( UNIVERSAL::isa( $file, 'IO::Handle' ) ) {
         $self->{filehandle} = $file;
         $self->{filename} = "";
     } else {
@@ -109,7 +108,9 @@ sub parsefile {
             or croak("failed to open file $file");
     }
 
-    if ( ! $self->{proceed} ) {
+    PICA::Parser::enable_binmode_encoding( $self->{filehandle} );
+
+    if ( not $self->{proceed} ) {
         $self->{read_counter} = 0;
         $self->{read_records} = [];
     }
@@ -142,9 +143,7 @@ sub parsefile {
                 if (PICA::Field::parse_pp_tag($1)) {
                     $self->_parseline($line);
                 } else {
-#print "!!!!!1\n" if $line =~ /\x1D/;
                     if ( "$id" ne "$1" ) { 
-#print "L: $line\n";
                         $self->_parseline(""); # next record
                     }
                     $id = $1;
@@ -155,10 +154,10 @@ sub parsefile {
         $/ = $EOL;
 
     } else {
-        do {
-            last if ($self->finished());
+        while ( defined $line and not $self->finished ) {
             $self->_parseline($line);
-        } while( $line = readline( $self->{filehandle} ) );
+            $line = readline( $self->{filehandle} );
+        };
     }
 
     $self->handle_record() unless $self->finished(); # handle last record
@@ -359,9 +358,7 @@ sub handle_record {
     if (defined $self->{broken}) {
         $broken = $self->{broken};
     } else {
-        $record = bless {
-            _fields => [@{$self->{fields}}]
-        }, 'PICA::Record';
+        $record = PICA::Record->new( @{$self->{fields}} );
     }
     $self->{fields} = [];
     $self->{broken} = undef;
@@ -405,7 +402,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 17;
+use Test::More tests => 18;
 
 use_ok( 'PICA::XMLParser' );
 use_ok( 'PICA::Parser' );
@@ -44,11 +44,15 @@ PICA::Parser->parsefile( $fh, Record => \&handle_record, Format => "xml" );
 isa_ok( $record, 'PICA::Record');
 
 # Use PICA::Parser and parse from file handle with XML data
-open XML, $xmlfile;
-PICA::Parser->parsefile( \*XML, Record => \&handle_record, Format => "xml" );
-isa_ok( $record, 'PICA::Record');
-undef $record;
-close XML;
+my $fxml;
+{
+  local *STDIN;
+  open STDIN, $xmlfile;
+  PICA::Parser->parsefile( \*STDIN, Record => \&handle_record, Format => "xml" );
+  isa_ok( $record, 'PICA::Record');
+  undef $record;
+  close STDIN;
+}
 
 # use as function or as method
 ($record) = PICA::XMLParser->parsefile("t/minimal.xml")->records();
@@ -68,8 +72,8 @@ isa_ok($record, "PICA::Record");
 
 
 # parse from a function
-open XML, $xmlfile;
-PICA::Parser->parsedata( sub {return readline XML;}, 
+open $fxml, $xmlfile;
+PICA::Parser->parsedata( sub {return readline $fxml;}, 
     Record => \&handle_record,
     Format => "xml"
 );
@@ -86,6 +90,10 @@ $parser = PICA::XMLParser->new( Proceed => 1 );
 $parser->parsedata($xmldata);
 $parser->parsedata($xmldata);
 ok( $parser->counter == 2, "proceed" );
+
+# parse with collection element and namespace
+($record) = PICA::Parser->parsefile("t/graveyard.xml")->records();
+is( $record->ppn, '588923168', "ppn (xml)" );
 
 __END__
 <?xml version="1.0"?>

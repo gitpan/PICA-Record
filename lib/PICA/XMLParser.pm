@@ -7,8 +7,7 @@ PICA::XMLParser - Parse PICA+ XML
 =cut
 
 use strict;
-use utf8;
-our $VERSION = "0.42";
+our $VERSION = "0.5";
 
 use base qw(Exporter);
 use Carp qw(croak);
@@ -123,7 +122,8 @@ sub parsedata {
       }
 
       my $parser = new XML::Parser(
-          Handlers => $self->_getHandlers
+          Handlers => $self->_getHandlers,
+          Namespaces => 1
       );
 
       if (ref($data) eq 'ARRAY') {
@@ -168,7 +168,8 @@ sub parsefile {
 
         $self->{filename} = $file if ref(\$file) eq 'SCALAR';
         my $parser = new XML::Parser(
-            Handlers => $self->_getHandlers
+            Handlers => $self->_getHandlers,
+            Namespaces => 1
         );
 
         if (ref($file) eq 'GLOB' or eval { $file->isa("IO::Handle") }) {
@@ -261,6 +262,9 @@ Called for each start tag.
 sub start_handler {
     my ($self, $parser, $name, %attrs) = @_;
 
+    my $ns = $parser->namespace($name);
+    $name = '{'.$ns.'}:'.$name if $ns and $ns ne $PICA::Record::XMLNAMESPACE;
+
     if ($name eq "subfield") {
 
         my $code = $attrs{"code"};
@@ -320,7 +324,7 @@ sub end_handler {
             _tag => $self->{tag},
             _occurrence => $self->{occurrence},
             _subfields => [@{$self->{subfields}}]
-        }, 'PICA::Field';
+        }, 'PICA::Field'; # TODO: use constructor instead
 
         if ($self->{field_handler}) {
             $field = $self->{field_handler}( $field );
@@ -335,9 +339,7 @@ sub end_handler {
         $self->{read_counter}++;
 
         if (! ($self->{offset} && $self->{read_counter} < $self->{offset}) ) {
-            my $record = bless {
-                _fields => [@{$self->{fields}}]
-            }, 'PICA::Record';
+            my $record =  PICA::Record->new( @{$self->{fields}} );
 
             if ($self->{record_handler}) {
                 $record = $self->{record_handler}( $record );
@@ -409,19 +411,13 @@ sub _getPosition {
 
 __END__
 
-=head1 TODO
-
-XML namespaces are not supported yet. When XML errors occur, there 
-should be better error messages that point to a give file and line.
-Return values of collections are not supported yet.
-
 =head1 AUTHOR
 
 Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 53;
+use Test::More tests => 56;
 
 use PICA::Field;
 use XML::Writer;
@@ -97,8 +97,6 @@ is ( @all, 4, 'get all subfields (content)');
 
 my @c = $field->content();
 
-#use Data::Dumper;
-#print STDERR Dumper(@c) . "\n";
 ok ( $c[1][0] eq '8' && $c[1][1] eq "Martin Schrettinger", 'get all subfields as array');
 
 my $fcopy = $field->copy(); #PICA::Field->new( $field );
@@ -157,7 +155,13 @@ ok ($sf[0] eq 'xx' && $sf[1] eq 'yy', 'Field->sf (array)');
 
 $field = PICA::Field->parse('123A $axx$byy$czz');
 @sf = $field->sf('a','c');
-ok ($sf[0] eq 'xx' && $sf[1] eq 'zz', 'Field->sf (multiple)');
+is_deeply ( \@sf, ['xx','zz'], 'Field->sf (multiple) - 1');
+@sf = $field->sf( qr/[ac]/ );
+is_deeply ( \@sf, ['xx','zz'], 'Field->sf (multiple) - 2');
+@sf = $field->sf( qr/[a-c]/ );
+is_deeply ( \@sf, ['xx','yy','zz'], 'Field->sf (multiple) - 3');
+@sf = $field->sf( 'a-b' );
+is_deeply ( \@sf, ['xx','yy'], 'Field->sf (multiple) - 4');
 
 # newlines in field values
 $field = PICA::Field->new( '021A', 'a' => "This\nare\n\t\nlines" );

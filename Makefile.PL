@@ -10,17 +10,24 @@ use ExtUtils::MakeMaker;
     PMLIBDIRS       => [ qw( lib/ ) ],
     AUTHOR          => 'Jakob Voss <jakob.voss@gbv.de>',
     PREREQ_PM       => {
-        'XML::Parser' => '2.32',
         'LWP::UserAgent' => '2.0',
         'URI::Escape' => '1.35',
         'SOAP::Lite' => '0.71',
-        'Scalar::Util' => '1.18',
+        'Scalar::Util' => '1.14',
         'Config::Simple' => '4.58',
+        'PerlIO' => '1.0',
         'IO::File' => '1.11',
+        'IO::Scalar' => '1.126',
         'Encode' => '2.33',
-        'XML::Writer' => '0.605'
+        'XML::Parser' => '2.32',
+        'XML::Writer' => '0.605',
+        'DBD::SQLite' => '0',
     },
-    EXE_FILES       => [ 'script/parsepica', 'script/picawebcat' ],
+    EXE_FILES       => [ 
+        'script/parsepica', 
+        'script/picaimport',
+        'script/picawebcat', # deprecated
+    ],
     dist            => {
         COMPRESS => 'gzip -9f',
         SUFFIX => 'gz',

@@ -11,6 +11,7 @@ use Config::Simple;
 use PICA::SOAPClient;
 use PICA::SQLiteStore;
 use Carp qw(croak);
+use Cwd qw(cwd abs_path);
 
 our $VERSION = '0.48';
 
@@ -29,7 +30,7 @@ later include WebDAV, and REST (for instance Jangle).
   use PICA::Store;
 
   # connect to store via SOAP API (SOAPClient)
-  $store = PICA::Store->new( SOAP => $baseurl, %params );
+  $store = PICA::Store->new( webcat => $baseurl, %params );
 
   # connect to SQLiteStore
   $store = PICA::Store->new( SQLite => $dbfile, %params );
@@ -50,9 +51,22 @@ later include WebDAV, and REST (for instance Jangle).
 
 our $readconfigfile = sub {
     my $params = shift; # hash reference
-    return unless defined $params->{config} or defined $params->{conf};
 
-    my $cfile = $params->{config} || $params->{conf};    
+    return unless exists $params->{conf} or exists $params->{config};
+
+    $params->{config} = $params->{conf} unless defined $params->{config};
+
+    if ( not defined $params->{config} ) {
+        if ($ENV{PICASTORE}) {
+            $params->{config} = $ENV{PICASTORE};
+        } elsif ( -e cwd.'/picastore.conf' ) {
+            $params->{config} = cwd.'/picastore.conf';
+        }
+    }
+
+    my $cfile = $params->{config};
+    return unless defined $cfile;
+
     my %config;
 
     croak("config file not found: $cfile") unless -e $cfile;
@@ -71,24 +85,26 @@ our $readconfigfile = sub {
 =head2 new ( %parameters )
 
 Return a new PICA::Store. You must either specify a parameter named
-'SOAP' to get a L<PICA::SOAPClient> or a parameter named 'SQLite' 
+'webcat' to get a L<PICA::SOAPClient> or a parameter named 'SQLite' 
 to get a L<PICA::SQLiteStore>. Alternatively you can specify a
-parameter named 'config' that points to a configuration file.
+parameter named 'config' that points to a configuration file. 
+If you set this parameter to undef, the file will be searched as
+environment variable PICASTORE or picastore.conf in the current 
+directory.
 
 =cut
 
 sub new {
     my ($class, %params) = (@_);
 
-    $readconfigfile->( \%params ) if defined $params{config};
+    $readconfigfile->( \%params )
+        if exists $params{config} or exists $params{conf} ;
 
-    return PICA::SOAPClient->new( %params ) if defined $params{SOAP};
+    return PICA::SOAPClient->new( %params ) if defined $params{webcat};
     return PICA::SQLiteStore->new( %params ) if defined $params{SQLite};
 
-    undef;
+    croak('Could not determine concrete type of PICA::Store');
 }
-
-# TODO: load from config file
 
 =head2 get
 

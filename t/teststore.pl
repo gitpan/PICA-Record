@@ -3,17 +3,14 @@
 # tests for PICA::Store and subclasses (to be included in other tests)
 
 sub teststore {
-    my $store = shift;
-    my (@records, %result, $record);
+    my ($store) = @_;
+    my (%result, $record);
 
-    # use a simple record
-    $record = PICA::Record->new("002@ \$0Aau\n021A \$aDas zweite Kapital\n028A \$dKarl\$aMarx");
-    push @records, $record;
-
-    # use a record with Unicode
-    $record = PICA::Record->new( IO::File->new("t/minimal.pica") );
-    $record->delete_fields('003@'); # remove PPN
-    push @records, $record;
+    my @records = (
+        PICA::Record->new("002@ \$0Aau\n021A \$aDas zweite Kapital\n028A \$dKarl\$aMarx"),
+    );
+    my $r = PICA::Record::getrecord('t/minimal.pica');
+    $r->delete_fields('003@');
 
     my $i=0;
 
@@ -41,7 +38,7 @@ sub teststore {
         }
 
         if (@records) {
-            $record = $records[0];
+            $record = $records[0];            
             %result = $store->update( $id, $record, $version );
             ok ($result{record} && $result{id}, "updateRecord($id)");
             if ($store->can('history')) {
@@ -69,7 +66,7 @@ sub teststore {
         $i++;
     }
 
-    %result = $store->get( 123 );
+    %result = $store->get( -1 );
 
     ok ($result{errorcode}, "getRecord of non-existing id");
 }

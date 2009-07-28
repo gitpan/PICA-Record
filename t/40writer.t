@@ -1,6 +1,7 @@
 #!perl -Tw
 
 use strict;
+use utf8;
 
 use Test::More tests => 13;
 use Encode;
@@ -33,10 +34,11 @@ my ($record, $xmldata, $str);
 isa_ok($record, "PICA::Record");
 
 # open XML file
-open XML, "t/minimal.xml";
-binmode XML, ":utf8";
-$xmldata = join("",grep { !($_ =~ /^<\?|^$/); } <XML>);
-close XML;
+my $fxml;
+open $fxml, "t/minimal.xml";
+binmode $fxml, ":utf8";
+$xmldata = join("",grep { !($_ =~ /^<\?|^$/); } <$fxml>);
+close $fxml;
 
 # write manually with to_xml
 my $writer = XML::Writer->new( 
@@ -50,10 +52,10 @@ $writer->endTag();
 is( "$str\n", $xmldata, "to_xml" );
 
 # open XML file
-open XML, "t/minimal.xml";
-binmode XML, ":utf8";
-$xmldata = join("", <XML>);
-close XML;
+open $fxml, "t/minimal.xml";
+binmode $fxml, ":utf8";
+$xmldata = join("", <$fxml>);
+close $fxml;
 
 
 # write to file
@@ -74,9 +76,10 @@ is( file2string($filename), $xmldata, "format => 'xml'" );
 
 sub file2string {
     my $fname = shift;
-    open( FILE, "<:utf8", $fname ) or return "failed to open $fname";
-    my $string = join('',<FILE>);
-    close FILE;
+    my $fh;
+    open( $fh, "<:utf8", $fname ) or return "failed to open $fname";
+    my $string = join('',<$fh>);
+    close $fh;
     return $string;
 }
 
@@ -96,6 +99,8 @@ is ("$s", file2string("t/graveyard.xml"), "default XML conversion");
 
 
 __END__
+
+TODO: write to a stream in another encoding
 
 if(0) {
 $str = "";

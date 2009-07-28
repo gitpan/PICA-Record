@@ -7,10 +7,9 @@ PICA::Field - Perl extension for handling PICA+ fields
 =cut
 
 use strict;
-use utf8;
 
 use base qw(Exporter);
-our $VERSION = "0.49";
+our $VERSION = "0.50";
 
 use Carp qw(croak);
 use XML::Writer;
@@ -143,7 +142,7 @@ The filter function can be used to select only required fields
 
 =cut
 
-sub parse($) {
+sub parse {
     my $class = shift;
     $class = ref($class) || $class;
 
@@ -215,7 +214,7 @@ sub tag {
     return $self->{_tag} . ($self->{_occurrence} ?  ("/" . $self->{_occurrence}) : "");
 }
 
-=head2 occurrence ( [ $occurrence ] )
+=head2 occurrence ( [ $occurrence ] ) or occ ( ... )
 
 Returns the ocurrence or undef. Optionally sets the ocurrence to a new value.
 
@@ -233,15 +232,8 @@ sub occurrence {
     return $self->{_occurrence};
 }
 
-=head2 occ ( [ $occurrence ] )
-
-Short for of method occurrence.
-
-=cut
-
-sub occ {
-    return shift->occurrence( @_ );
-}
+# Shortcut
+*occ = \&occurrence;
 
 =head2 level ( )
 
@@ -254,17 +246,7 @@ sub level {
     return substr($self->{_tag},0,1);
 }
 
-=head2 sf ( [ $code(s) ] )
-
-Shortcut for method C<subfield>.
-
-=cut
-
-sub sf {
-    return subfield(@_);
-}
-
-=head2 subfield ( [ $code(s) ] )
+=head2 subfield ( [ $code(s) ] ) or sf ( ... )
 
 Return selected or all subfield values. If you specify 
 one ore more subfield codes, only matching subfields are 
@@ -274,6 +256,9 @@ first (matching) subfield. You may specify multiple subfield codes:
     my $subfield = $field->subfield( 'a' );   # first $a
     my $subfield = $field->subfield( 'acr' ); # first of $a, $c, $r
     my $subfield = $field->subfield( 'a', 'c', 'r' ); # the same
+
+    my @subfields = $field->subfield( '0-9' );     # $0 ... $9
+    my @subfields = $field->subfield( qr/[0-9]/ ); # $0 ... $9
 
     my @subfields = $field->subfield( 'a' );
     my @all_subfields = $field->subfield();
@@ -287,9 +272,15 @@ Remember that there can be more than one subfield of a given code!
 
 sub subfield {
     my $self = shift;
-    my $codes = join('',@_);
-    $codes = $codes eq '' ? '.' : "[$codes]";
-    $codes = qr/$codes/;
+    my $codes = $_[0];
+    if (ref($codes) ne 'Regexp') {
+        $codes = join('',@_);
+        if ($codes eq '') {
+            $codes = qr/./;
+        } else {
+            $codes = qr/[$codes]/;
+        }
+    }
 
     my @list;
     my @data = @{$self->{_subfields}};
@@ -308,6 +299,9 @@ sub subfield {
     return $list[0] unless wantarray;
     return @list;
 }
+
+# Shortcut
+*sf = \&subfield;
 
 =head2 content ( [ $code(s) ] )
 
@@ -499,13 +493,11 @@ sub empty {
 
 =head2 is_empty ( )
 
-Alias for method empty (deprecated).
+Deprecated alias for method empty.
 
 =cut
 
-sub is_empty {
-    return shift->empty;
-}
+*is_empty = \&empty;
 
 =head2 purged ( )
 
@@ -766,7 +758,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Göttingen (VZG) and Jakob Voß
+Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

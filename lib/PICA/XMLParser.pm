@@ -13,6 +13,8 @@ use base qw(Exporter);
 use Carp qw(croak);
 our @EXPORT_OK = qw(parsefile parsedata);
 
+require PICA::Field;
+
 =head1 SYNOPSIS
 
   my $rcount = 1;
@@ -269,7 +271,7 @@ sub start_handler {
 
         my $code = $attrs{"code"};
         if (defined $code) {
-            if ($code =~ PICA::Field::SUBFIELD_CODE_REGEXP) {
+            if ($code =~ $PICA::Field::SUBFIELD_CODE_REGEXP) {
                 $self->{subfield_code} = $code;
                 $self->{subfield_value} = "";
             } else {
@@ -281,14 +283,14 @@ sub start_handler {
     } elsif ($name eq "field" or $name eq "datafield") {
         my $tag = $attrs{tag};
         if (defined $tag) {
-            if (!($tag =~ PICA::Field::FIELD_TAG_REGEXP)) {
+            if (!($tag =~ $PICA::Field::FIELD_TAG_REGEXP)) {
                 croak("Invalid field tag '$tag'" . $self->_getPosition($parser));
             }
         } else {
             croak("Missing attribute 'tag'" . $self->_getPosition($parser));
         }
         my $occurrence = $attrs{occurrence};
-        if ($occurrence && !($occurrence =~ PICA::Field::FIELD_OCCURRENCE_REGEXP)) {
+        if ($occurrence && !($occurrence =~ $PICA::Field::FIELD_OCCURRENCE_REGEXP)) {
             croak("Invalid occurrence '$occurrence'" . $self->_getPosition($parser));
         }
 

@@ -7,7 +7,7 @@ PICA::SQLiteStore - Store L<PICA::Record>s in a SQLite database with versioning
 =cut
 
 use strict;
-our $VERSION = "0.1.2";
+our $VERSION = "0.20";
 
 use PICA::Record;
 use PICA::Store;

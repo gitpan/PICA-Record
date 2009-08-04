@@ -13,8 +13,10 @@ use PICA::Writer;
 use IO::File;
 use Encode;
 
+my $files = "t/files";
+
 my $record;
-my $plainpicafile = "t/kochbuch.pica";
+my $plainpicafile = "$files/kochbuch.pica";
 sub handle_record { $record = shift; }
 
 # parse from a file
@@ -90,19 +92,19 @@ $parser = PICA::Parser->new( Record => sub {
     $writer->write( $record ); 
     return $record;
 } );
-$parser->parsefile("t/dumpformat");
+$parser->parsefile("$files/dumpformat");
 is( $writer->counter(), 3, 'parse dumpformat (records) - writer' );
 is( $parser->counter(), 3, 'parse dumpformat (records) - parser' );
 is( $writer->fields(), 92, 'parse dumpformat (fields)' );
 $writer->reset();
 
 # parse dumpformat (from file)
-$parser->parsefile("t/bib.pica");
+$parser->parsefile("$files/bib.pica");
 is ($writer->fields(), 24, 'parse dumpformat (from file)' );
 
 # parse from IO::Handle
 use IO::File;
-$fh = new IO::File("< t/dumpformat");
+$fh = new IO::File("< $files/dumpformat");
 $parser = PICA::Parser->new();
 $parser->parsefile( $fh );
 is( $parser->counter, 3, 'parse dumpformat (records)' );
@@ -127,8 +129,8 @@ my @r = PICA::Parser->parsedata($picadata)->records();
 is( scalar @r, 1, "one call (->records)" );
 
 # run parsefile in many ways
-test_parsefile("t/kochbuch.pica");
-test_parsefile("t/record.xml");
+test_parsefile("$files/kochbuch.pica");
+test_parsefile("$files/record.xml");
 
 sub test_parsefile {
     my $file = shift;
@@ -159,8 +161,8 @@ sub test_parsefile {
 }
 
 # run parsedata in many ways
-test_parsedata("t/kochbuch.pica");
-test_parsedata("t/record.xml");
+test_parsedata("$files/kochbuch.pica");
+test_parsedata("$files/record.xml");
 
 sub test_parsedata {
     my $file = shift;
@@ -185,7 +187,7 @@ sub test_parsedata {
 }
 
 # use PICA::Writer as record handler
-my $file = "t/cjk.pica";
+my $file = "$files/cjk.pica";
 open FILE, $file; 
 binmode FILE, ":utf8";
 my $data = join( "", <FILE> );
@@ -243,17 +245,17 @@ PICA::Parser->new(
 is( $msg, "bad", "record handler produces error" );
 
 
-my $filename = 't/minimal.pica';
+my $filename = "$files/minimal.pica";
 @r = PICA::Parser->parsefile( $filename, Limit => 1 )->records();
 push @r, PICA::Record::getrecord( $filename );
 push @r, PICA::Record->new( IO::File->new( $filename ) );
 open ($fh, "<:utf8", $filename); push @r, PICA::Record->new( $fh ); close $fh;
 
-$filename = 't/minimal.xml';
+$filename = "$files/minimal.xml";
 push @r, PICA::Parser->parsefile( $filename, Limit => 1 )->records();
 push @r, PICA::Record::getrecord( $filename );
 
-$fh = IO::File->new( ' t/minimal.iso-8859-2' );
+$fh = IO::File->new( "$files/minimal.iso-8859-2" );
 binmode $fh,':encoding(iso-8859-2)';
 my $r = PICA::Record::getrecord( $fh );
 $r->replace('021A', 'a' => 'Das $-Kapital mit ☎');
@@ -270,10 +272,10 @@ __END__
 
 # TODO: parse WinIBW output
 
-@records = PICA::Parser->parsefile( "t/winibwsave.example", Limit => 2 )->records();
+@records = PICA::Parser->parsefile( "$files/winibwsave.example", Limit => 2 )->records();
 is( scalar @records, 2, "limit" );
 
-@records = PICA::Parser->parsefile( "t/winibwsave.example", Offset => 3 )->records();
+@records = PICA::Parser->parsefile( "$files/winibwsave.example", Offset => 3 )->records();
 is( scalar @records, 3, "offset" );
 
 # TODO: check encoding of WinIBW output

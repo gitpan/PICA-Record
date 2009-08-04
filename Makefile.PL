@@ -21,12 +21,12 @@ use ExtUtils::MakeMaker;
         'Encode' => '2.33',
         'XML::Parser' => '2.32',
         'XML::Writer' => '0.605',
-        'DBD::SQLite' => '0',
+        'DBI' => '1.0',
+        'DBD::SQLite' => '1.14',
     },
     EXE_FILES       => [ 
         'script/parsepica', 
-        'script/picaimport',
-        'script/picawebcat', # deprecated
+        'script/picaimport'
     ],
     dist            => {
         COMPRESS => 'gzip -9f',

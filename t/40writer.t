@@ -8,6 +8,8 @@ use Encode;
 use File::Temp qw(tempfile);
 use XML::Writer;
 
+my $files = "t/files";
+
 use_ok("PICA::Writer");
 use_ok("PICA::XMLParser");
 use_ok("PICA::Parser");
@@ -30,12 +32,12 @@ is ( $s, "042A \$1bar\n\n045B \$Xdoz\n", "multiple records" );
 # prepare
 my ($record, $xmldata, $str);
 
-($record) = PICA::Parser->parsefile("t/minimal.xml")->records();
+($record) = PICA::Parser->parsefile("$files/minimal.xml")->records();
 isa_ok($record, "PICA::Record");
 
 # open XML file
 my $fxml;
-open $fxml, "t/minimal.xml";
+open $fxml, "$files/minimal.xml";
 binmode $fxml, ":utf8";
 $xmldata = join("",grep { !($_ =~ /^<\?|^$/); } <$fxml>);
 close $fxml;
@@ -52,7 +54,7 @@ $writer->endTag();
 is( "$str\n", $xmldata, "to_xml" );
 
 # open XML file
-open $fxml, "t/minimal.xml";
+open $fxml, "$files/minimal.xml";
 binmode $fxml, ":utf8";
 $xmldata = join("", <$fxml>);
 close $fxml;
@@ -91,11 +93,11 @@ $w->write( $record )->end();
 
 is( file2string($filename), $xmldata, "format => 'xml' (implicit, pretty)" );
 
-$s="";
+$s = "";
 $w = PICA::Writer->new( \$s, format => 'xml' );
-PICA::Parser->parsefile( "t/graveyard.pica", Record => $w );
+PICA::Parser->parsefile( "$files/graveyard.pica", Record => $w );
 $w->end();
-is ("$s", file2string("t/graveyard.xml"), "default XML conversion");
+is ("$s", file2string("$files/graveyard.xml"), "default XML conversion");
 
 
 __END__

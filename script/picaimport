@@ -2,7 +2,7 @@
 
 =head1 NAME
 
-picawebcat - Import or delete PICA+ records in a L<PICA::Store>
+picaimport - Import or delete PICA+ records in a L<PICA::Store>
 
 =cut
 
@@ -10,7 +10,7 @@ use warnings;
 use strict;
 use utf8;
 
-our $VERSION = '0.20';
+our $VERSION = '0.21';
 
 =head1 SYNOPSIS
 
@@ -77,10 +77,12 @@ pod2usage("Please provide EITHER files OR -from option")
 
 $fromfile = '-' unless defined $fromfile or @ARGV;
 
+# Support TODO output to STDOUT *and* to a file (-verbose)
 $outfile = "-" unless defined $outfile;
 if ( $outfile eq '-' ) {
     *OUT = *STDOUT;
 } else {
+    # TODO: append to a file?
     print "Resulting mappings are written to $outfile\n" unless $quiet;
     open OUT, ">$outfile" or die("Failed to open $outfile");
 }

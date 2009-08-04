@@ -11,8 +11,10 @@ use strict;
 use base qw(Exporter);
 our @EXPORT_OK = qw(getrecord);
 
-our $VERSION = '0.50';
+our $VERSION = '0.501';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
+
+our @CARP_NOT = qw(PICA::Field PICA::Parser);
 
 use POSIX qw(strftime);
 use PICA::Field;
@@ -161,6 +163,7 @@ my $append_field = sub {
             return;
         }
     }
+    # TODO: limit occ and iln, epn 
     push(@{ $self->{_fields} }, $field);
 };
 
@@ -168,6 +171,8 @@ my $append_field = sub {
 my %field_regex;
 my $get_regex = sub {
     my $reg = shift;
+
+    return $reg if ref($reg) eq 'Regexp';
 
     my $regex = $field_regex{ $reg };
 
@@ -220,9 +225,6 @@ sub new {
     my $first = $_[0];
 
     if (defined $first) {
-
-        # pass croak without including Record.pm at the stack trace
-        local $Carp::CarpLevel = 1;
 
         if ($#_ == 0 and ref(\$first) eq 'SCALAR') {
             my @lines = split("\n", $first);
@@ -289,6 +291,7 @@ You may specify multiple tags and use regular expressions.
   my $field  = $record->field("021A","021C");
   my $field  = $record->field("009P/03");
   my @fields = $record->field("02..");
+  my @fields = $record->field( qr/^02..$/ );
   my @fields = $record->field("039[B-E]");
 
 If the first parameter is an integer, it is used as a limitation
@@ -380,7 +383,8 @@ sub subfield {
             $subfield = shift;
         }
 
-        croak("Missing subfield for $tag") unless defined $subfield;
+        croak("Missing subfield for $tag") 
+            unless defined $subfield;
 
         my $tag_regex = $get_regex->($tag);
         for my $f ( $self->all_fields ) {
@@ -738,7 +742,7 @@ sub replace {
     my $tag = shift;
 
     croak("Not a valid tag: $tag")
-        unless PICA::Field::parse_pp_tag($tag);
+        unless PICA::Field::parse_pp_tag( $tag );
 
     my $replace;
 

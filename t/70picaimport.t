@@ -12,20 +12,19 @@ use PICA::Record qw(getrecord);
 use Data::Dumper;
 
 my $tempdir = tempdir( UNLINK => 1 );
-my $tdir = abs_path( "t/" );
 my $verbose = 0;
 
 writefile("store.conf","SQLite=$tempdir/picastore.db\n");
-writefile("test.pica", slurp("t/minimal.pica"));
+writefile("test.pica", slurp("t/files/minimal.pica"));
 
 my @files = (
-  abs_path("t/cjk.pica"),
+  abs_path("t/files/cjk.pica"),
   "$tempdir/test.pica"
 );
 
 writefile("files", join("\n", @files)."\n");
 
-#my $record = getrecord("t/minimal.pica");
+#my $record = getrecord("t/files/minimal.pica");
 #$record->delete_field('
 
 
@@ -39,16 +38,15 @@ ok ( $result{id}, 'created a record' );
 # $store->size
 
 # chdir $dir;
-#t/graveyard.pica
+#t/files/graveyard.pica
 
 my ($stdout, $stderr) = picaimport();
 ok( $stderr, "needs parameters" );
 
 ($stdout, $stderr) = picaimport( "-conf $tempdir/store.conf -from $tempdir/files" );
 ok( !$stderr, "import looks fine" );
-#print "$stderr\n";
 
-my @lines = split("\n", $stdout);
+my @lines = $stdout ? split("\n", $stdout) : ('');
 my $msg = "^Reading from $tempdir/files";
 ok( shift(@lines) =~ /$msg/, "read from file" );
 my %records = map { $_ =~ /^([0-9]*[0-9Xx]) (.+)/; ($1=>$2); } @lines;
@@ -67,7 +65,7 @@ is( scalar @{$store->recentchanges}, 2+1, 'imported into store' );
 # print "$stdout\n";
 
 #print Dumper(\%records) . "\n"; 
-#2 /home/voj/svn/picapm/trunk/t/cjk.pica
+#2 /home/voj/svn/picapm/trunk/t/files/cjk.pica
 #3 /tmp/9NjveobGae/test.pica
 
 

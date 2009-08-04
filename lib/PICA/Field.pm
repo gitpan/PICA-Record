@@ -18,13 +18,13 @@ use PICA::Writer;
 
 our @EXPORT = qw(parse_pp_tag);
 
-use constant SUBFIELD_INDICATOR => "\x1F"; # 31
-use constant START_OF_FIELD     => "\x1E"; # 30
-use constant END_OF_FIELD       => "\x0A"; # 10
+our $SUBFIELD_INDICATOR = "\x1F"; # 31
+our $START_OF_FIELD     = "\x1E"; # 30
+our $END_OF_FIELD       = "\x0A"; # 10
 
-use constant FIELD_TAG_REGEXP => qr/[012][0-9][0-9][A-Z@]$/;
-use constant FIELD_OCCURRENCE_REGEXP => qr/[0-9][0-9]$/;
-use constant SUBFIELD_CODE_REGEXP => qr/^[0-9a-zA-Z]$/;
+our $FIELD_TAG_REGEXP = qr/[012][0-9][0-9][A-Z@]$/;
+our $FIELD_OCCURRENCE_REGEXP = qr/[0-9][0-9]$/;
+our $SUBFIELD_CODE_REGEXP = qr/^[0-9a-zA-Z]$/;
 
 =head1 SYNOPSIS
 
@@ -149,11 +149,8 @@ sub parse {
     my $data = shift;
     my $tag_filter_func = shift;
 
-    my $START_OF_FIELD = START_OF_FIELD;
-
     # TODO: better manage different parsing modes (normalized, plain, WinIBW...)
-    my $END_OF_FIELD = END_OF_FIELD;
-    $END_OF_FIELD = qr/[\x0A\x0D]+/;
+    my $END_OF_FIELD = qr/[\x0A\x0D]+/; # local
 
     $data =~ s/^$START_OF_FIELD//;
     $data =~ s/$END_OF_FIELD$//;
@@ -362,7 +359,7 @@ sub add {
         $value =~ s/\s+/ /gm;
 
         croak( "Subfield code \"$code\" is not a valid subfield code" )
-            if !($code =~ SUBFIELD_CODE_REGEXP);
+            if !($code =~ $SUBFIELD_CODE_REGEXP);
 
         push( @{$self->{_subfields}}, $code, $value );
     }
@@ -405,7 +402,7 @@ sub update {
         my $value = shift;
 
         croak( "Subfield code \"$code\" is not a valid subfield code" )
-            if !($code =~ SUBFIELD_CODE_REGEXP);
+            if !($code =~ $SUBFIELD_CODE_REGEXP);
 
         $value =~ s/\s+/ /mg;
 
@@ -546,9 +543,9 @@ sub normalized() {
 
     return $self->to_string( 
       subfields => $subfields,
-      startfield => START_OF_FIELD,
-      endfield => END_OF_FIELD,
-      startsubfield => SUBFIELD_INDICATOR
+      startfield => $START_OF_FIELD,
+      endfield => $END_OF_FIELD,
+      startsubfield => $SUBFIELD_INDICATOR
     );
 }
 
@@ -738,8 +735,8 @@ sub parse_pp_tag {
     my $tag = shift;
 
     my ($tagno, $occurrence) = split ('/', $tag);
-    undef $tagno unless defined $tagno and $tagno =~ FIELD_TAG_REGEXP;
-    undef $occurrence unless defined $occurrence and $occurrence =~ FIELD_OCCURRENCE_REGEXP;
+    undef $tagno unless defined $tagno and $tagno =~ $FIELD_TAG_REGEXP;
+    undef $occurrence unless defined $occurrence and $occurrence =~ $FIELD_OCCURRENCE_REGEXP;
 
     return ($occurrence, $tagno);
 }

@@ -11,7 +11,7 @@ use File::Temp qw(tempfile);
 use Data::Dumper;
 
 # record to insert
-my $record = PICA::Record->new( IO::File->new("t/minimal.pica") );
+my $record = PICA::Record->new( IO::File->new("t/files/minimal.pica") );
 
 # create new store
 my ($dbfile, $dbfilename) = tempfile();
@@ -72,13 +72,14 @@ my $history = $store->history($id);
 $rc = $store->recentchanges();
 is_deeply( $history, $rc, "history==recent changes (2)" );
 
+__END__
+
 #print Dumper($store->history($id));
 #print Dumper($rc);
 
 # TODO: contributions
 # TODO: deletions (check that a version is inserted)
 # TODO: history including deletions (?)
-__END__
 
 # TODO: require SQLite 3.3 (?)
 

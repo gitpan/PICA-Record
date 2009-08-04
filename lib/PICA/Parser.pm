@@ -12,6 +12,10 @@ our $VERSION = "0.48";
 
 use Carp qw(croak);
 our @EXPORT_OK = qw(parsefile parsedata);
+our @CARP_NOT = qw(PICA::PlainParser PICA::XMLParser);
+
+require PICA::PlainParser;
+require PICA::XMLParser;
 
 =head1 SYNOPSIS
 
@@ -341,14 +345,14 @@ sub _getparser {
     # XMLParser
     if ( defined $unionparams{Format} and $unionparams{Format} =~ /^xml$/i ) {
         if ( !$self->{xmlparser} or %params ) {
-            require PICA::XMLParser; 
+            #require PICA::XMLParser; 
             #if ($self->{xmlparser} && 
             $self->{xmlparser} = PICA::XMLParser->new( %unionparams );
         }
         $parser = $self->{xmlparser};
     } else { # PlainParser
         if ( !$self->{plainparser} or %params ) {
-            require PICA::PlainParser; 
+            #require PICA::PlainParser; 
             $self->{plainparser} = PICA::PlainParser->new( %unionparams );
         }
         $parser = $self->{plainparser};
@@ -375,6 +379,6 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
-This library is free software; you can redistribute it and/or modify it
+This library is free software; you Ccan redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at
 your option, any later version of Perl 5 you may have available.

@@ -9,6 +9,8 @@ use_ok( 'PICA::Parser' );
 use_ok( 'PICA::Record' );
 use_ok( 'IO::File' );
 
+my $files = "t/files";
+
 my @xmldata = <DATA>;              # array
 my $xmldata = join("", @xmldata);  # string
 my $record;
@@ -30,7 +32,7 @@ PICA::Parser->parsedata( \@xmldata, Record => \&handle_record, Format=>"xml" );
 isa_ok( $record, 'PICA::Record');
 undef $record;
 
-my $xmlfile = "t/record.xml";
+my $xmlfile = "$files/record.xml";
 
 # Use PICA::Parser and parse from xml file
 PICA::Parser->parsefile( $xmlfile, Record => \&handle_record );
@@ -55,11 +57,11 @@ my $fxml;
 }
 
 # use as function or as method
-($record) = PICA::XMLParser->parsefile("t/minimal.xml")->records();
+($record) = PICA::XMLParser->parsefile("$files/minimal.xml")->records();
 isa_ok($record, "PICA::Record");
 
 $parser = PICA::XMLParser->new();
-($record) = $parser->parsefile("t/minimal.xml")->records();
+($record) = $parser->parsefile("$files/minimal.xml")->records();
 isa_ok($record, "PICA::Record");
 
 # use as function or as method
@@ -92,7 +94,7 @@ $parser->parsedata($xmldata);
 ok( $parser->counter == 2, "proceed" );
 
 # parse with collection element and namespace
-($record) = PICA::Parser->parsefile("t/graveyard.xml")->records();
+($record) = PICA::Parser->parsefile("$files/graveyard.xml")->records();
 is( $record->ppn, '588923168', "ppn (xml)" );
 
 __END__

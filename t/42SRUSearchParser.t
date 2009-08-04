@@ -7,7 +7,7 @@ use Test::More tests => 6;
 use PICA::SRUSearchParser;
 use PICA::XMLParser;
 
-open SRU, "t/searchRetrieveResponse-1.xml";
+open SRU, "t/files/searchRetrieveResponse-1.xml";
 my $xml = join("",<SRU>);
 close SRU;
 

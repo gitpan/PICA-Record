@@ -3,11 +3,13 @@
 use strict;
 use utf8;
 
-use Test::More tests => 75;
+use Test::More tests => 76;
 
 use PICA::Field;
 use PICA::Record qw(getrecord);
 use IO::File;
+
+my $files = "t/files";
 
 # PICA::Record constructor
 my $testrecord = PICA::Record->new(
@@ -121,6 +123,8 @@ is( scalar @fields, 2 , "Record->field()" );
 is( scalar @fields, 1 , "Record->field()" );
 @fields = $record->field("0...(/..)?");
 is( scalar @fields, 4 , "Record->field()" );
+@fields = $record->field( qr/^0...(\/..)?$/ );
+is( scalar @fields, 4 , "Record->field(qr)" );
 @fields = $record->all_fields();
 is( scalar @fields, 5 , "Record->field()" );
 @fields = $record->field(2, "0...(/..)?");
@@ -176,14 +180,14 @@ $record->replace('010@', 'a' => 'fra');
 is( $record->subfield('010@$a'), 'fra', "replace field");
 
 ### parse normalized by autodetection
-open PICA, "t/bib.pica"; # TODO: bib.pica is bytestream, not character-stream!
+open PICA, "$files/bib.pica"; # TODO: bib.pica is bytestream, not character-stream!
 $normalized = join( "", <PICA> );
 close PICA;
 
 $r = PICA::Record->new( $normalized );
 is( $r->all_fields(), 24, "detect and read normalized pica" );
 
-my $file = IO::File->new("t/minimal.pica");
+my $file = IO::File->new("$files/minimal.pica");
 $record = PICA::Record->new( $file );
 $file->seek(0,0);
 my $minimal = join('',$file->getlines());
@@ -200,7 +204,7 @@ is( $record->sf('021A_a'), "This are lines", "newline in value (1, _)" );
 is( $record->to_string(), "021A \$aThis are lines\n", "newline in value (2)" );
 
 # also test getrecord
-$record = getrecord("t/graveyard.pica");
+$record = getrecord("$files/graveyard.pica");
 is( scalar $record->all_fields(), 62, "parsed graveyard.pica" );
 
 ### PPN
@@ -230,7 +234,7 @@ is_deeply( \@epns, [917400194,923091475,923091483,923091491], "epn() as array" )
 
 ### holdings
 
-$record = PICA::Record->new( IO::File->new("t/bgb.example") );
+$record = PICA::Record->new( IO::File->new("$files/bgb.example") );
 
 my @holdings = $record->holdings();
 is( scalar @holdings, 56, 'holdings' );
@@ -248,7 +252,7 @@ ok( scalar $holdings[5]->items() == 26, "items (26)");
 
 ### UTF8 and encodings
 my $cjk = "我国民事立法的回顾与展望";
-$record = new PICA::Record( new IO::File("t/cjk.pica") );
+$record = new PICA::Record( new IO::File("$files/cjk.pica") );
 is( $record->sf('021A_a'), $cjk, 'CJK record' );
 
 
@@ -259,7 +263,7 @@ __END__
 if (0) {
   use PICA::Parser;
 
-  PICA::Parser->parsefile( "t/winibwsave.example", Record => sub { $record = shift; } );
+  PICA::Parser->parsefile( "$files/winibwsave.example", Record => sub { $record = shift; } );
   isa_ok( $record, 'PICA::Record' );
 
   # test bibliographic()
@@ -268,4 +272,4 @@ if (0) {
 }
 
 # TODO: test to_xml
-# TODO: test unicode equivalence!
+

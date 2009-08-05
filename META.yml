@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                PICA-Record
-version:             0.501
+version:             0.502
 abstract:            Perl extension for handling PICA+ records
 license:             ~
 author:              
@@ -9,7 +9,7 @@ generated_by:        ExtUtils::MakeMaker version 6.42
 distribution_type:   module
 requires:     
     Config::Simple:                4.58
-    DBD::SQLite:                   1.14
+    DBD::SQLite:                   1.23
     DBI:                           1.0
     Encode:                        2.33
     IO::File:                      1.11

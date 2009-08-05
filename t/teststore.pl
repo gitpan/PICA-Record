@@ -19,7 +19,7 @@ sub teststore {
 
         my %result = $store->create($record);
         ok( scalar %result, "create[$i]");
-        isa_ok( $result{record}, "PICA::Record", "create[$i] returned a PICA::Record" );
+        isa_ok( $result{record}, 'PICA::Record' );
         my $id = $result{id};
         ok( $id, "create[$i] returned an id: $id" );
 

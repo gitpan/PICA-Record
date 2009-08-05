@@ -22,7 +22,7 @@ use ExtUtils::MakeMaker;
         'XML::Parser' => '2.32',
         'XML::Writer' => '0.605',
         'DBI' => '1.0',
-        'DBD::SQLite' => '1.14',
+        'DBD::SQLite' => '1.23',
     },
     EXE_FILES       => [ 
         'script/parsepica', 

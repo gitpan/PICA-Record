@@ -11,7 +11,7 @@ use strict;
 use base qw(Exporter);
 our @EXPORT_OK = qw(getrecord);
 
-our $VERSION = '0.501';
+our $VERSION = '0.502';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);

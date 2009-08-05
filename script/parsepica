@@ -32,6 +32,7 @@ my %fieldstat_r; # number of records
 # TODO read settings from config file (for instance SRU)
 
 GetOptions(
+    # TODO: add config file
     "output:s" => \$outfilename,   # print valid records to a file
     "log:s" => \$logfile,          # print messages to a file
     "files:s" => \$inputlistfile,  # read names of input files from a file

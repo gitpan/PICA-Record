@@ -11,6 +11,12 @@ use PICA::Store;
 use PICA::Record qw(getrecord);
 use Data::Dumper;
 
+if (not $ENV{PICASQL_TEST} ) {
+    diag("Set PICASQL_TEST to enable additional tests of PICA::SQLiteStore!");
+    ok(1);
+    exit;
+}
+
 my $tempdir = tempdir( UNLINK => 1 );
 my $verbose = 0;
 

@@ -103,7 +103,7 @@ sub new {
     return PICA::SOAPClient->new( %params ) if defined $params{webcat};
     return PICA::SQLiteStore->new( %params ) if defined $params{SQLite};
 
-    croak('Could not determine concrete type of PICA::Store');
+    croak('please specify a store type (webcat/SQLite) - possibly in a config file');
 }
 
 =head2 get

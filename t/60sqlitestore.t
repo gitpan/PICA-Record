@@ -10,12 +10,18 @@ use IO::File;
 use File::Temp qw(tempfile);
 use Data::Dumper;
 
+if (not $ENV{PICASQL_TEST} ) {
+    diag("Set PICASQL_TEST to enable additional tests of PICA::SQLiteStore!");
+    ok(1);
+    exit;
+}
+
 # record to insert
 my $record = PICA::Record->new( IO::File->new("t/files/minimal.pica") );
 
 # create new store
 my ($dbfile, $dbfilename) = tempfile();
-my $store = PICA::SQLiteStore->new( $dbfilename, rebuild => 1);
+my $store = PICA::SQLiteStore->new( $dbfilename, rebuild => 1 );
 isa_ok( $store, "PICA::SQLiteStore", "new PICA::SQLiteStore $dbfilename" );
 
 # run general store tests

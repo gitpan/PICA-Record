@@ -7,7 +7,7 @@ PICA::XMLParser - Parse PICA+ XML
 =cut
 
 use strict;
-our $VERSION = "0.5";
+our $VERSION = "0.51";
 
 use base qw(Exporter);
 use Carp qw(croak);

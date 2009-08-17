@@ -3,7 +3,7 @@
 use strict;
 use utf8;
 
-use Test::More tests => 53;
+use Test::More qw(no_plan);
 
 use PICA::Parser qw(parsefile parsedata);
 use PICA::PlainParser;
@@ -186,6 +186,26 @@ sub test_parsedata {
     is( $parser->counter(), 1 , "ignore Proceed when calling parsedata");
 }
 
+# parse multiple records with junk in between
+
+my @junks = ( "\n", "\n\n\n", "SET: 1\n", "SET: 1\n\n", "# Comment\n", " \t \n\t\n" );
+foreach my $junk ( @junks ) {
+    my $data = '021A $0Foo' . "\n$junk" . '021A $0Bar';
+    my @records = parsedata( $data )->records;
+    is( scalar @records, 2, 'skipped junk in between');
+    my $parser = parsedata( $data, strict => 0 );
+    is( $parser->counter, 2, 'skipped junk in between');
+}
+
+foreach my $junk ( @junks ) {
+    my $data = '021A $0Foo' . "\n$junk" . '021A $0Bar';
+    my $msg;
+    my $parser = parsedata( $data, strict => 1, FieldError => sub { $msg = shift; return; } );
+    like( $msg, qr/No or not allowed subfield indicator/, 'junk in between not allowed in strict mode' );
+    is( $parser->counter, 1, 'junk in between not allowed in strict mode');
+
+}
+
 # use PICA::Writer as record handler
 my $file = "$files/cjk.pica";
 open FILE, $file; 
@@ -197,13 +217,12 @@ $writer = PICA::Writer->new( \$s );
 $parser = PICA::Parser->new( Record => $writer )->parsefile($file);
 is ( $s, "$data\n", 'PICA::Writer as record handler' );
 
-my @records;
 
 # test error handlers
 
 my ($msg, $badfield);
 my $badrecord = "foo\n021@ \$ahi\nbar";
-@records = PICA::Parser->parsedata( $badrecord,
+my @records = PICA::Parser->parsedata( $badrecord,
     , FieldError => sub { $badfield .= $_[1]; return; } 
 )->records();
 is( scalar @records, 1, "field error (ignore)" );
@@ -234,7 +253,7 @@ ok( $msg, "field error triggers record error" );
 # empty record
 $msg = undef;
 $parser = PICA::Parser->new( RecordError => sub { $msg = shift; } );
-$parser->parsedata("\n");
+$parser->parsedata("\n", strict => 0);
 is( $msg, "empty record", "empty record" );
 
 $msg = undef;

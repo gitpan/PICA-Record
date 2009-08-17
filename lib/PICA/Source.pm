@@ -7,7 +7,7 @@ PICA::Source - Data source that can be queried for PICA+ records
 =cut
 
 use strict;
-our $VERSION = "0.48";
+our $VERSION = "0.50";
 
 =head1 SYNOPSIS
 
@@ -29,7 +29,8 @@ Instead or in addition to SRU you can use Z39.50, PSI, and unAPI (experimental).
 use Carp qw(croak);
 use PICA::PlainParser;
 use PICA::SRUSearchParser;
-use LWP::UserAgent;
+use LWP::Simple;
+use Unicode::Normalize qw(NFC);
 
 =head1 METHODS
 
@@ -69,8 +70,8 @@ sub new {
 =head2 getPPN ( $ppn )
 
 Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
-Only available for SRU and unAPI at the moment. If both are specified, unAPI
-is used. You should check whether the returned object is empty or not.
+This method may croak. Only available for source APIs SRU, unAPI, and PSI.
+You should check whether the returned object is empty or not.
 
 =cut
 
@@ -79,8 +80,6 @@ sub getPPN {
 
     croak("No SRU, PSI or unAPI interface defined")
         unless $self->{SRU} or $self->{unAPI} or $self->{PSI};
-
-    my $ua = LWP::UserAgent->new( agent => 'PICA::Source/'.$PICA::Source::VERSION);
 
     if ( $self->{PSI} or $self->{unAPI} ) {
         my $url;
@@ -94,16 +93,20 @@ sub getPPN {
             # TODO: unapi server does not set encoding header (utf8)?
         }
 
-        my $request = HTTP::Request->new(GET => $url);
-        my $response = $ua->request($request);
-        if ($response->is_success) {
-            my $data = $response->decoded_content();
-            $data = url_decode($data) if ($self->{PSI});
-            my $record = PICA::Record->new( $data );
-            return $record;
-        } else {
-            croak("HTTP request failed: $url");
+        my $data = LWP::Simple::get( $url );
+        croak("HTTP request failed: $url") unless $data;
+
+        if ( $self->{PSI} ) {
+            utf8::downgrade( $data ); # make sure that the UTF-8 flag is off
+            $data = url_decode($data);
+            utf8::decode($data);
+            $data = NFC($data); # compose combining chars  
+            utf8::upgrade($data);
         }
+        my $record = eval { PICA::Record->new( $data ) } 
+            or croak "Failed to parse PICA::Record";
+        return $record;
+
     } else {
         my $result = $self->cqlQuery( "pica.ppn=$id", Limit => 1 );
         my ($record) = $result->records();
@@ -113,9 +116,9 @@ sub getPPN {
 
 =head2 cqlQuery ( $cql [ $parser | %params | ] )
 
-Perform a CQL query (SRU) and return the L<PICA::XMLParser> object
-that was used to parse the resulting records. You can pass an existing
-Parser or parser parameters as listed at L<PICA::Parser>.
+Perform a CQL query and return the L<PICA::XMLParser> object that was used to
+parse the resulting records. You can pass an existing Parser or parser 
+parameters as listed at L<PICA::Parser>. Only available for API type C<SRU>.
 
 =cut
 
@@ -128,8 +131,6 @@ sub cqlQuery {
                   ? $_[2] : PICA::XMLParser->new( @_ );
     my $sruparser = PICA::SRUSearchParser->new( $xmlparser );
 
-    my $ua = LWP::UserAgent->new( agent => 'PICA::Source/' . $PICA::Source::VERSION);
-
     my $options = "";
     $cql = url_encode($cql); #url_unicode_encode($cql);
     my $baseurl = $self->{SRU} . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
@@ -141,16 +142,13 @@ sub cqlQuery {
 
         # print "$url\n"; # TODO: logging
 
-        my $request = HTTP::Request->new(GET => $url);
-        my $response = $ua->request( $request );
-        croak("SRU Request failed $url") unless $response->is_success;
-
-        my $xml = $response->decoded_content();
+        my $xml = LWP::Simple::get( $url );
+        croak("SRU Request failed $url") unless $xml;
         $xmlparser = $sruparser->parse($xml);
 
-        # print "numberOfRecords " . $sruparser->numberOfRecords() . "\n";
-        # print "resultSetId " . $sruparser->resultSetId()  . "\n";
-        # print "current counter " . $xmlparser->counter() . "\n";  
+        #print "numberOfRecords " . $sruparser->numberOfRecords() . "\n";
+        #print "resultSetId " . $sruparser->resultSetId()  . "\n";
+        #print "current counter " . $xmlparser->counter() . "\n";  
 
         return $xmlparser unless $sruparser->currentNumber(); # zero results
         $startRecord += $sruparser->currentNumber();
@@ -257,19 +255,15 @@ sub url_decode {
     return $str;
 }
 
-=head2 url_unicode_encode
 
-Returns the fully URL-encoded version of the given string as
-unicode characters.  It does not convert space characters to 
-'+' characters.
-
-=cut
-
-sub url_unicode_encode {
-    my $str = shift;
-    $str =~ s{([^A-Za-z0-9_\.\*])}{sprintf("%%u%04x", ord($1))}eg;
-    return $str;
-}
+# Returns the fully URL-encoded version of the given string as
+# unicode characters.  It does not convert space characters to 
+# '+' characters.
+# sub url_unicode_encode {
+#    my $str = shift;
+#    $str =~ s{([^A-Za-z0-9_\.\*])}{sprintf("%%u%04x", ord($1))}eg;
+#    return $str;
+#}
 
 1;
 

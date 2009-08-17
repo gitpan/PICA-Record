@@ -11,7 +11,7 @@ use strict;
 use base qw(Exporter);
 our @EXPORT_OK = qw(getrecord);
 
-our $VERSION = '0.502';
+our $VERSION = '0.51';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);
@@ -25,6 +25,10 @@ use XML::Writer;
 use Encode;
 use PerlIO;
 use Carp qw(croak confess);
+
+use overload 
+    'bool' => sub { ! $_[0]->empty },
+    '""'   => sub { $_[0]->as_string };
 
 =head1 INTRODUCTION
 
@@ -58,11 +62,11 @@ convert between PICA+ and PicaXML
 
 =item *
 
-process PICA+ records that you have downloaded with WinIBW 
+download records in native format via SRU or Z39.50
 
 =item *
 
-download records in native format via SRU or Z39.50
+process PICA+ records that you have downloaded with WinIBW 
 
 =item *
 
@@ -74,15 +78,21 @@ store PICA+ records in a database
 
 PICA::Record is a module for handling PICA+ records as Perl objects.
 
+=head2 Clients and examples
+
+This module includes and installs the scripts C<parsepica>, C<picaimport>,
+and C<winibw2pica>. They provide most functionality on the command line 
+without having to deal with Perl code. Have a look at the documentation of
+this scripts! More examples are included in the examples directory - maybe
+the application you need it already included, so have a look!
+
 =head2 On character encoding
 
 Character encoding is an issue of permanent confusion both in library 
 databases and in Perl. PICA::Record treats character encoding the 
-following way: 
-
-Internally all strings are stored as Perl strings. If you directly 
-read from or write to a file that you specify by filename only, the
-file will be opened with binmode utf8, so the content will be decoded
+following way: Internally all strings are stored as Perl strings. If you
+directly read from or write to a file that you specify by filename only,
+the file will be opened with binmode utf8, so the content will be decoded
 or encoded in UTF-8 Unicode encoding.
 
 If you read from or write to a handle (for instance a file that you
@@ -97,14 +107,6 @@ have already specified another encoding layer:
   $record = getrecord( \*FILE ); # does not imply binmode FILE, ":utf8"
 
 If you read or write from Perl strings, UTF-8 is never implied.
-
-=head2 Clients and examples
-
-This module includes and installs the scripts C<parsepica> and C<picawebcat>.
-They provide most functionality on the command line without having
-to deal with Perl code. Have a look at the documentation of this scripts.
-More examples are includes in the examples directory if this module - maybe
-the application you need it already included, so have a look!
 
 =head1 SYNOPSIS
 
@@ -138,13 +140,13 @@ are some additional two-liners:
   # read records from a STDIN and print to STDOUT of field 003@ exists
   PICA::Parser->new->parsefile( \STDIN, Record => sub {
       my $record = shift;
-      print $record->to_string() if $record->field('003@');
+      print $record if $record->field('003@');
       return;
   });
 
   # print record in normalized format and in HTML
-  print $record->normalized();
-  print $record->to_html();
+  print $record->normalized;
+  print $record->html;
 
   # write some records in XML to a file
   my $writer = PICA::Writer->new( $filename, format => 'xml' );
@@ -255,9 +257,9 @@ sub new {
     return $self;
 } # new()
 
-=head2 copy ( )
+=head2 copy
 
-Creates a clone of this record by copying all fields.
+Returns a clone of this record by copying all fields.
 
 =cut
 
@@ -266,21 +268,7 @@ sub copy {
     return PICA::Record->new( $self );
 }
 
-=head2 all_fields ( )
-
-Returns an array of all the fields in the record. The array contains 
-a C<PICA::Field> object for each field in the record. An empty array 
-is returns if the record is empty.
-
-=cut
-
-sub all_fields() {
-    my $self = shift;
-    croak("You called all_fields() but you probably want field()") if @_;
-    return @{$self->{_fields}};
-}
-
-=head2 field ( [ $limit, ] { $field }+ ) or f ( ... )
+=head2 field ( [ $limit, ] { $field }+ [ $filter ] ) or f ( ... )
 
 Returns a list of C<PICA::Field> objects with tags that
 match the field specifier, or in scalar context, just
@@ -299,12 +287,21 @@ of response size, for instance two get only two fields:
 
   my ($f1, $f2) = $record->field( 2, "028B/.." );
 
+The last parameter can be a function to filter returned fields
+in the same way as a field handler of L<PICA::Parser>. For instance
+you can filter out all fields with a given subfield:
+
+  my @fields = $record->field( "021A", sub { $_[0] if $_[0]->sf('a'); } );
+
 =cut
 
 sub field {
     my $self = shift;
     my $limit = looks_like_number($_[0]) ? shift : 0;
     my @specs = @_;
+
+    my $test = ref($specs[-1]) eq 'CODE' ? pop @specs : undef;
+    @specs = (".*") if $test and not @specs;
 
     return unless @specs;
     my @list = ();
@@ -314,10 +311,12 @@ sub field {
 
         for my $maybe ( $self->all_fields ) {
             if ( $maybe->tag() =~ $regex ) {
-                return $maybe unless wantarray;
-                push( @list, $maybe );
-                if ($limit > 0) {
-                    return @list unless --$limit;
+                if ( not $test or $test->($maybe) ) {
+                    return $maybe unless wantarray;
+                    push( @list, $maybe );
+                    if ($limit > 0) {
+                        return @list unless --$limit;
+                    }
                 }
             }
         }
@@ -328,6 +327,20 @@ sub field {
 
 # Shortcut
 *f = \&field;
+
+=head2 all_fields
+
+Returns an array of all the fields in the record. The array contains 
+a C<PICA::Field> object for each field in the record. An empty array 
+is returns if the record is empty.
+
+=cut
+
+sub all_fields() {
+    my $self = shift;
+    croak("You called all_fields() but you probably want field()") if @_;
+    return @{$self->{_fields}};
+}
 
 =head2 subfield ( [ $limit, ] { [ $field, $subfield ] | $fullspec }+ ) or sf ( ... )
 
@@ -763,14 +776,14 @@ sub replace {
     }
 }
 
-=head2 sort ( )
+=head2 sort
 
 Sort all fields. Most times the order of fields is not changed and
 not relevant but sorted fields may be helpful for viewing records.
 
 =cut
 
-sub sort() {
+sub sort {
     my $self = shift;
 
     # TODO: sort holdings independently!
@@ -778,24 +791,33 @@ sub sort() {
     @{$self->{_fields}} = sort {$a->tag() cmp $b->tag()} @{$self->{_fields}};
 }
 
-=head2 to_string ( [ %options ] )
+=head2 as_string ( [ %options ] )
 
 Returns a string representation of the record for printing.
 See also L<PICA::Writer> for printing to a file or file handle.
 
 =cut
 
-sub to_string() {
+sub as_string {
     my ($self, %args) = @_;
 
     $args{endfield} = "\n" unless defined($args{endfield});
 
     my @lines = ();
     for my $field ( @{$self->{_fields}} ) {
-        push( @lines, $field->to_string(%args) );
+        push( @lines, $field->as_string(%args) );
     }
     return join('', @lines);
 }
+
+=head2 to_string ( [ %options ] )
+
+Alias for as_string (deprecated)
+
+=cut
+
+sub to_string { as_string( @_ ); }
+
 
 =head2 normalized ( [ $prefix ] )
 
@@ -873,7 +895,7 @@ sub write_xml {
     $writer->endTag(); # record
 }
 
-=head2 to_html ( [ %options ] )
+=head2 html ( [ %options ] )
 
 Returns a HTML representation of the record for browser display. See also
 the C<pica2html.xsl> script to generate a more elaborated HTML view from
@@ -881,13 +903,13 @@ PICA-XML.
 
 =cut
 
-sub to_html  {
+sub html  {
     my $self = shift;
     my %options = @_;
 
     my @html = ("<div class='record'>\n");
     for my $field ( @{$self->{_fields}} ) {
-        push @html, $field->to_html( %options );
+        push @html, $field->html( %options );
     }
     push @html, "</div>";
 

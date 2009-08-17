@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                PICA-Record
-version:             0.502
+version:             0.51
 abstract:            Perl extension for handling PICA+ records
 license:             ~
 author:              
@@ -14,10 +14,11 @@ requires:
     Encode:                        2.33
     IO::File:                      1.11
     IO::Scalar:                    1.126
-    LWP::UserAgent:                2.0
+    LWP::Simple:                   1.0
     PerlIO:                        1.0
     Scalar::Util:                  1.14
     SOAP::Lite:                    0.71
+    Unicode::Normalize:            0.23
     URI::Escape:                   1.35
     XML::Parser:                   2.32
     XML::Writer:                   0.605

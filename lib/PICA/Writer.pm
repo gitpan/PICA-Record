@@ -59,8 +59,8 @@ use constant ENDED   => 2;
 
 =head2 new ( [ $output ] [ format => $format ] [ %options ] )
 
-Create a new writer. See the output method for possible parameters. 
-The status of the new writer is set to PICA::Writer::NEW which is zero.
+Create a new writer. See the C<output> method for possible parameters. 
+The status of the new writer is set to C<PICA::Writer::NEW> which is zero.
 
 =cut
 
@@ -79,13 +79,13 @@ sub new {
 =head2 output ( [ $output ] [ format => $format ] [ %options ] )
 
 Define the output handler for this writer. Record and field counters are
-not reset but the writer is ended with the end method if it had been 
+not reset but the writer is ended with the C<end> method if it had been 
 started before. The output handler can be a filename, a GLOB, an
-L<IO:Handle> object, a string reference, or undef. In addition you
-can specify the output format with the format parameter (plain or xml)
-and some options depending on the format - for instance 'pretty => 1'.
+L<IO:Handle> object, a string reference, or C<undef>. In addition you
+can specify the output format with the C<format> parameter (C<plain> or
+C<xml>) and some options depending on the format, for instance 'pretty => 1'.
 
-The status of the writer is set to PICA::Writer::NEW which is zero.
+The status of the writer is set to C<PICA::Writer::NEW> which is zero.
 
 =cut
 
@@ -203,7 +203,7 @@ sub write {
                         if ($self->{recordcounter} > 0 && $self->{io});
                     print { $self->{io} } $record->to_string() if $self->{io};
                 } elsif ($format eq 'normalized') {
-                    print { $self->{io} }  "\x1D\x0A"
+                    print { $self->{io} }  "\x1D\x0A" # next record
                         if ($self->{recordcounter} > 0 && $self->{io});
                     print { $self->{io} } $record->normalized() if $self->{io};
                 } elsif ($format eq 'xml' and defined $self->{xmlwriter} ) {

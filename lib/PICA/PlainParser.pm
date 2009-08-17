@@ -8,7 +8,7 @@ PICA::PlainParser - Parse normalized PICA+
 
 use strict;
 
-our $VERSION = "0.48";
+our $VERSION = "0.50";
 
 =head1 SYNOPSIS
 
@@ -68,7 +68,7 @@ sub new {
         broken => undef,    # broken record
 
         read_records => [],
-        lax => $params{lax} ? $params{lax} : 1,
+        'strict' => $params{strict} || 0,
         filename => "",
         fields => [],
         read_counter => 0,
@@ -257,7 +257,7 @@ sub _parsedata {
     my @lines;
 
     if (ref(\$data) eq 'SCALAR') {
-        @lines = split "\n", $data;
+        @lines = $data eq "\n" ? ('') : split "\n", $data;
     } elsif (ref($data) eq 'ARRAY') {
         @lines = @{$data};
     } else {
@@ -280,13 +280,8 @@ sub _parseline {
     chomp $line; # remove newline if present
 
     # start of record marker
-    if ( $line eq "\x1D" or ($self->{lax} and $line =~ /^\s*$/) ) {
-        # TODO: ignore multiple newlines after each other!
-        $self->handle_record() if $self->{active};
-    } elsif( $self->{lax} and ($line =~ /^[#\[]/ or $line =~ /^SET:/)) {
-        # ignore comments and lines starting with "SET" or "[" (WinIBW output)
-        # ignore non-data fields
-        # TODO: be more specific here
+    if ( $line eq "\x1D" or (not $self->{strict} and $line =~ /^\s*$|^#|^SET/) ) {
+        $self->handle_record() if $self->{active} and @{$self->{fields}};
     } else {
         my $field = eval { PICA::Field->parse($line); };
         if ($@) {
@@ -355,7 +350,11 @@ sub handle_record {
     $self->{read_counter}++;
 
     my ($record, $broken);
-    if (defined $self->{broken}) {
+
+    # $self->{broken} = "empty record" 
+    #    unless defined $self->{broken} or @{$self->{fields}} > 0;
+
+    if ( $self->{broken} ) {
         $broken = $self->{broken};
     } else {
         $record = PICA::Record->new( @{$self->{fields}} );
@@ -368,7 +367,7 @@ sub handle_record {
 
     if (not defined $broken) {
         if ($self->{record_handler}) {
-            if (UNIVERSAL::isa($self->{record_handler}, 'PICA::Writer')) {
+            if (UNIVERSAL::isa( $self->{record_handler}, 'PICA::Writer') ) {
                 $self->{record_handler}->write( $record );
                 #$record = TODO allow here!
             } else {

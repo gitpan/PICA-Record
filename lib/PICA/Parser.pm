@@ -8,7 +8,7 @@ PICA::Parser - Parse PICA+ data
 
 use strict;
 use base qw(Exporter);
-our $VERSION = "0.48";
+our $VERSION = "0.49";
 
 use Carp qw(croak);
 our @EXPORT_OK = qw(parsefile parsedata);

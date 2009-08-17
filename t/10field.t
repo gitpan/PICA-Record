@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 56;
+use Test::More qw(no_plan);
 
 use PICA::Field;
 use XML::Writer;
@@ -36,22 +36,23 @@ is( $field->normalized(), $normalized, 'new with picamarc');
 
 my $xml = join('',<DATA>);
 $xml =~ s/\n$//m;
-is( $field->to_xml(), $xml, 'to_xml()');
+is( $field->xml, $xml, 'xml()');
 
 $xml =~ s/pica:/foo:/g;
 $xml =~ s/xmlns:pica/xmlns:foo/;
 $prefixmap = {'info:srw/schema/5/picaXML-v1.0'=>'foo'};
-is( $field->to_xml( PREFIX_MAP => $prefixmap ), $xml, 'to_xml(PREFIX_MAP)' );
+is( $field->xml( PREFIX_MAP => $prefixmap ), $xml, 'xml(PREFIX_MAP)' );
 
 $string = "";
 $writer = XML::Writer->new( OUTPUT => \$string, NAMESPACES => 1, PREFIX_MAP => $prefixmap );
-$field->to_xml( $writer );
-is( $string, $xml, 'to_xml(PREFIX_MAP) with XML::Writer to string' );
+my $w = $field->xml( $writer );
+is( $string, $xml, 'xml(PREFIX_MAP) with XML::Writer' );
+isa_ok( $w, 'XML::Writer' );
 
 $xml =~ s/foo://g;
 $xml =~ s/xmlns:foo/xmlns/g;
 $prefixmap = {'info:srw/schema/5/picaXML-v1.0'=>''};
-is( $field->to_xml( PREFIX_MAP => $prefixmap ), $xml, 'to_xml(PREFIX_MAP:"")' );
+is( $field->xml( PREFIX_MAP => $prefixmap ), $xml, 'xml(PREFIX_MAP:"")' );
 
 $string = "";
 $writer = XML::Writer->new( OUTPUT => \$string, NAMESPACES => 1, PREFIX_MAP => $prefixmap );
@@ -64,8 +65,12 @@ $writer = XML::Writer->new( OUTPUT => \$string, NAMESPACES => 0 );
 $field->to_xml( $writer );
 is( $string, $xml, 'to_xml( no namspaces ) with XML::Writer' );
 
+$string = "!";
+$field->xml( \$string, NAMESPACES => 0 );
+is( $string, "!$xml", 'to_xml( no namspaces ) to string' );
+
 $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n$xml";
-is ( $field->to_xml( header => 1, NAMESPACES => 0 ), $xml, 'to_xml with xmlDecl' );
+is ( $field->xml( header => 1, NAMESPACES => 0 ), $xml, 'to_xml with xmlDecl' );
 
 $field = PICA::Field->new("028A","9" => "117060275");
 $field->add( "8" => "Martin Schrettinger", "d" => "Martin", "a" => "Schrettinger" );
@@ -108,24 +113,27 @@ is( $fcopy->normalized(), $normalized, 'copy' );
 
 $field = PICA::Field->new("028A","d" => "Karl", "a" => "Marx");
 isa_ok( $field, 'PICA::Field');
-ok( !$field->is_empty(), '!is_empty()' );
-ok( !$field->empty(), '!empty()' );
+ok( ! $field->empty, '!empty' );
+ok( $field, 'overloaded bool' );
+
+$field = PICA::Field->new("\x1E028A \x1F9117060275\x1FdMartin\x1FaSchrettinger");
+ok( $field, 'overloaded bool' );
 
 $field = PICA::Field->new("028A","d" => "", "a" => "Marx");
-ok( !$field->is_empty(), '!is_empty()' );
+ok( !$field->empty, '!empty()' );
 is( $field->purged->to_string, "028A \$aMarx\n", "purged empty field");
 
 $field = PICA::Field->new("028A", "d"=>"", "a"=>"" );
-ok( $field->is_empty(), 'is_empty()' );
-ok( $field->empty(), 'empty()' );
+ok( $field->empty, 'empty()' );
 is( join('', $field->empty_subfields() ), "da", 'empty_subfields' );
 is( $field->purged, undef, "purged empty field");
 
 # normally fields without subfields should not occur, but if...
-is( $field->to_string(subfields=>'x'), "", "empty field");
+is( $field->as_string(subfields=>'x'), "", "empty field");
 $field->{_subfields} = [];
-ok( $field->is_empty(), 'empty field');
-is( $field->to_string, "", "empty field (to_string)");
+ok( $field->empty, 'empty field');
+is( $field->as_string, "", "empty field (as_string)");
+is( $field, "", "empty field (as_string, overload)");
 my $emptyxml = '<pica:datafield tag="028A" xmlns:pica="info:srw/schema/5/picaXML-v1.0"></pica:datafield>';
 is( $field->to_xml, $emptyxml, "empty field (to_xml)");
 is( $field->purged, undef, "purged empty field");
@@ -139,14 +147,14 @@ is( $field->occ, '02', 'set occurrence' );
 
 $field = PICA::Field->new( '021A', 'a' => 'Get a $, loose a $!', 'b' => 'test' );
 my $enc = '021A $aGet a $$, loose a $$!$btest';
-is( $field->to_string(), "$enc\n", 'dollar signs in field values (1)' );
+is( "$field", "$enc\n", 'dollar signs in field values (1)' );
 
 $field = PICA::Field->parse($enc);
-is( $field->to_string(endfield=>''), $enc, 'dollar signs in field values (2)' );
+is( $field->as_string(endfield=>''), $enc, 'dollar signs in field values (2)' );
 
 $enc = '021A $aGet a $$, loose a $$';
 $field = PICA::Field->parse($enc);
-is( $field->to_string(endfield=>''), $enc, 'dollar signs in field values (3)' );
+is( $field->as_string(endfield=>''), $enc, 'dollar signs in field values (3)' );
 
 ok( $field->sf('a') eq 'Get a $, loose a $', 'Field->sf (scalar)' );
 $field = PICA::Field->parse('123A $axx$ayy');
@@ -166,7 +174,7 @@ is_deeply ( \@sf, ['xx','yy'], 'Field->sf (multiple) - 4');
 # newlines in field values
 $field = PICA::Field->new( '021A', 'a' => "This\nare\n\t\nlines" );
 is( $field->sf('a'), "This are lines", "newline in value (1)");
-is( $field->to_string(), "021A \$aThis are lines\n", "newline in value (2)");
+is( $field, "021A \$aThis are lines\n", "newline in value (2)");
 
 
 __DATA__

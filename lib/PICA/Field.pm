@@ -9,7 +9,7 @@ PICA::Field - Perl extension for handling PICA+ fields
 use strict;
 
 use base qw(Exporter);
-our $VERSION = "0.50";
+our $VERSION = "0.51";
 
 use Carp qw(croak);
 use XML::Writer;
@@ -25,6 +25,10 @@ our $END_OF_FIELD       = "\x0A"; # 10
 our $FIELD_TAG_REGEXP = qr/[012][0-9][0-9][A-Z@]$/;
 our $FIELD_OCCURRENCE_REGEXP = qr/[0-9][0-9]$/;
 our $SUBFIELD_CODE_REGEXP = qr/^[0-9a-zA-Z]$/;
+
+use overload 
+    'bool' => sub { ! $_[0]->empty; },
+    '""'   => sub { $_[0]->as_string; };
 
 =head1 SYNOPSIS
 
@@ -96,7 +100,6 @@ sub new($) {
     return $self;
 }
 
-
 =head2 copy ( $field )
 
 Creates and returns a copy of this object.
@@ -163,7 +166,7 @@ sub parse {
 
     # TODO: better manage different parsing modes (normalized, plain, WinIBW...)
     my $sfreg;
-    my $sf = substr($subfields, 0, 1);
+    my $sf = defined $subfields ? substr($subfields, 0, 1) : '';
     if ($sf eq "\x1F") { $sfreg = '\x1F'; }
     elsif ( $sf eq '$' ) { $sfreg = '\$'; }
     elsif( $sf eq "\x83" ) { $sfreg = '\x83'; }
@@ -472,7 +475,9 @@ sub empty_subfields {
 
 =head2 empty ( )
 
-Test whether there are no subfields or all subfields are empty.
+Test whether there are no subfields or all subfields are empty. This method 
+is automatically called by overloading whenever a PICA::Field is converted 
+to a boolean value.
 
 =cut
 
@@ -487,14 +492,6 @@ sub empty {
 
     return 1;
 }
-
-=head2 is_empty ( )
-
-Deprecated alias for method empty.
-
-=cut
-
-*is_empty = \&empty;
 
 =head2 purged ( )
 
@@ -541,7 +538,7 @@ sub normalized() {
     my $self = shift;
     my $subfields = shift;
 
-    return $self->to_string( 
+    return $self->as_string( 
       subfields => $subfields,
       startfield => $START_OF_FIELD,
       endfield => $END_OF_FIELD,
@@ -549,7 +546,7 @@ sub normalized() {
     );
 }
 
-=head2 to_string ( [ %params ] )
+=head2 as_string ( [ %params ] )
 
 Returns a pretty string for printing.
 
@@ -562,9 +559,9 @@ Fields without subfields return an empty string.
 
 =cut
 
-sub to_string() {
+sub as_string {
     my $self = shift;
-    my %args = @_;
+    my (%args) = @_ ? @_ : ();
 
     my $subfields = defined($args{subfields}) ? $args{subfields} : '';
     my $startfield = defined($args{startfield}) ? $args{startfield} : '';
@@ -597,45 +594,16 @@ sub to_string() {
            $endfield;
 }
 
-=head2 to_xml ( [ $xmlwriter | %params ] )
+=head2 to_string
 
-Write the field to an L<XML::Writer> or return an XML string of the field.
-If you pass an existing XML::Writer object, the field will be written with it
-and nothing is returned. Otherwise the passed parameters are used to create a
-new XML writer. Unless you specify an XML writer or an OUTPUT parameter, the
-resulting XML is returned as string. By default the PICA-XML namespaces with
-namespace prefix 'pica' is included. In addition to XML::Writer this methods
-knows the 'header' parameter that first adds the XML declaration.
+Alias for as_string (deprecated)
 
 =cut
 
-sub to_xml {
-    my $self = shift;
-    my $writer = $_[0];
-    my ($string, $sref);
+sub to_string { $_[0]->as_string; }
 
-    if (not UNIVERSAL::isa( $writer, 'XML::Writer' )) {
-        my %params = @_;
-        if (not defined $params{OUTPUT}) {
-            $sref = \$string;
-            $params{OUTPUT} = $sref;
-        }
-        $writer = PICA::Writer::xmlwriter( %params );
-    }
-
-    $self->write_xml( $writer );
-
-    return defined $sref ? $$sref : undef;
-}
-
-
-=head2 write_xml ( $writer )
-
-Write the field to a L<XML::Writer> object.
-
-=cut
-
-sub write_xml {
+# Write the field to a L<XML::Writer> object
+my $write_xml = sub {
     my ($self, $writer) = @_;
 
     my ($datafield, $subfield);
@@ -666,9 +634,62 @@ sub write_xml {
     }
 
     $writer->endTag(); # datafield
+
+    $writer;
+};
+
+=head2 xml ( [ [ writer => ] $writer | [ OUTPUT ] => \$sref | %param ] )
+
+Return the field in PICA-XML format or write it to an L<XML::Writer>
+and return the writer. If you provide parameters, they will be passed
+to a newly created XML::Writer that is used to write to a string.
+
+By default the PICA-XML namespaces with namespace prefix 'pica' is 
+included. In addition to XML::Writer this methods knows the 'header'
+parameter that first adds the XML declaration.
+
+=cut
+
+sub xml {
+    my $self = shift;
+
+    my %param;
+    if ( UNIVERSAL::isa( $_[0], 'XML::Writer' ) ) {
+        (%param) = ( writer => @_ );
+    } elsif ( ref($_[0]) ) {
+        (%param) = ( OUTPUT => @_ );
+    } else {
+        (%param) = @_;
+    }
+
+    if ( defined $param{writer} ) {
+        $write_xml->( $self, $param{writer} );
+        return $param{writer};
+    } else {
+        my ($string, $sref);
+        if (not defined $param{OUTPUT}) {
+            $sref = \$string;
+            $param{OUTPUT} = $sref;
+        }
+
+        my $writer = PICA::Writer::xmlwriter( %param );
+
+        $write_xml->( $self, $writer );
+
+        return defined $sref ? "$string" : $writer;
+    }
 }
 
-=head2 to_html ( [ %options ] )
+=head2 to_xml ( [ $writer | %params ] )
+
+Alias for the xml method (deprecated).
+
+=cut
+
+sub to_xml { xml( @_ ); }
+
+
+=head2 html ( [ %options ] )
 
 Returns a HTML representation of the field for browser display. See also
 the C<pica2html.xsl> script to generate a more elaborated HTML view from
@@ -676,7 +697,7 @@ PICA-XML.
 
 =cut
 
-sub to_html  {
+sub html  {
     my $self = shift;
     my %options = @_;
 

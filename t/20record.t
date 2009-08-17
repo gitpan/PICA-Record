@@ -3,7 +3,7 @@
 use strict;
 use utf8;
 
-use Test::More tests => 76;
+use Test::More qw(no_plan);
 
 use PICA::Field;
 use PICA::Record qw(getrecord);
@@ -33,19 +33,20 @@ my $record = new PICA::Record();
 isa_ok( $record, 'PICA::Record');
 ok( $record->empty, 'empty record' );
 ok( $record->is_empty, 'empty record' );
+ok( !$record, 'empty record (overload)' );
 
 # append a field
 $record->append($field);
 is( $record->normalized(), $normalized, 'Record->normalized()');
 ok( !$record->empty, 'not empty record' );
-ok( !$record->is_empty, 'not empty record' );
-
+ok( $record, 'not empty record (overload)' );
 
 # directly pass a field to new()
 $record = PICA::Record->new($field);
 is( $record->normalized(), $normalized, 'Record->normalized()');
 
 # directly pass data to new() for parsing
+print "N:$normalized\n";
 $record = PICA::Record->new( $normalized );
 is( $record->normalized(), $normalized, 'Record->normalized()');
 
@@ -115,7 +116,7 @@ is( $record->occ, '03', 'occurrence' );
 
 ### field()
 $record = $testrecord;
-my @fields = $record->field("009P/03");
+my @fields = $record->field("009P/03","a"=>"http://example.com");
 is( scalar @fields, 1 , "Record->field()" );
 @fields = $record->f("037A");
 is( scalar @fields, 2 , "Record->field()" );
@@ -135,6 +136,19 @@ is( scalar @fields, 4 , "Record->field() with limit zero" );
 is( scalar @fields, 1 , "Record->field() with limit one" );
 @fields = $record->f(99, "037A");
 is( scalar @fields, 2 , "Record->field() with limit high" );
+
+@fields = $record->f( "037A", sub { return $_[0] if $_[0]->sf('a'); } );
+is( scalar @fields, 2 , "Record->field() with filter" );
+
+@fields = $record->f( ".*", sub { return unless $_[0]->sf('a'); $_[0]; } );
+is( scalar @fields, 3 , "Record->field() with filter" );
+
+my $r2 = PICA::Record->new($record);
+@fields = $r2->f( "0.*", sub { return unless $_[0]->sf('a'); $_[0]->update('a'=>'xx'); $_[0]; } );
+is_deeply( [ map { $_->sf('a'); } @fields ], ['xx','xx','xx'], "Record->field() with filter" );
+
+@fields = $r2->f( sub { return unless $_[0]->sf('a'); $_[0]->update('a'=>'xx'); $_[0]; } );
+is_deeply( [ map { $_->sf('a'); } @fields ], ['xx','xx','xx'], "Record->field() with filter" );
 
 ### subfield()
 is( $record->subfield('009P/03$0'), "http", "subfield() \$");
@@ -192,6 +206,8 @@ $record = PICA::Record->new( $file );
 $file->seek(0,0);
 my $minimal = join('',$file->getlines());
 is( $record->to_string(), $minimal, "to_string()" );
+is( $record->as_string(), $minimal, "as_string()" );
+is( $record, $minimal, "stringify" );
 
 # parse non-existing file
 $record = eval { PICA::Record->new( IO::File->new('xxx') ); };
@@ -256,11 +272,10 @@ $record = new PICA::Record( new IO::File("$files/cjk.pica") );
 is( $record->sf('021A_a'), $cjk, 'CJK record' );
 
 
-
 __END__
 
-### parse WinIBW output : TODO
-if (0) {
+### TODO: parse WinIBW output : this is possible via winibw2pica (test needed)
+if (1) {
   use PICA::Parser;
 
   PICA::Parser->parsefile( "$files/winibwsave.example", Record => sub { $record = shift; } );
@@ -271,5 +286,6 @@ if (0) {
   isa_ok( $main, 'PICA::Record' );
 }
 
+__END__
 # TODO: test to_xml
 

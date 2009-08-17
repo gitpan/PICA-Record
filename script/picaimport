@@ -10,7 +10,7 @@ use warnings;
 use strict;
 use utf8;
 
-our $VERSION = '0.22';
+our $VERSION = '0.24';
 
 =head1 SYNOPSIS
 
@@ -27,14 +27,27 @@ our $VERSION = '0.22';
  -force         do not ask before deleting
  -ppn           use the PPN of a record if no PPN is given for updating
  -quiet         suppress additional status messages and output
+ -version       print version of this script and exit
 
 =head1 DESCRIPTION 
 
 This script can be used to import or delete PICA records in a L<PICA::Store>,
 for instance via webcat (L<PICA::SOAPClient>) or into a SQLite database
-(L<PICA::SQLiteStore>). 
+(L<PICA::SQLiteStore>). By default only the first PICA record of each file
+that you specify is imported. 
 
-To define the connection you must provide a config file via the -config
+The PICA+ files to be imported can be specified either as command line 
+parameters or listed in another file (option -from) or you type in the
+file names on request. It is recommended to delete sucessfully imported
+files (option -move) so you do not import them twice. To update an existing
+record you must specify a PPN and a record (or with option -ppn the PPN is 
+taken from the record). You must specify PPN and filename seperated by space.
+
+On import or update picaimport prints the PPN and filename of each record
+in one line - you can use this output format as input format with option
+-from to later update the records.
+
+To connect to a PICA store you must provide a config file via the -config
 parameter or the PICASTORE environment variable - or name it picastore.conf
 and put it in the current directory. The config file can contain all 
 parameters that may be provided to the L<PICA::Store> constructor.
@@ -57,9 +70,11 @@ use Pod::Usage;
 use IO::File;
 use Data::Dumper;
 
-my ($configfile, $outfile, $fromfile, $move, $help, $quiet, $ppnmode, $delete, $force);
+my ($configfile, $outfile, $fromfile, $move, $help, $quiet, $ppnmode,
+    $delete, $force, $allmode, $writemode, $version); # TODO: all and write
 
 GetOptions(
+    'all' => \$allmode,
     'config:s' => \$configfile,
     'from:s' => \$fromfile, 
     'out:s' => \$outfile,
@@ -69,11 +84,13 @@ GetOptions(
     'force' => \$force,
     'help|?' => \$help,
     'quiet' => \$quiet,
+    'version' => \$version,
 ) or pod2usage(2);
 pod2usage(1) if $help;
-
+print "picaimport version $VERSION\n" and pod2usage(1)
+    if $version;
 pod2usage("Please provide EITHER files OR -from option")
-    if defined $fromfile and @ARGV;
+    unless (defined $fromfile xor scalar @ARGV);
 
 $fromfile = '-' unless defined $fromfile or @ARGV;
 
@@ -127,6 +144,14 @@ sub betterask {
     print $_[0] . " Then type 'Y'!\n";
     my $answer = readline(STDIN);
     exit unless $answer =~ /^y$/i;
+}
+
+sub import_multiple {
+    # TODO: import all records from a given file
+}
+
+sub delete_multiple {
+    # TODO: delete all records with PPNs in a given file
 }
 
 sub record_import {

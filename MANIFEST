@@ -37,8 +37,8 @@ t/15parse_pp_tag.t
 t/20record.t
 t/30parser.t
 t/35XMLParser.t
+t/38source.t
 t/40writer.t
-t/42SRUSearchParser.t
 t/50store.t
 t/60sqlitestore.t
 t/70picaimport.t

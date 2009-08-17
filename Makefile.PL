@@ -10,7 +10,7 @@ use ExtUtils::MakeMaker;
     PMLIBDIRS       => [ qw( lib/ ) ],
     AUTHOR          => 'Jakob Voss <jakob.voss@gbv.de>',
     PREREQ_PM       => {
-        'LWP::UserAgent' => '2.0',
+        'LWP::Simple' => '1.0',
         'URI::Escape' => '1.35',
         'SOAP::Lite' => '0.71',
         'Scalar::Util' => '1.14',
@@ -23,10 +23,12 @@ use ExtUtils::MakeMaker;
         'XML::Writer' => '0.605',
         'DBI' => '1.0',
         'DBD::SQLite' => '1.23',
+        'Unicode::Normalize' => '0.23',
     },
     EXE_FILES       => [ 
         'script/parsepica', 
-        'script/picaimport'
+        'script/picaimport',
+	'script/winibw2pica',
     ],
     dist            => {
         COMPRESS => 'gzip -9f',

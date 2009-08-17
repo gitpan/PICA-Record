@@ -74,7 +74,7 @@ is( scalar @{$store->recentchanges}, 2+1, 'imported into store' );
 #2 /home/voj/svn/picapm/trunk/t/files/cjk.pica
 #3 /tmp/9NjveobGae/test.pica
 
-
+# TODO: use Test::...something for testing scripts
 sub picaimport {
     my $args = shift || '';
     my ($stdout, $stderr) = ("$tempdir/stdout", "$tempdir/stderr");

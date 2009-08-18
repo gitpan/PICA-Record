@@ -42,16 +42,16 @@ binmode $fxml, ":utf8";
 $xmldata = join("",grep { !($_ =~ /^<\?|^$/); } <$fxml>);
 close $fxml;
 
-# write manually with to_xml
+# write manually with xml
 my $writer = XML::Writer->new( 
   DATA_MODE => 1, DATA_INDENT => 2, 
   NAMESPACES => 1, PREFIX_MAP => {$PICA::Record::XMLNAMESPACE=>''},
   OUTPUT => \$str
 );
 $writer->startTag([$PICA::Record::XMLNAMESPACE,'collection']);
-$record->to_xml( $writer );
+$record->xml( $writer );
 $writer->endTag();
-is( "$str\n", $xmldata, "to_xml" );
+is( "$str\n", $xmldata, "xml" );
 
 # open XML file
 open $fxml, "$files/minimal.xml";

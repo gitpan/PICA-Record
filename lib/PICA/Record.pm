@@ -11,7 +11,7 @@ use strict;
 use base qw(Exporter);
 our @EXPORT_OK = qw(getrecord);
 
-our $VERSION = '0.51';
+our $VERSION = '0.511';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);
@@ -452,7 +452,7 @@ sub ppn {
     return $self->{_ppn};
 }
 
-=head2 epn ( )
+=head2 epn
 
 Get zero or more EPNs (item numbers) of this record, which is field 203@/.., subfield 0.
 Returns the first EPN (or undef) in scalar context or a list in array context. Each copy 
@@ -465,7 +465,7 @@ sub epn {
   return $self->subfield('203@/..$0');
 }
 
-=head2 occurrence ( ) or occ ( )
+=head2 occurrence  or  occ
 
 Returns the occurrence of the first field of this record. 
 This is only useful if the first field has an occurrence.
@@ -482,7 +482,7 @@ sub occ {
     return shift->occurrence;
 }
 
-=head2 main_record ( )
+=head2 main_record
 
 Get the main record (level 0, all tags starting with '0').
 
@@ -495,7 +495,7 @@ sub main_record {
   return PICA::Record->new(@fields);
 }
 
-=head2 holdings ( )
+=head2 holdings
 
 Get a list of local records (holdings, level 1 and 2).
 Returns an array of L<PICA::Record> objects.
@@ -526,7 +526,7 @@ sub holdings {
   return @holdings;
 }
 
-=head2 local_records ( )
+=head2 local_records
 
 Alias for method holdings (deprecated).
 
@@ -536,7 +536,7 @@ sub local_records {
     return shift->holdings(@_);
 }
 
-=head2 items ( )
+=head2 items
 
 Get an array of L<PICA::Record> objects with fields of each copy/item
 included in the record. Copy records are located at level 2 (tags starting
@@ -566,7 +566,7 @@ sub items {
   return @copies;
 }
 
-=head2 copy_records ( )
+=head2 copy_records
 
 Alias for method items (deprecated).
 
@@ -576,7 +576,7 @@ sub copy_records {
     return shift->items(@_);
 }
 
-=head2 empty ( )
+=head2 empty
 
 Return true if the record is empty (no fields or all fields empty)
 
@@ -589,17 +589,6 @@ sub empty() {
     }
     return 1;
 }
-
-=head2 is_empty ( )
-
-Aloas for method empty (deprecated).
-
-=cut
-
-sub is_empty {
-    return shift->empty;
-}
-
 
 =head2 delete_fields ( <tagspec(s)> )
 
@@ -843,7 +832,7 @@ sub normalized() {
     return "\x1D\x0A" . $prefix . join( "", @lines );
 }
 
-=head2 to_xml ( [ $xmlwriter | %params ] )
+=head2 xml ( [ $xmlwriter | %params ] )
 
 Write the record to an L<XML::Writer> or return an XML string of the record.
 If you pass an existing XML::Writer object, the record will be written with it
@@ -856,11 +845,12 @@ parameter that adds an XSLT stylesheet.
 
 =cut
 
-sub to_xml {
+sub xml {
     my $self = shift;
     my $writer = $_[0];
     my ($string, $sref);
 
+    # write to a string
     if (not UNIVERSAL::isa( $writer, 'XML::Writer' )) {
         my %params = @_;
         if (not defined $params{OUTPUT}) {
@@ -870,29 +860,17 @@ sub to_xml {
         $writer = PICA::Writer::xmlwriter( %params );
     }
 
-    $self->write_xml( $writer );
-
-    return defined $sref ? $$sref : undef;
-}
-
-=head2 write_xml ( $writer )
-
-Write the record to a L<XML::Writer> object.
-
-=cut
-
-sub write_xml {
-    my ($self, $writer) = @_;
-
-    if (UNIVERSAL::isa( $writer, 'XML::Writer::Namespaces' )) {
+    if ( UNIVERSAL::isa( $writer, 'XML::Writer::Namespaces' ) ) {
         $writer->startTag( [$PICA::Record::XMLNAMESPACE, 'record'] );
     } else {
         $writer->startTag( 'record' );
     }
     for my $field ( @{$self->{_fields}} ) {
-        $field->to_xml( $writer );
+        $field->xml( $writer );
     }
-    $writer->endTag(); # record
+    $writer->endTag();
+
+    return defined $sref ? $$sref : undef;
 }
 
 =head2 html ( [ %options ] )

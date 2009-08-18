@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                PICA-Record
-version:             0.51
+version:             0.511
 abstract:            Perl extension for handling PICA+ records
 license:             ~
 author:              

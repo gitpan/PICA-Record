@@ -41,8 +41,8 @@ use overload
   $field->add( 'd' => 'Martin', 'a' => 'Schrettinger' );
   $field->update( "8", "Schrettinger, Martin" );
 
-  print $field->normalized();
-  print $field->to_xml();
+  print $field->normalized;
+  print $field->xml;
 
 =head1 DESCRIPTION
 
@@ -679,15 +679,6 @@ sub xml {
         return defined $sref ? "$string" : $writer;
     }
 }
-
-=head2 to_xml ( [ $writer | %params ] )
-
-Alias for the xml method (deprecated).
-
-=cut
-
-sub to_xml { xml( @_ ); }
-
 
 =head2 html ( [ %options ] )
 

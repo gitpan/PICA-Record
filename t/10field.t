@@ -56,21 +56,21 @@ is( $field->xml( PREFIX_MAP => $prefixmap ), $xml, 'xml(PREFIX_MAP:"")' );
 
 $string = "";
 $writer = XML::Writer->new( OUTPUT => \$string, NAMESPACES => 1, PREFIX_MAP => $prefixmap );
-$field->to_xml( $writer );
-is( $string, $xml, 'to_xml(PREFIX_MAP:"") with XML::Writer' );
+$field->xml( $writer );
+is( $string, $xml, 'xml(PREFIX_MAP:"") with XML::Writer' );
 
 $xml =~ s/ xmlns="[^"]+"//;
 $string = "";
 $writer = XML::Writer->new( OUTPUT => \$string, NAMESPACES => 0 );
-$field->to_xml( $writer );
-is( $string, $xml, 'to_xml( no namspaces ) with XML::Writer' );
+$field->xml( $writer );
+is( $string, $xml, 'xml( no namspaces ) with XML::Writer' );
 
 $string = "!";
 $field->xml( \$string, NAMESPACES => 0 );
-is( $string, "!$xml", 'to_xml( no namspaces ) to string' );
+is( $string, "!$xml", 'xml( no namspaces ) to string' );
 
 $xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n$xml";
-is ( $field->xml( header => 1, NAMESPACES => 0 ), $xml, 'to_xml with xmlDecl' );
+is ( $field->xml( header => 1, NAMESPACES => 0 ), $xml, 'xml with xmlDecl' );
 
 $field = PICA::Field->new("028A","9" => "117060275");
 $field->add( "8" => "Martin Schrettinger", "d" => "Martin", "a" => "Schrettinger" );
@@ -135,7 +135,7 @@ ok( $field->empty, 'empty field');
 is( $field->as_string, "", "empty field (as_string)");
 is( $field, "", "empty field (as_string, overload)");
 my $emptyxml = '<pica:datafield tag="028A" xmlns:pica="info:srw/schema/5/picaXML-v1.0"></pica:datafield>';
-is( $field->to_xml, $emptyxml, "empty field (to_xml)");
+is( $field->xml, $emptyxml, "empty field (xml)");
 is( $field->purged, undef, "purged empty field");
 
 $field->tag("028C/01");

@@ -333,7 +333,7 @@ sub broken_record {
     if ($self->{broken_record_handler}) {
         return $self->{broken_record_handler}( $msg, $record );
     }
-    return if UNIVERSAL::isa( $record, 'PICA::Record' ) && $record->is_empty();
+    return if UNIVERSAL::isa( $record, 'PICA::Record' ) && $record->empty;
     print STDERR "$msg\n" if defined $msg;
     return;
 }
@@ -377,7 +377,7 @@ sub handle_record {
         }
         if (defined $record) {
             if ( UNIVERSAL::isa( $record, 'PICA::Record' ) ) {
-                $broken = "empty record" if $record->is_empty();
+                $broken = "empty record" if $record->empty;
             } else {
                 $broken = $record;
             }

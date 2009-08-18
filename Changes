@@ -1,3 +1,6 @@
+0.511   2009-08-18
+        - fixed make (winibw2pica was missing)
+        - removed some deprecated methods
 0.51    2009-08-17   
         - added winibw2pica
         - filter functions are also allowed in Record->field

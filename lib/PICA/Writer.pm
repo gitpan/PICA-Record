@@ -186,7 +186,7 @@ sub write {
                 } elsif ($format eq 'normalized') {
                     print { $self->{io} } $field->normalized() if $self->{io};
                 } elsif ($format eq 'xml' and defined $self->{xmlwriter} ) {
-                    $field->write_xml( $self->{xmlwriter} );
+                    $field->xml( $self->{xmlwriter} );
                 }
                 $self->{fieldcounter}++;
             } else {
@@ -207,7 +207,7 @@ sub write {
                         if ($self->{recordcounter} > 0 && $self->{io});
                     print { $self->{io} } $record->normalized() if $self->{io};
                 } elsif ($format eq 'xml' and defined $self->{xmlwriter} ) {
-                    $record->write_xml( $self->{xmlwriter} );
+                    $record->xml( $self->{xmlwriter} );
                 }
                 $self->{recordcounter}++;
                 $self->{fieldcounter} += scalar $record->all_fields;

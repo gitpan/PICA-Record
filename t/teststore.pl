@@ -18,7 +18,8 @@ sub teststore {
         $record = shift @records;
 
         my %result = $store->create($record);
-        ok( scalar %result, "create[$i]");
+        ok( scalar %result && $i, "create[$i]");
+
         isa_ok( $result{record}, 'PICA::Record' );
         my $id = $result{id};
         ok( $id, "create[$id] returned an id: $id" );

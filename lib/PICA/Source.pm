@@ -7,7 +7,7 @@ PICA::Source - Data source that can be queried for PICA+ records
 =cut
 
 use strict;
-our $VERSION = "0.50";
+our $VERSION = "0.51";
 
 =head1 SYNOPSIS
 

@@ -32,7 +32,6 @@ my $normalized = "\x1D\x0A\x1E028A \x1F9117060275\x1FdMartin\x1FaSchrettinger\x0
 my $record = new PICA::Record();
 isa_ok( $record, 'PICA::Record');
 ok( $record->empty, 'empty record' );
-ok( $record->is_empty, 'empty record' );
 ok( !$record, 'empty record (overload)' );
 
 # append a field

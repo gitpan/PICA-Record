@@ -28,6 +28,7 @@ examples/.htaccess
 script/parsepica
 script/picawebcat
 script/picaimport
+script/winibw2pica
 script/pica2html.xsl
 
 t/01distribution.t

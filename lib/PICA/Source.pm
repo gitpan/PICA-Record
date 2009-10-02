@@ -7,7 +7,7 @@ PICA::Source - Data source that can be queried for PICA+ records
 =cut
 
 use strict;
-our $VERSION = "0.51";
+our $VERSION = "0.52";
 
 =head1 SYNOPSIS
 
@@ -16,6 +16,9 @@ our $VERSION = "0.51";
   );
   my $record = $server->getPPN('1234567890');
   $server->cqlQuery("pica.tit=Hamster")->count();
+
+  # Get connection details from a config file
+  $store = PICA::Source->new( config => "myconf.conf" );
 
   $result = $server->cqlQuery("pica.tit=Hamster", Limit => 15 );
   $result = $server->z3950Query('@attr 1=4 microformats');
@@ -29,6 +32,7 @@ Instead or in addition to SRU you can use Z39.50, PSI, and unAPI (experimental).
 use Carp qw(croak);
 use PICA::PlainParser;
 use PICA::SRUSearchParser;
+use PICA::Store;
 use LWP::Simple;
 use Unicode::Normalize qw(NFC);
 
@@ -39,13 +43,17 @@ use Unicode::Normalize qw(NFC);
 Create a new Server. You can specify an SRU interface with C<SRU>, 
 a Z39.50 server with C<Z3950>, an unAPI base url with C<unAPI> or a
 raw PICA PSI interface with c<PSI>. Optional parameters include
-C<user> and C<password> for authentification.
+C<user> and C<password> for authentification. If you provide a C<config>
+parameter, configuration parameters will read from a file.
 
 =cut
 
 sub new {
     my ($class, %params) = @_;
     $class = ref $class || $class;
+
+    $PICA::Store::readconfigfile->( \%params )
+        if exists $params{config} or exists $params{conf} ;
 
     my $self = {
         SRU => $params{SRU} ? $params{SRU} : undef,
@@ -70,8 +78,8 @@ sub new {
 =head2 getPPN ( $ppn )
 
 Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
-This method may croak. Only available for source APIs SRU, unAPI, and PSI.
-You should check whether the returned object is empty or not.
+Only available for source APIs SRU, unAPI, and PSI. You should check whether 
+the returned object is empty or not. On error the special variable $@ is set.
 
 =cut
 
@@ -94,7 +102,10 @@ sub getPPN {
         }
 
         my $data = LWP::Simple::get( $url );
-        croak("HTTP request failed: $url") unless $data;
+        if (not $data) {
+            $@ = "HTTP request failed: $url";
+            return;
+        }
 
         if ( $self->{PSI} ) {
             utf8::downgrade( $data ); # make sure that the UTF-8 flag is off
@@ -103,10 +114,13 @@ sub getPPN {
             $data = NFC($data); # compose combining chars  
             utf8::upgrade($data);
         }
-        my $record = eval { PICA::Record->new( $data ) } 
-            or croak "Failed to parse PICA::Record";
-        return $record;
-
+        my $record = eval { PICA::Record->new( $data ) } ;
+        if ($record) {
+            return $record;
+        } else {
+            $@ = "Failed to parse PICA::Record";
+            return;
+        }
     } else {
         my $result = $self->cqlQuery( "pica.ppn=$id", Limit => 1 );
         my ($record) = $result->records();
@@ -143,7 +157,7 @@ sub cqlQuery {
         # print "$url\n"; # TODO: logging
 
         my $xml = LWP::Simple::get( $url );
-        croak("SRU Request failed $url") unless $xml;
+        croak("SRU Request failed $url") unless $xml; # TODO: don't croak?
         $xmlparser = $sruparser->parse($xml);
 
         #print "numberOfRecords " . $sruparser->numberOfRecords() . "\n";

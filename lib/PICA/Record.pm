@@ -9,9 +9,11 @@ PICA::Record - Perl extension for handling PICA+ records
 use strict;
 
 use base qw(Exporter);
-our @EXPORT_OK = qw(getrecord);
+our @EXPORT = qw(readpicarecord writepicarecord);
+our @EXPORT_OK = qw(picarecord);
+our %EXPORT_TAGS = (all => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.511';
+our $VERSION = '0.52';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);
@@ -100,13 +102,16 @@ have already opened), binmode utf8 will also be enabled unless you
 have already specified another encoding layer:
 
   open FILE, "<$filename";
-  $record = getrecord( \*FILE1 ); # implies binmode FILE, ":utf8"
+  $record = readpicarecord( \*FILE1 ); # implies binmode FILE, ":utf8"
 
   open FILE, "<$filename";
   binmode FILE,':encoding(iso-8859-1)';
-  $record = getrecord( \*FILE ); # does not imply binmode FILE, ":utf8"
+  $record = readpicarecord( \*FILE ); # does not imply binmode FILE, ":utf8"
 
-If you read or write from Perl strings, UTF-8 is never implied.
+If you read or write from Perl strings, UTF-8 is never implied. This means
+you must explicitely enable utf8 on your strings. As long as you read and
+write PICA record data from files and other sources or stores you should not
+need to do anything, but if you modify records in your scripts, use utf8;
 
 =head1 SYNOPSIS
 
@@ -125,8 +130,8 @@ are some additional two-liners:
   # read all records from a file
   my @records = PICA::Parser->new->parsefile( $filename )->records();
 
-  # read one record from a file (if 'getrecord' has been exported)
-  my $record = getrecord( $filename );
+  # read one record from a file
+  my $record = readpicarecord( $filename );
 
   # read one record from a string
   my ($record) =  PICA::Parser->parsedata( $picadata, Limit => 1)->records();
@@ -188,7 +193,7 @@ my $get_regex = sub {
 };
 
 
-=head1 METHODS
+=head1 CONSTRUCTOR
 
 =head2 new ( [ ...data... | $filehandle ] )
 
@@ -209,12 +214,13 @@ it. Each of the following four lines has the same result:
   $record = PICA::Record->new( IO::Handle->new("< $filename") );
   ($record) = PICA::Parser->parsefile( $filename, Limit => 1 )->records(),
   open (F, "<:utf8", $plainpicafile); $record = PICA::Record->new( \*F ); close F;
-  $record = getrecord( $filename );
+  $record = readpicarecord( $filename );
 
 =cut
 
 sub new {
-    my $class = shift;
+    my $class = 'PICA::Record';
+    shift if defined $_[0] and $_[0] eq $class; # called as function
 
     $class = ref($class) || $class; # Handle cloning
     my $self = bless {
@@ -267,6 +273,8 @@ sub copy {
     my $self = shift;
     return PICA::Record->new( $self );
 }
+
+=head2 ACCESSOR METHODS
 
 =head2 field ( [ $limit, ] { $field }+ [ $filter ] ) or f ( ... )
 
@@ -327,20 +335,6 @@ sub field {
 
 # Shortcut
 *f = \&field;
-
-=head2 all_fields
-
-Returns an array of all the fields in the record. The array contains 
-a C<PICA::Field> object for each field in the record. An empty array 
-is returns if the record is empty.
-
-=cut
-
-sub all_fields() {
-    my $self = shift;
-    croak("You called all_fields() but you probably want field()") if @_;
-    return @{$self->{_fields}};
-}
 
 =head2 subfield ( [ $limit, ] { [ $field, $subfield ] | $fullspec }+ ) or sf ( ... )
 
@@ -437,6 +431,20 @@ sub values {
     return @values;
 }
 
+=head2 all_fields
+
+Returns an array of all the fields in the record. The array contains 
+a C<PICA::Field> object for each field in the record. An empty array 
+is returns if the record is empty.
+
+=cut
+
+sub all_fields() {
+    my $self = shift;
+    croak("You called all_fields() but you probably want field()") if @_;
+    return @{$self->{_fields}};
+}
+
 =head2 ppn ( [ $ppn ] )
 
 Get or set the identifier (PPN) of this record (field 003@, subfield 0).
@@ -456,13 +464,26 @@ sub ppn {
 
 Get zero or more EPNs (item numbers) of this record, which is field 203@/.., subfield 0.
 Returns the first EPN (or undef) in scalar context or a list in array context. Each copy 
-record (get them with method copy_records) should have only one EPN.
+record (get them with method items) should have only one EPN.
 
 =cut
 
 sub epn {
-  my $self = shift;
-  return $self->subfield('203@/..$0');
+    my $self = shift;
+    return $self->subfield('203@/..$0');
+}
+
+=head2 iln
+
+Get zero or more ILNs (internal library numbers) of this record, which is field 101@$a.
+Returns the first ILN (or undef) in scalar context or a list in array context. Each holdings record is identified by its ILN.
+
+=cut
+
+sub iln {
+    # TODO: set ILN with this method and check uniqueness
+    my $self = shift;
+    return $self->subfield('101@$a');
 }
 
 =head2 occurrence  or  occ
@@ -489,21 +510,21 @@ Get the main record (level 0, all tags starting with '0').
 =cut
 
 sub main_record {
-  my $self = shift;
-  my @fields = $self->field("0...(/..)?");
+    my $self = shift;
+    my @fields = $self->field("0...(/..)?");
 
-  return PICA::Record->new(@fields);
+    return PICA::Record->new(@fields);
 }
 
-=head2 holdings
+=head2 holdings ( [ $iln ] )
 
-Get a list of local records (holdings, level 1 and 2).
-Returns an array of L<PICA::Record> objects.
+Get a list of local records (holdings, level 1 and 2) or the local record with
+given ILN. Returns an array of L<PICA::Record> objects or a single holding.
 
 =cut
 
 sub holdings {
-  my $self = shift;
+  my ($self, $iln) = @_;
 
   my @holdings = ();
   my @fields = ();
@@ -514,7 +535,10 @@ sub holdings {
 
     if ($f->tag =~ /^1/) {
         if ($prevtag && $prevtag =~ /^2/) {
-            push @holdings, PICA::Record->new(@fields) if (@fields);
+            if (@fields) {
+                my $h = PICA::Record->new(@fields);
+                push @holdings, $h unless $iln and $h->iln ne $iln;
+            }
             @fields = ();
         }
     }
@@ -522,8 +546,11 @@ sub holdings {
     push @fields, $f;
     $prevtag = $f->tag;
   }
-  push @holdings, PICA::Record->new(@fields) if (@fields);
-  return @holdings;
+  if (@fields) {
+      my $h = PICA::Record->new(@fields);
+      push @holdings, $h unless $iln and $h->iln ne $iln;
+  }
+  return $iln ? $holdings[0] : @holdings;
 }
 
 =head2 local_records
@@ -532,9 +559,7 @@ Alias for method holdings (deprecated).
 
 =cut
 
-sub local_records {
-    return shift->holdings(@_);
-}
+*local_records = *holdings;
 
 =head2 items
 
@@ -552,15 +577,23 @@ sub items {
   my $prevocc;
 
   foreach my $f (@{$self->{_fields}}) {
-    next unless $f->tag =~ /^2...\/(..)/;
+      next unless $f->tag =~ /^[^0]/;
 
-    if (!($prevocc && $prevocc eq $1)) {
-      $prevocc = $1;
-      push @copies, PICA::Record->new(@fields) if (@fields);
-      @fields = ();
-    }
+      if ($f->tag =~ /^1/) {
+          $prevocc = undef;
+          push @copies, PICA::Record->new(@fields) if (@fields);
+          @fields = ();
+      } else {
+          next unless $f->tag =~ /^2...\/(..)/;
 
-    push @fields, $f;
+          if (!($prevocc && $prevocc eq $1)) {
+              $prevocc = $1;
+              push @copies, PICA::Record->new(@fields) if (@fields);
+              @fields = ();
+          }
+
+          push @fields, $f;
+      }
   }
   push @copies, PICA::Record->new(@fields) if (@fields);
   return @copies;
@@ -568,13 +601,11 @@ sub items {
 
 =head2 copy_records
 
-Alias for method items (deprecated).
+Alias for method items (deprecated, use C<items> instead).
 
 =cut
 
-sub copy_records {
-    return shift->items(@_);
-}
+*copy_records = *items;
 
 =head2 empty
 
@@ -589,6 +620,8 @@ sub empty() {
     }
     return 1;
 }
+
+=head1 MODIFICATION METHODS
 
 =head2 delete_fields ( <tagspec(s)> )
 
@@ -731,15 +764,16 @@ sub appendif {
     $self;
 }
 
-=head2 replace ( $tag, $field | @fieldspec )
+=head2 update ( $tag, ( $field | @fieldspec | $coderef ) )
 
-Replace a field. You must pass a tag and a field. 
-Attention: Only the first occurence will be replaced
-so better not use this method for repeatable fields.
+Replace a field. You must pass a tag and a field. By default only the first
+matching field will be replaced, so be sure not to replace repeatable fields.
+If you pass a code reference, the code will be called for each field and the
+field is replaced by the result.
 
 =cut
 
-sub replace {
+sub update {
     my $self = shift;
     my $tag = shift;
 
@@ -748,7 +782,7 @@ sub replace {
 
     my $replace;
 
-    if (@_ and ref($_[0]) eq 'PICA::Field') {
+    if (@_ and ref($_[0]) eq 'PICA::Field' or  ref($_[0]) eq 'CODE') {
         $replace = shift;
     } else {
         $replace = PICA::Field->new($tag, @_);
@@ -758,12 +792,27 @@ sub replace {
 
     for my $field ( $self->all_fields ) {
         if ( $field->tag() =~ $regex ) {
-            $self->{_ppn} = $replace->sf('0') if $replace->tag eq '003@';
-            $field->replace( $replace );
-            return;
+            my $rep = $replace;
+            if (ref($replace) eq 'CODE') {
+                $rep = $rep->( $field );
+                $rep = undef unless UNIVERSAL::isa( $rep, 'PICA::Field' );
+            }
+            if (defined $rep) {
+                $self->{_ppn} = $rep->sf('0') if $rep->tag eq '003@';
+                $field->replace( $rep );
+            }
+            return unless ref($replace) eq 'CODE';
         }
     }
 }
+
+=head2 replace
+
+Alias for update (deprecated, use C<update> instead)
+
+=cut
+
+*replace = *update;
 
 =head2 sort
 
@@ -779,6 +828,51 @@ sub sort {
 
     @{$self->{_fields}} = sort {$a->tag() cmp $b->tag()} @{$self->{_fields}};
 }
+
+=head2 add_headers ( [ %options ] )
+
+Add header fields to a L<PICA::Record>. You must specify two named parameters
+(C<eln> and C<status>). This method is experimental. There is no test whether 
+the header fields already exist. This method may be removed in a later release.
+
+=cut
+
+sub add_headers {
+    my ($self, %params) = @_;
+
+    my $eln = $params{eln};
+    croak("add_headers needs an ELN") unless defined $eln;
+
+    my $status = $params{status};
+    croak("add_headers needs status") unless defined $status;
+
+    my @timestamp = defined $params{timestamp} ? @{$params{timestamp}} : localtime;
+    # TODO: Test timestamp
+
+    my $hdate = strftime ("$eln:%d-%m-%g", @timestamp);
+    my $htime = strftime ("%H:%M:%S", @timestamp);
+
+    # Pica3: 000K - Unicode-Kennzeichen
+    $self->append( "001U", '0' => 'utf8' );
+
+    # PICA3: 0200 - Kennung und Datum der Ersterfassung
+    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0200.pdf
+    $self->append( "001A", '0' => $hdate );
+
+    # PICA3: 0200 - Kennung und Datum der letzten Aenderung
+    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0210.pdf
+    $self->append( "001B", '0' => $hdate, 't' => $htime );
+
+    # PICA3: 0230 - Kennung und Datum der Statusaenderung
+    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0230.pdf
+    $self->append( "001D", '0' => $hdate );
+
+    # PCIA3: 0500 - Bibliographische Gattung und Status
+    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0500.pdf
+    $self->append( "002@", '0' => $status );
+}
+
+=head1 SERIALIZATION METHODS
 
 =head2 as_string ( [ %options ] )
 
@@ -801,7 +895,7 @@ sub as_string {
 
 =head2 to_string ( [ %options ] )
 
-Alias for as_string (deprecated)
+Alias for as_string (deprecated, use C<as_string> instead)
 
 =cut
 
@@ -894,64 +988,67 @@ sub html  {
     return join("", @html) . "\n";
 }
 
-=head2 add_headers ( [ %options ] )
+=head2 write ( [ $output ] [ format => $format ] [ %options ] )
 
-Add header fields to a L<PICA::Record>. You must specify two named parameters
-(C<eln> and C<status>). This method is experimental. There is no test whether 
-the header fields already exist.
+Write a single record to a file or stream and end the output. You can pass
+the same parameters as known to the constructor of L<PICA::Writer>. Returns
+the PICA::Writer object that was used to write the record. Use can check the
+status of the writer with a simple boolean check.
 
 =cut
 
-sub add_headers {
-    my ($self, %params) = @_;
-
-    my $eln = $params{eln};
-    croak("add_headers needs an ELN") unless defined $eln;
-
-    my $status = $params{status};
-    croak("add_headers needs status") unless defined $status;
-
-    my @timestamp = defined $params{timestamp} ? @{$params{timestamp}} : localtime;
-    # TODO: Test timestamp
-
-    my $hdate = strftime ("$eln:%d-%m-%g", @timestamp);
-    my $htime = strftime ("%H:%M:%S", @timestamp);
-
-    # Pica3: 000K - Unicode-Kennzeichen
-    $self->append( "001U", '0' => 'utf8' );
-
-    # PICA3: 0200 - Kennung und Datum der Ersterfassung
-    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0200.pdf
-    $self->append( "001A", '0' => $hdate );
-
-    # PICA3: 0200 - Kennung und Datum der letzten Aenderung
-    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0210.pdf
-    $self->append( "001B", '0' => $hdate, 't' => $htime );
-
-    # PICA3: 0230 - Kennung und Datum der Statusaenderung
-    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0230.pdf
-    $self->append( "001D", '0' => $hdate );
-
-    # PCIA3: 0500 - Bibliographische Gattung und Status
-    # http://www.gbv.de/vgm/info/mitglieder/02Verbund/01Erschliessung/02Richtlinien/01KatRicht/0500.pdf
-    $self->append( "002@", '0' => $status );
+sub write {
+    my $record = shift;
+    my $writer = PICA::Writer->new( @_ );
+    return $writer unless $writer;
+    $writer->write( $record )->end;
 }
+
 
 =head1 FUNCTIONS
 
-=head2 getrecord ( $filename )
+The functions readpicarecord and writepicarecord are exported by default.
+On request you can also export the function picarecord which is a shortcut
+for the constructor PICA::Record::new. To export all functions, import the 
+module via:
 
-Read one record from a file. Returns a non-empty PICA::Record
+  use PICA::Record qw(:all);
+
+=head2 readpicarecord ( $filename )
+
+Read a single record from a file. Returns a non-empty PICA::Record
 object or undef.
 
 =cut
 
-sub getrecord {
+sub readpicarecord {
     my $file = shift;
     my ($record) = PICA::Parser->parsefile( $file, Limit => 1 )->records();
-    return unless $record and not $record->empty;
+    return undef unless $record and not $record->empty;
     return $record;
 }
+
+=head2 writepicarecord ( $record, [ $output ] [ format => $format ] [ %options ] )
+
+Write a single record to a file or stream. Shortcut for
+
+  $record->write( [ $output ] [ format => $format ] [ %options ] )
+
+as described above - see the constructor of L<PICA::Writer> for more details.
+Returns the PICA::Writer object that was used to write the record - you can use
+a simple if to check whether an error occurred.
+
+=cut
+
+*writepicarecord = *write;
+
+=head2 picarecord ( ... )
+
+Shortcut for PICA::Record->new( ... )
+
+=cut
+
+*picarecord = *new;
 
 1;
 

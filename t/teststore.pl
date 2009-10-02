@@ -6,19 +6,22 @@ sub teststore {
     my ($store) = @_;
     my (%result, $record);
 
-    my @records = (
-        PICA::Record->new("002@ \$0Aau\n021A \$aDas zweite Kapital\n028A \$dKarl\$aMarx"),
-    );
-    my $r = PICA::Record::getrecord('t/files/minimal.pica');
+    my $r = PICA::Record::readpicarecord('t/files/minimal.pica');
     $r->delete_fields('003@');
-
-    my $i=0;
+    my @records = (
+        $r,
+        #PICA::Record->new("002@ \$0Aau\n021A \$aDas zweite Kapital\n028A \$dKarl\$aMarx"),
+    );
+    
 
     while( @records ) {
         $record = shift @records;
 
         my %result = $store->create($record);
-        ok( scalar %result && $i, "create[$i]");
+        if (not %result or not $result{record}) {
+            ok( 0, "Failed to create record: " . $result{errormessage} );
+            last;
+        }
 
         isa_ok( $result{record}, 'PICA::Record' );
         my $id = $result{id};
@@ -27,6 +30,9 @@ sub teststore {
         %result = $store->get( $id );
         isa_ok( $result{record}, "PICA::Record", "get($id) returned a PICA::Record" );
         ok( $id, "get($id) returned an id" );
+
+        is( $result{record}->sf('021A$a'), $record->sf('021A$a'),
+            "UTF-8 not broken on create" );
 
         my $version = $result{version};
         my $history;
@@ -63,13 +69,13 @@ sub teststore {
         if ($store->can('deletions')) {
             # ...
         }
-
-        $i++;
     }
 
     %result = $store->get( -1 );
 
     ok ($result{errorcode}, "getRecord of non-existing id");
+
+    return 1;
 }
 
 1;

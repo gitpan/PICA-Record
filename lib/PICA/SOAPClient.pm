@@ -9,7 +9,7 @@ PICA::SOAPClient - L<PICA::Store> via SOAP access (aka 'webcat')
 use strict;
 use warnings;
 
-our $VERSION = "0.43";
+our $VERSION = "0.45";
 
 use PICA::Record;
 use PICA::Store;
@@ -141,7 +141,7 @@ sub create {
     );
 }
 
-=head2 update ( $id, $record, $version )
+=head2 update ( $id, $record [, $version ] )
 
 Update a record by ID, updated record (of type L<PICA::Record>),
 and version (of a previous get, create, or update command).
@@ -156,6 +156,12 @@ sub update {
     croak('update needs a PICA::Record object') unless ref($record) eq 'PICA::Record';
 
     my $recorddata = encode_utf8( $record->to_string );
+
+    if (not defined $version) {
+        my %current = $self->get( $id );
+        return %current unless $current{version};
+        $version = $current{version};
+    }
 
     return $self->_soap_query( "update",
         SOAP::Data->name("ppn")->type( string => $id ),

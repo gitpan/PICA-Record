@@ -8,7 +8,7 @@ use Test::More qw(no_plan);
 use File::Temp qw(tempdir);
 use Cwd qw(abs_path cwd);
 use PICA::Store;
-use PICA::Record qw(getrecord);
+use PICA::Record;
 use Data::Dumper;
 
 if (not $ENV{PICASQL_TEST} ) {
@@ -30,7 +30,7 @@ my @files = (
 
 writefile("files", join("\n", @files)."\n");
 
-#my $record = getrecord("t/files/minimal.pica");
+#my $record = readpicarecord("t/files/minimal.pica");
 #$record->delete_field('
 
 

@@ -106,9 +106,11 @@ sub new {
     croak('please specify a store type (webcat/SQLite) - possibly in a config file');
 }
 
-=head2 get
+=head2 get ( $id )
 
-Retrieve a record.
+Retrieve the latest revision of record by ID. Returns a hash with either
+'errorcode' and 'errormessage' or a hash with 'id', 'record' 
+(a L<PICA::Record> object), 'version', and 'timestamp'.
 
 =cut
 
@@ -116,9 +118,11 @@ sub get {
     croak('abstract method "get" is not implemented');  
 }
 
-=head2 create
+=head2 create ( $record )
 
-Insert a new record.
+Insert a new record. The parameter must be a L<PICA::Record> object.
+Returns a hash with either 'errorcode' and 'errormessage' or a hash
+with 'id', 'record', 'version', and 'timestamp'.
 
 =cut
 
@@ -126,9 +130,13 @@ sub create {
     croak('abstract method "create" is not implemented');  
 }
 
-=head2 update
+=head2 update ( $id, $record [, $version ] )
 
-Update an existing record.
+Update a record by ID, updated record (of type L<PICA::Record>),
+and version (of a previous get, create, or update command).
+
+Returns a hash with either 'errorcode' and 'errormessage'
+or a hash with 'id', 'record', 'version', and 'timestamp'.
 
 =cut
 
@@ -136,9 +144,10 @@ sub update {
     croak('abstract method "update" is not implemented');  
 }
 
-=head2 delete
+=head2 delete ( $id )
 
-Delete a record.
+Delete a record by ID. Returns a hash with either 'errorcode' and 
+'errormessage' or a hash with 'id'.
 
 =cut
 

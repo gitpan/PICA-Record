@@ -1,3 +1,6 @@
+0.52    2009-10-02
+        - PICA::Record fixes and additions (replace, update, read, write, iln)
+        - minor updates in picaimport and PICA::Writer
 0.511   2009-08-18
         - fixed make (winibw2pica was missing)
         - removed some deprecated methods

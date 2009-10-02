@@ -58,6 +58,7 @@ t/files/winibwsave.example
 t/files/dumpformat
 t/files/bgb.example
 t/files/bib.pica
+t/files/holdings.pica
 
 pica-xml-v1-0.xsd
 META.yml                                 Module meta-data (added by MakeMaker)

@@ -6,7 +6,7 @@ use utf8;
 use Test::More qw(no_plan);
 
 use PICA::Field;
-use PICA::Record qw(getrecord);
+use PICA::Record;
 use IO::File;
 
 my $files = "t/files";
@@ -45,7 +45,6 @@ $record = PICA::Record->new($field);
 is( $record->normalized(), $normalized, 'Record->normalized()');
 
 # directly pass data to new() for parsing
-print "N:$normalized\n";
 $record = PICA::Record->new( $normalized );
 is( $record->normalized(), $normalized, 'Record->normalized()');
 
@@ -192,6 +191,13 @@ is( $record->subfield('010@$a'), 'ger', "replace field");
 $record->replace('010@', 'a' => 'fra');
 is( $record->subfield('010@$a'), 'fra', "replace field");
 
+$record->replace('037A', sub { 
+    return unless $_[0]->sf('a') =~ /^2nd/;
+    PICA::Field->new('037A','a' => 'xxx');
+} );
+
+is_deeply( [ $record->sf('037A$a') ], [ '1st note', 'xxx' ], 'replace by code' );
+
 ### parse normalized by autodetection
 open PICA, "$files/bib.pica"; # TODO: bib.pica is bytestream, not character-stream!
 $normalized = join( "", <PICA> );
@@ -218,9 +224,25 @@ is( $record->sf('021A$a'), "This are lines", "newline in value (1, \$)" );
 is( $record->sf('021A_a'), "This are lines", "newline in value (1, _)" );
 is( $record->to_string(), "021A \$aThis are lines\n", "newline in value (2)" );
 
-# also test getrecord
-$record = getrecord("$files/graveyard.pica");
+# also test readpicarecord
+$record = readpicarecord("$files/graveyard.pica");
 is( scalar $record->all_fields(), 62, "parsed graveyard.pica" );
+
+# writepicarecord
+use File::Temp qw(tempfile);
+my ($fh, $tempfile) = tempfile(UNLINK => 1);
+my $written = $record->write( $tempfile );
+is( $written->counter, 1, 'write' );
+
+my $rec2 = readpicarecord( $tempfile );
+is_deeply( $rec2, $record, 'read back written record' );
+
+$written = $record->writepicarecord( $tempfile );
+is( $written->counter, 1, '::write' );
+
+$written = writepicarecord( $record, $tempfile );
+is( $written->counter, 1, 'writerecord as function' );
+
 
 ### PPN
 
@@ -241,13 +263,15 @@ $record->replace('003@','0'=>'123456789');
 is( $record->ppn, '123456789', 'replace PPN' );
 
 
+### EPN
 my $epn = $record->epn();
 my @epns = $record->epn();
 
 is( $epn, 917400194, "epn() as scalar" );
 is_deeply( \@epns, [917400194,923091475,923091483,923091491], "epn() as array" );
 
-### holdings
+
+### holdings and items
 
 $record = PICA::Record->new( IO::File->new("$files/bgb.example") );
 
@@ -257,13 +281,27 @@ my @a = $record->local_records;
 is( scalar @a, scalar @holdings, 'local_records' );
 
 my @copies = $record->items();
-ok( scalar @copies == 336, 'items' );
+is( scalar @copies, 353, 'items' );
 @a = $record->copy_records;
 is( scalar @a, scalar @copies, 'copy_records' );
 
-ok( scalar $holdings[0]->items() == 1, "items (1)");
-ok( scalar $holdings[4]->items() == 2, "items (2)");
-ok( scalar $holdings[5]->items() == 26, "items (26)");
+is( scalar $holdings[0]->items(), 1, "items (1)");
+is( scalar $holdings[4]->items(), 2, "items (2)");
+is( scalar $holdings[5]->items(), 26, "items (26)");
+
+foreach my $h (@holdings) {
+    my $iln = $h->iln;
+    my $h2 = $record->holdings( $iln );
+    is( "$h2", "$h", "ILN: $iln" );
+    last; # we could do more...
+}
+
+
+$record = readpicarecord( "$files/holdings.pica" );
+@holdings = $record->holdings();
+is( scalar @holdings, 3, 'holdings' );
+@copies = $record->items();
+is( scalar @copies, 3, 'items' );
 
 ### UTF8 and encodings
 my $cjk = "我国民事立法的回顾与展望";
@@ -272,6 +310,7 @@ is( $record->sf('021A_a'), $cjk, 'CJK record' );
 
 
 __END__
+
 
 ### TODO: parse WinIBW output : this is possible via winibw2pica (test needed)
 if (1) {
@@ -285,6 +324,5 @@ if (1) {
   isa_ok( $main, 'PICA::Record' );
 }
 
-__END__
 # TODO: test to_xml
 

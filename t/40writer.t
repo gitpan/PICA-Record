@@ -3,18 +3,20 @@
 use strict;
 use utf8;
 
-use Test::More tests => 13;
+use Test::More tests => 19;
 use Encode;
 use File::Temp qw(tempfile);
 use XML::Writer;
-
-my $files = "t/files";
 
 use_ok("PICA::Writer");
 use_ok("PICA::XMLParser");
 use_ok("PICA::Parser");
 use_ok("PICA::Field");
 use_ok("PICA::Record");
+
+# prepare
+my ($record, $xmldata, $str);
+my ($fh, $filename);
 
 # simple writing
 my $w = PICA::Writer->new();
@@ -29,15 +31,22 @@ PICA::Writer->new( \$s )->write(
 )->end();
 is ( $s, "042A \$1bar\n\n045B \$Xdoz\n", "multiple records" );
 
-# prepare
-my ($record, $xmldata, $str);
 
-($record) = PICA::Parser->parsefile("$files/minimal.xml")->records();
+# parsefile and readpicarecord
+($record) = PICA::Parser->parsefile("t/files/minimal.xml")->records();
 isa_ok($record, "PICA::Record");
+my $r2 = readpicarecord("t/files/minimal.pica");
+is( $record->to_string, $r2->to_string, "parse XML == read PICA" );
+
+# writefile
+($fh, $filename) = tempfile(UNLINK => 1);
+writepicarecord( $record, $fh );
+$r2 = readpicarecord( $filename );
+is( $record->to_string, $r2->to_string, "read/write pica record" );
 
 # open XML file
 my $fxml;
-open $fxml, "$files/minimal.xml";
+open $fxml, "t/files/minimal.xml";
 binmode $fxml, ":utf8";
 $xmldata = join("",grep { !($_ =~ /^<\?|^$/); } <$fxml>);
 close $fxml;
@@ -54,7 +63,7 @@ $writer->endTag();
 is( "$str\n", $xmldata, "xml" );
 
 # open XML file
-open $fxml, "$files/minimal.xml";
+open $fxml, "t/files/minimal.xml";
 binmode $fxml, ":utf8";
 $xmldata = join("", <$fxml>);
 close $fxml;
@@ -62,7 +71,7 @@ close $fxml;
 
 # write to file
 
-my ($fh, $filename) = tempfile(UNLINK => 1);
+($fh, $filename) = tempfile(UNLINK => 1);
 binmode $fh, ":utf8";
 
 my $prefixmap = {'info:srw/schema/5/picaXML-v1.0'=>''};
@@ -95,9 +104,20 @@ is( file2string($filename), $xmldata, "format => 'xml' (implicit, pretty)" );
 
 $s = "";
 $w = PICA::Writer->new( \$s, format => 'xml' );
-PICA::Parser->parsefile( "$files/graveyard.pica", Record => $w );
+PICA::Parser->parsefile( "t/files/graveyard.pica", Record => $w );
 $w->end();
-is ("$s", file2string("$files/graveyard.xml"), "default XML conversion");
+is ("$s", file2string("t/files/graveyard.xml"), "default XML conversion");
+
+# error handling
+#$w = writepicarecord( $record, "/" );
+$w = PICA::Writer->new( "/" );
+is( $w->status, 0, "Failed to open writer" );
+eval { $w->write( $record ); };
+ok( $@, "Failed to write to writer in error status" );
+
+$w = writepicarecord( $record, "/" );
+ok( !$w->status, "writepicarecord failed" );
+ok( !$w, "writepicarecord failed (bool overload)" );
 
 
 __END__

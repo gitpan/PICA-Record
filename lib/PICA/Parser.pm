@@ -55,10 +55,10 @@ constructs like
   my @records = parsefile($filename)->records();
 
 To parse just one record you can use the special method
-getrecord which can be exported by PICA::Record:
+writerecord which can be exported by PICA::Record:
 
-  use PICA::Record qw(getrecord);
-  my $record = getrecord( $file );
+  use PICA::Record qw(writerecord);
+  my $record = writerecord( $file );
 
 Another method is to limit the parser to one record:
 

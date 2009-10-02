@@ -7,12 +7,12 @@ PICA::Writer - Write and count PICA+ records and fields
 =cut
 
 use strict;
-our $VERSION = "0.48";
+our $VERSION = "0.52";
 
 =head1 DESCRIPTION
 
 This module contains a simple class to write PICA+ records and fields.
-Several output targets (file, GLOB, L<IO:Handle>, string) and formats 
+Several output targets (file, GLOB, L<IO:Handle>, string, null) and formats 
 (XML, plain, normalized) are supported. The number of written records
 and fields is counted so you can also use the class as a simple counter.
 
@@ -31,6 +31,7 @@ and fields is counted so you can also use the class as a simple counter.
 
   $writer->output( "output.xml" );  
   $writer->output( \*STDOUT, format => 'plain' );  
+  print "Failed to open writer" unless $writer; # PICA::Writer::ERROR == 0
 
   print $writer->counter() . " records written\n";
   print $writer->fields()  . " fields written\n";
@@ -40,6 +41,9 @@ and fields is counted so you can also use the class as a simple counter.
   print $writer->status() == PICA::Writer::ENDED ? "open" : "ended";
  
   $writer->end(); # essential to close end tags in XML and such
+
+  use PICA::Record qw(writerecord);
+  writerecord( $record, $file );
 
 =cut
 
@@ -51,16 +55,22 @@ use IO::Scalar;
 use IO::File;
 use Carp qw(croak);
 
-use constant NEW     => 0;
-use constant STARTED => 1;
-use constant ENDED   => 2;
+use constant ERROR   => 0;
+use constant NEW     => 1;
+use constant STARTED => 2;
+use constant ENDED   => 3;
+
+use overload 
+    'bool' => sub { $_[0]->status };
 
 =head1 METHODS
 
 =head2 new ( [ $output ] [ format => $format ] [ %options ] )
 
 Create a new writer. See the C<output> method for possible parameters. 
-The status of the new writer is set to C<PICA::Writer::NEW> which is zero.
+The status of the new writer is set to C<PICA::Writer::NEW> (1) or
+C<PICA::Writer::ERROR> (0). Boolean conversion is overloaded to return
+the status so you can easily check whether a writer is in error status.
 
 =cut
 
@@ -85,7 +95,9 @@ L<IO:Handle> object, a string reference, or C<undef>. In addition you
 can specify the output format with the C<format> parameter (C<plain> or
 C<xml>) and some options depending on the format, for instance 'pretty => 1'.
 
-The status of the writer is set to C<PICA::Writer::NEW> which is zero.
+The status of the writer is set to C<PICA::Writer::NEW> or C<PICA::Writer::ERROR>.
+This methods returns the writer itself which boolean conversion is overloaded to
+return the status so you can easily check the return value whether an error occurred.
 
 =cut
 
@@ -108,7 +120,7 @@ sub output {
         $self->{io} = IO::Scalar->new( $output );
     } else {
         $self->{io} = IO::File->new($output, '>:utf8');
-        $format = 'xml' unless defined $format and $output =~ /\.xml$/;
+        $format = 'xml' if not defined $format and $output =~ /\.xml$/;
     }
 
     if ($options{pretty}) {
@@ -119,6 +131,7 @@ sub output {
     }
 
     $format = 'plain' unless defined $format and $format =~ /^(plain|normalized|xml)$/i;
+
     $self->{options}->{format} = lc($format);
     if ( $format =~ /^xml$/i and defined $output ) {
         $options{OUTPUT} = $self->{io};
@@ -128,6 +141,10 @@ sub output {
         $self->{xmlwriter} = undef;
     }
     
+    if (defined $output and not $self->{io}) {
+        $self->{status} = ERROR;
+    }
+
     return $self;
 }
 
@@ -168,12 +185,16 @@ counted and can be queried with methods counter and fields.
 Writing single fields or mixing records and fields may not be possible 
 depending on the output format and output handler. 
 
+Returns the writer object so you can chain calls:
+
+  $writer->write( $r1 )->write( $r2 )->end;
+
 =cut
 
 sub write {
     my $self = shift;
-    croak('cannot write to a closed writer') if $self->status() == ENDED;
-    $self->start() if $self->status() != STARTED;
+    croak('cannot write to a closed writer') if $self->status == ENDED;
+    $self->start if $self->status != STARTED;
 
     my $format = $self->{options}->{format};
 
@@ -248,7 +269,8 @@ that is not in status PICA::Writer::STARTED..
 
 sub start {
     my $self = shift;
-    croak('cannot start a writer twice') if $self->status() == STARTED;
+    croak('cannot start a writer twice') if $self->status == STARTED;
+    croak('cannot start a writer in error status') if $self->status == ERROR;
 
     my $writer = $self->{xmlwriter};
     if ( $self->{options}->{format} eq 'xml' and defined $writer ) {
@@ -279,8 +301,9 @@ restart an ended writer with the output method or with the start method.
 
 sub end {
     my $self = shift;
-    croak('cannot end a writer twice') if $self->status() == ENDED;
-    $self->start() if $self->status() != STARTED;
+    croak('cannot end a writer in error status') if $self->status == ERROR;
+    croak('cannot end a writer twice') if $self->status == ENDED;
+    $self->start if $self->status != STARTED;
 
     if ( $self->{options}->{format} eq 'xml') {
         if ( defined $self->{xmlwriter} ) {
@@ -299,8 +322,8 @@ sub end {
 
 =head2 status ( )
 
-Return the status which can be PICA::Writer::NEW (0),
-PICA::Writer::STARTED, or PICA::Writer::ENDED.
+Return the status which can be PICA::Writer::NEW, PICA::Writer::STARTED, 
+PICA::Writer::ENDED, or PICA::Writer::ERROR.
 
 =cut
 

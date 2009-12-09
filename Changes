@@ -1,3 +1,7 @@
+0.53    2009-12-09
+        - minor additions to XMLParser and readpicarecord
+        - extended winibw2pica to correctly read WinIBW3 "utf8"
+        - added PICA::Source->iktQuery for PSI
 0.52    2009-10-02
         - PICA::Record fixes and additions (replace, update, read, write, iln)
         - minor updates in picaimport and PICA::Writer

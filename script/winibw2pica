@@ -9,17 +9,19 @@ winibw2pica - convert WinIBW PICA+ download to valid PICA+
 use strict;
 use warnings;
 
-our $VERSION = '0.1';
+our $VERSION = '0.3';
 
 use PICA::Parser qw(parsedata);
 use PICA::Field qw(parse_pp_tag);
 use Getopt::Long;
+use Encode;
 use Pod::Usage;
 
-my ($outfile, $pretty, $xml, $help, $man, $version);
+my ($outfile, $pretty, $xml, $help, $man, $utf8, $version);
 
 GetOptions(
     "output:s" => \$outfile,
+    "utf8" => \$utf8,
     "prettyxml" => \$pretty,
     "help|?" => \$help,
     "man" => \$man,
@@ -60,7 +62,11 @@ sub winibw2pica {
     $line = nextline() if defined $line and $line =~ /^SET/;
     return unless defined $line;
 
-    $line =~ s/\x83/\x1F/g;
+    if ( $line =~ /\x83/ ) {
+        $line =~ s/\x83/\x1F/g;
+    } elsif ( $line =~ /\xC6\x92/ ) {
+        $line =~ s/\xC6\x92/\x1F/g;
+    }
 
     my $next = lookahead();    
     while ( defined $next and not $next =~ /^\s*$/ and not
@@ -77,6 +83,11 @@ sub winibw2pica {
         return "101\@ \x1Fd$2\xA0";
     }
 
+    # convert charset
+    if ( $utf8 ) {
+        $line = join("\x1F", map {Encode::decode_utf8($_);} split("\x1F", $line));
+    }
+
     return $line;
 }
 
@@ -89,15 +100,16 @@ winibw2pica [options] inputfile(s)
  -help          brief help message
  -man           full documentation with examples
  -output FILE   write PICA+ records to a given file (default: '-' for STDOUT)
- -prettyxml     pretty print PICA/XML
- -xml           output of records in PICA/XML
+ -xml           print records in PICA/XML
+ -prettyxml     pretty print records in PICA/XML
+ -utf8          read input field values as UTF-8
  -version       show version information
 
 =head1 DESCRIPTION
 
-This script can be used to convert "PICA+" download files from WinIBW software
-to valid PICA+. You can download so called PICA+ from WinIBW with the WinIBW
-command C<DOWNLOAD> (or just C<DOW>). The calling syntax is
+This script can be used to convert "PICA+" download files from WinIBW3 
+software to valid PICA+. You can download so called PICA+ from WinIBW with 
+the WinIBW command C<DOWNLOAD> (or just C<DOW>). The calling syntax is:
 
   DOW <n1>[-<n2> ] P[<n3>]
 
@@ -105,14 +117,23 @@ Where C<n1> ist the first and C<n2> is the last record number that you want to
 download from the current result list (staring with 1) and C<n3> is either a
 library number or C<A> for all libraries. If you omit C<n3> then only level 0
 will be downloaded. Unfortunately the resulting download format is not valid
-PICA+ but it includes some additional lines, linebreaks and other nasty stuff.
-This script tries to clean the WinIBW output and returns PICA+ on success. 
+PICA+ nor valid UTF-8 but it includes some additional lines, linebreaks, control
+characters and other nasty stuff. This script tries to clean the WinIBW output
+and returns PICA+ on success.
 
 If this script failed to convert some data, please first make sure to install 
 the latest version of L<PICA::Record>. If there is still an error afterwards,
 send me a detailed bug report with the version number of this script, the
 downloaded data, your WinIBW version number and a B<detailed list> of which
 WinIBW commands you performed to produce the download.
+
+More information about WinIBW3 can be found in the WinIBW3 manual in German at
+L<http://www.gbv.de/wikis/cls/WinIBW3>.
+
+=head1 EXAMPLES
+
+winib2wpica -prettyxml mydownload.txt
+winib2wpica -utf8 -out mydownload.pica mydownload.txt
 
 =head1 AUTHOR
 

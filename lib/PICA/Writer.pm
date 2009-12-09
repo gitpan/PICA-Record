@@ -26,6 +26,7 @@ and fields is counted so you can also use the class as a simple counter.
   $writer->start();  # called implicitely by default
 
   $writer->write( $record );
+  $writer->write( @records );
   $writer->write( $field1, $field2, $field3 );
   $writer->write( $comment, $record );
 

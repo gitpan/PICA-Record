@@ -383,11 +383,11 @@ auto-vivification you must check for the existence of the subfield prior to
 update.
 
   if ( $field->subfield( 'a' ) ) {
-    $field->update( 'a' => 'Cryptonomicon' );
+      $field->update( 'a' => 'Cryptonomicon' );
   }
 
-Note: when doing subfield updates be aware that C<update()> will only
-update the first occurrence. If you need to do anything more complicated
+When doing subfield updates be aware that C<update()> will only update 
+the first occurrence! If you need to do anything more complicated
 you will probably need to create a new field and use C<replace()>.
 
 Returns the number of items modified.

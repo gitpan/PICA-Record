@@ -51,6 +51,7 @@ t/files/minimal.iso-8859-2
 t/files/cjk.pica
 t/files/kochbuch.pica
 t/files/record.xml
+t/files/records.xml
 t/files/graveyard.pica
 t/files/graveyard.xml
 t/files/searchRetrieveResponse-1.xml

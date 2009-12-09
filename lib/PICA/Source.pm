@@ -7,7 +7,7 @@ PICA::Source - Data source that can be queried for PICA+ records
 =cut
 
 use strict;
-our $VERSION = "0.52";
+our $VERSION = "0.53";
 
 =head1 SYNOPSIS
 
@@ -42,7 +42,7 @@ use Unicode::Normalize qw(NFC);
 
 Create a new Server. You can specify an SRU interface with C<SRU>, 
 a Z39.50 server with C<Z3950>, an unAPI base url with C<unAPI> or a
-raw PICA PSI interface with c<PSI>. Optional parameters include
+raw PICA PSI interface with C<PSI>. Optional parameters include
 C<user> and C<password> for authentification. If you provide a C<config>
 parameter, configuration parameters will read from a file.
 
@@ -150,11 +150,15 @@ sub cqlQuery {
     my $baseurl = $self->{SRU} . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
 
     my $startRecord = 1;
+    if ($xmlparser->{offset} > 0) {
+        $startRecord += $xmlparser->{offset};
+        $xmlparser->{offset} = 0;
+    }
     while(1) {
         my $options = "&startRecord=$startRecord";
         my $url = $baseurl . "&query=" . $cql . $options;
 
-        # print "$url\n"; # TODO: logging
+         print "$url\n"; # TODO: logging
 
         my $xml = LWP::Simple::get( $url );
         croak("SRU Request failed $url") unless $xml; # TODO: don't croak?
@@ -221,6 +225,34 @@ sub z3950Query {
         return $parser if $parser->finished();
     }
     return $parser;
+}
+
+=head2 iktQuery ( $ikt, $term )
+
+Search a source by IKT (search index) and search term. The current implementation
+only returns the first record. This method does only work for PSI source.
+
+=cut
+
+sub iktQuery {
+    my ($self, $ikt, $term) = @_;
+
+    croak('No PSI interface defined') unless $self->{PSI};
+
+    $ikt = url_encode($ikt);
+    $term =  url_encode($term);
+    # $term =~ s/\//\\\//; # escape / => \/
+
+    my $url = $self->{PSI}
+            . "/PLAIN=ON/CHARSET=UTF8/PLAINTTLCHARSET=UTF8/"
+            . "CMD?ACT=SRCHA&IKT=$ikt&TRM=$term";
+    my $raw = get($url);
+    utf8::decode($raw);
+    $raw = NFC($raw); # compose combining chars  
+    utf8::upgrade($raw);
+    my $record = eval { PICA::Record->new( $raw ); };
+    
+    return ($record);
 }
 
 =head2 baseURL

@@ -2,7 +2,7 @@
 
 use strict;
 
-use Test::More tests => 18;
+use Test::More qw(no_plan);
 
 use_ok( 'PICA::XMLParser' );
 use_ok( 'PICA::Parser' );
@@ -96,6 +96,30 @@ ok( $parser->counter == 2, "proceed" );
 # parse with collection element and namespace
 ($record) = PICA::Parser->parsefile("$files/graveyard.xml")->records();
 is( $record->ppn, '588923168', "ppn (xml)" );
+
+# parse a collection of records
+$xmlfile = "$files/records.xml";
+my @collection = PICA::Parser->parsefile($xmlfile)->records();
+is( scalar @collection, 2, "parsed multiple records" );
+is( $collection[0], "021A \$0Test 1\n");
+is( $collection[1], "021A \$0Test 2\n");
+
+@collection = readpicarecord($xmlfile);
+is( scalar @collection, 1, "parsed the first record with readpicarecord" );
+is( $collection[0], "021A \$0Test 1\n");
+
+use PICA::Parser qw(parsefile);
+@collection = parsefile($xmlfile)->records();
+is( scalar @collection, 2, "parsed multiple records with parsefile" );
+is( $collection[0], "021A \$0Test 1\n");
+is( $collection[1], "021A \$0Test 2\n");
+
+@collection = readpicarecord( $xmlfile, Limit => 99 );
+is( scalar @collection, 2, "parsed multiple records with readpicarecord" );
+
+@collection = ();
+PICA::Parser->parsefile( $xmlfile, Collection => sub { @collection = @_; } );
+is( scalar @collection, 2, "parsed multiple records with collection handler" );
 
 __END__
 <?xml version="1.0"?>

@@ -47,6 +47,11 @@ This module contains a parser to parse PICA+ XML. Up to now
 PICA+ XML is not fully standarized yet so this parser may 
 slightly change in the future.
 
+This module can read multiple collections per file or data 
+stream but only the records of the current collection are
+saved and returned with the <records> method. Use the 
+C<Collection> handler to parse files with multiple collections.
+
 =cut
 
 use PICA::Field;
@@ -59,7 +64,9 @@ use Carp qw(croak);
 =head2 new ( [ %params ] )
 
 Creates a new Parser. See L<PICA::Parser> for a description of 
-parameters to define handlers (Field and Record).
+parameters to define handlers (Field and Record). In addition
+this parser supports the C<Collection> handler that is called
+on a C<collection> end tag.
 
 =cut
 
@@ -68,7 +75,6 @@ sub new {
     $class = ref $class || $class;
 
     my $self = {
-        collection => {},
         record => {},
         fields => {},
 
@@ -85,6 +91,7 @@ sub new {
         # Handlers
         field_handler  => $params{Field} ? $params{Field} : undef,
         record_handler => $params{Record} ? $params{Record} : undef,
+        collection_handler => $params{Collection} ? $params{Collection} : undef,
 
         proceed => $params{Proceed} ? $params{Proceed} : 0,
 
@@ -236,13 +243,12 @@ Called at the beginning.
 =cut
 
 sub init_handler {
-  my ($self, $parser) = @_;
+    my ($self, $parser) = @_;
 
-  $self->{subfield_code} = "";
-  $self->{tag} = "";
-  $self->{occurrence} = "";
-  $self->{record} = ();
-  $self->{collection} = ();
+    $self->{subfield_code} = "";
+    $self->{tag} = "";
+    $self->{occurrence} = "";
+    $self->{record} = ();
 }
 
 =head2 final_handler
@@ -252,7 +258,7 @@ Called at the end. Does nothing so far.
 =cut
 
 sub final_handler {
-  # my ($self, $parser) = @_;
+    my ($self, $parser) = @_;
 }
 
 =head2 start_handler
@@ -352,7 +358,8 @@ sub end_handler {
         }
 
     } elsif ($name eq "collection") {
-      # TODO
+        $self->{collection_handler}( $self->records() )
+            if $self->{collection_handler};
     } else {
         croak("Unknown element '$name'" . $self->_getPosition($parser));
     }

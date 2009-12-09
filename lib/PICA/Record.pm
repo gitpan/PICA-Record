@@ -13,7 +13,7 @@ our @EXPORT = qw(readpicarecord writepicarecord);
 our @EXPORT_OK = qw(picarecord);
 our %EXPORT_TAGS = (all => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.52';
+our $VERSION = '0.53';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);
@@ -111,7 +111,11 @@ have already specified another encoding layer:
 If you read or write from Perl strings, UTF-8 is never implied. This means
 you must explicitely enable utf8 on your strings. As long as you read and
 write PICA record data from files and other sources or stores you should not
-need to do anything, but if you modify records in your scripts, use utf8;
+need to do anything, but if you modify records in your scripts, use utf8.
+
+If you download PICA+ records with the WinIBW3 client software, you may first
+need to convert the records to valid PICA+ syntax. For this reason this module
+contains the script C<winibw2pica>.
 
 =head1 SYNOPSIS
 
@@ -1014,16 +1018,29 @@ module via:
 
   use PICA::Record qw(:all);
 
-=head2 readpicarecord ( $filename )
+=head2 readpicarecord ( $filename [, %options ] )
 
 Read a single record from a file. Returns a non-empty PICA::Record
-object or undef.
+object or undef. Shortcut for:
+
+  PICA::Parser->parsefile( $filename, Limit => 1 )->records();
+
+In array context you can use this method as shortcut to read multiple
+records if you specify a C<Limit> parameter. use C<Limit=&gt;0> to read
+all records from a file. The following statements are equivalent:
+
+  @records = readpicarecord( $filename, Limit => 0 );
+  @records = PICA::Parser->parsefile( $filename )->records()
 
 =cut
 
 sub readpicarecord {
-    my $file = shift;
-    my ($record) = PICA::Parser->parsefile( $file, Limit => 1 )->records();
+    my ($file, %options) = @_;
+    if ( wantarray and defined $options{Limit} ) {
+        return PICA::Parser->parsefile( $file, %options )->records();
+    }
+    $options{Limit} = 1;
+    my ($record) = PICA::Parser->parsefile( $file, %options )->records();
     return undef unless $record and not $record->empty;
     return $record;
 }

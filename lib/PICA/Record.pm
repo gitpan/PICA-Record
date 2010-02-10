@@ -7,13 +7,14 @@ PICA::Record - Perl extension for handling PICA+ records
 =cut
 
 use strict;
+use utf8;
 
 use base qw(Exporter);
 our @EXPORT = qw(readpicarecord writepicarecord);
-our @EXPORT_OK = qw(picarecord);
+our @EXPORT_OK = qw(picarecord pgrep pmap);
 our %EXPORT_TAGS = (all => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.53';
+our $VERSION = '0.54';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);
@@ -31,6 +32,8 @@ use Carp qw(croak confess);
 use overload 
     'bool' => sub { ! $_[0]->empty },
     '""'   => sub { $_[0]->as_string };
+
+use sort 'stable';
 
 =head1 INTRODUCTION
 
@@ -170,12 +173,15 @@ my $append_field = sub {
     if ( $field->tag eq '003@' ) {
         $self->{_ppn} = $field->sf('0');
         if ( $self->field('003@') ) {
-            $self->replace( '003@', $field );
-            return;
+            $self->update( '003@', $field );
+            return 0;
         }
     }
-    # TODO: limit occ and iln, epn 
+    # TODO: limit occ and iln, epn
+    return 0 if $field->empty;
+
     push(@{ $self->{_fields} }, $field);
+    return 1;
 };
 
 # private method to compile and cache a regular expression
@@ -197,7 +203,7 @@ my $get_regex = sub {
 };
 
 
-=head1 CONSTRUCTOR
+=head1 CONSTRUCTORS
 
 =head2 new ( [ ...data... | $filehandle ] )
 
@@ -269,7 +275,9 @@ sub new {
 
 =head2 copy
 
-Returns a clone of this record by copying all fields.
+Returns a clone of a record by copying all fields.
+
+  $newrecord = $record->copy;
 
 =cut
 
@@ -278,7 +286,7 @@ sub copy {
     return PICA::Record->new( $self );
 }
 
-=head2 ACCESSOR METHODS
+=head1 ACCESSOR METHODS
 
 =head2 field ( [ $limit, ] { $field }+ [ $filter ] ) or f ( ... )
 
@@ -449,45 +457,15 @@ sub all_fields() {
     return @{$self->{_fields}};
 }
 
-=head2 ppn ( [ $ppn ] )
+=head2 size
 
-Get or set the identifier (PPN) of this record (field 003@, subfield 0).
-This is equivalent to C<$self->subfield('003@$0')> and always returns a 
-scalar or undef.
+Returns the number of fields in this record.
 
 =cut
 
-sub ppn {
+sub size {
     my $self = shift;
-    $append_field->( $self, PICA::Field->new('003@', '0' => $_[0]) ) 
-        if defined $_[0];
-    return $self->{_ppn};
-}
-
-=head2 epn
-
-Get zero or more EPNs (item numbers) of this record, which is field 203@/.., subfield 0.
-Returns the first EPN (or undef) in scalar context or a list in array context. Each copy 
-record (get them with method items) should have only one EPN.
-
-=cut
-
-sub epn {
-    my $self = shift;
-    return $self->subfield('203@/..$0');
-}
-
-=head2 iln
-
-Get zero or more ILNs (internal library numbers) of this record, which is field 101@$a.
-Returns the first ILN (or undef) in scalar context or a list in array context. Each holdings record is identified by its ILN.
-
-=cut
-
-sub iln {
-    # TODO: set ILN with this method and check uniqueness
-    my $self = shift;
-    return $self->subfield('101@$a');
+    return 1 * @{$self->{_fields}};
 }
 
 =head2 occurrence  or  occ
@@ -507,13 +485,13 @@ sub occ {
     return shift->occurrence;
 }
 
-=head2 main_record
+=head2 main
 
 Get the main record (level 0, all tags starting with '0').
 
 =cut
 
-sub main_record {
+sub main {
     my $self = shift;
     my @fields = $self->field("0...(/..)?");
 
@@ -557,14 +535,6 @@ sub holdings {
   return $iln ? $holdings[0] : @holdings;
 }
 
-=head2 local_records
-
-Alias for method holdings (deprecated).
-
-=cut
-
-*local_records = *holdings;
-
 =head2 items
 
 Get an array of L<PICA::Record> objects with fields of each copy/item
@@ -603,17 +573,9 @@ sub items {
   return @copies;
 }
 
-=head2 copy_records
-
-Alias for method items (deprecated, use C<items> instead).
-
-=cut
-
-*copy_records = *items;
-
 =head2 empty
 
-Return true if the record is empty (no fields or all fields empty)
+Return true if the record is empty (no fields or all fields empty).
 
 =cut
 
@@ -625,44 +587,65 @@ sub empty() {
     return 1;
 }
 
-=head1 MODIFICATION METHODS
+=head1 ACCESSOR AND MODIFCATION METHODS
 
-=head2 delete_fields ( <tagspec(s)> )
+=head2 ppn ( [ $ppn ] )
 
-Delete fields specified by tags. You can also use wildcards, 
-see C<field()> for examples Returns the number of deleted fields.
+Get or set the identifier (PPN) of this record (field 003@, subfield 0).
+This is equivalent to C<$self-E<gt>subfield('003@$0')> and always returns a 
+scalar or undef. Pass C<undef> to remove the PPN.
 
 =cut
 
-sub delete_fields {
+sub ppn {
     my $self = shift;
-    my @specs = @_;
-
-    return 0 if !@specs;
-    my $c = 0;
-
-    for my $tag ( @specs ) {
-        my $regex = $get_regex->($tag);
-
-        my $i=0;
-        for my $maybe ( $self->all_fields ) {
-            if ( $maybe->tag() =~ $regex ) {
-                $self->{_ppn} = undef if $maybe->tag() eq '003@';
-                splice( @{$self->{_fields}}, $i, 1);
-                $c++;
-            } else {
-                $i++;
-            }
+    if ( @_ ) {
+        my $ppn = shift;
+        if (defined $ppn) { 
+            $append_field->( $self, PICA::Field->new('003@', '0' => $ppn) ) 
+        } else {
+            $self->remove('003@');
         }
-    } # for $tag
-
-    return $c;
+    }
+    return $self->{_ppn};
 }
+
+=head2 epn ( [ $epn[s] ] )
+
+Get zero or more EPNs (item numbers) of this record, which is field 203@/.., subfield 0.
+Returns the first EPN (or undef) in scalar context or a list in array context. Each copy 
+record (get them with method items) should have only one EPN.
+
+=cut
+
+sub epn {
+    my $self = shift;
+    #for(my $i=0; $i<@_; $i++) {
+    #    # TODO: add EPNs
+    #}
+    return $self->subfield('203@/..$0');
+}
+
+=head2 iln
+
+Get zero or more ILNs (internal library numbers) of this record, which is field 101@$a.
+Returns the first ILN (or undef) in scalar context or a list in array context. 
+Each holdings record is identified by its ILN.
+
+=cut
+
+sub iln {
+    # TODO: set ILN with this method and check uniqueness
+    my $self = shift;
+    return $self->subfield('101@$a');
+}
+
+=head1 MODIFICATION METHODS
 
 =head2 append ( ...fields or records... )
 
 Appends one or more fields to the end of the record. Parameters can be
-L<PICA::Field> objects or parameters that are passed to C<PICA::Field->new>.
+L<PICA::Field> objects or parameters that are passed to C<PICA::Field-E<gt>new>.
 
     my $field = PICA::Field->new( '037A','a' => 'My note' );
     $record->append( $field );
@@ -686,7 +669,7 @@ directly used:
 
     my $field = PICA::Field->new('037A','a' => 'My note');
     $record->append( $field );
-    $field->replace( 'a' => 'Your note' ); # Also changes $record's field!
+    $field->update( 'a' => 'Your note' ); # Also changes $record's field!
 
 You can avoid this by cloning fields or by using the appendif method:
 
@@ -710,15 +693,13 @@ sub append {
     while (@_) {
         # Append a field (whithout creating a copy)
         while (@_ and ref($_[0]) eq 'PICA::Field') {
-            $append_field->( $self, shift );
-            $c++;
+            $c += $append_field->( $self, shift );
         }
         # Append a whole record (copy all its fields)
         while (@_ and ref($_[0]) eq 'PICA::Record') {
             my $record = shift;
             for my $field ( $record->all_fields ) {
-                $append_field->( $self, $field->copy );
-                $c++;
+                $c += $append_field->( $self, $field->copy );
             }
         }
         if (@_) {
@@ -733,9 +714,7 @@ sub append {
                 # pass croak without including Record.pm at the stack trace
                 local $Carp::CarpLevel = 1;
 
-                $append_field->( $self, PICA::Field->new( @params ) );
-
-                $c++;
+                $c += $append_field->( $self, PICA::Field->new( @params ) );
             }
         }
     }
@@ -773,7 +752,7 @@ sub appendif {
 Replace a field. You must pass a tag and a field. By default only the first
 matching field will be replaced, so be sure not to replace repeatable fields.
 If you pass a code reference, the code will be called for each field and the
-field is replaced by the result.
+field is replaced by the result unless the result is C<undef>.
 
 =cut
 
@@ -810,27 +789,62 @@ sub update {
     }
 }
 
-=head2 replace
+=head2 remove ( <tagspec(s)> )
 
-Alias for update (deprecated, use C<update> instead)
+Delete fields specified by tags. You can also use wildcards, and compiled
+regular expressions. see C<field()> for examples Returns the number of 
+deleted fields.
 
 =cut
 
-*replace = *update;
+sub remove {
+    my $self = shift;
+    my @specs = @_;
+
+    return 0 if !@specs;
+    my $c = 0;
+
+    for my $tag ( @specs ) {
+        my $regex = $get_regex->($tag);
+
+        my $i=0;
+        for my $maybe ( $self->all_fields ) {
+            if ( $maybe->tag() =~ $regex ) {
+                $self->{_ppn} = undef if $maybe->tag() eq '003@';
+                splice( @{$self->{_fields}}, $i, 1);
+                $c++;
+            } else {
+                $i++;
+            }
+        }
+    } # for $tag
+
+    return $c;
+}
 
 =head2 sort
 
-Sort all fields. Most times the order of fields is not changed and
-not relevant but sorted fields may be helpful for viewing records.
+Sort the fields of this records. Respects level 0, 1, and 2.
 
 =cut
 
 sub sort {
     my $self = shift;
 
-    # TODO: sort holdings independently!
+    my $main = $self->main;
 
-    @{$self->{_fields}} = sort {$a->tag() cmp $b->tag()} @{$self->{_fields}};
+    # first holdings with ILN (sorted by ILN), then holdings without ILN
+    my @holdings = sort { $a->iln <=> $b->iln }
+                   grep { defined $_->iln } 
+                   $self->holdings;
+    my @hx = grep { not defined $_->iln } $self->holdings;
+    push @holdings, @hx if @hx;
+
+    @{$self->{_fields}} = sort {$a->tag() cmp $b->tag()} @{$main->{_fields}};
+
+    foreach my $h ( @holdings ) {
+        push @{$self->{_fields}}, sort {$a->tag() cmp $b->tag()} @{$h->{_fields}};
+    }
 }
 
 =head2 add_headers ( [ %options ] )
@@ -896,15 +910,6 @@ sub as_string {
     }
     return join('', @lines);
 }
-
-=head2 to_string ( [ %options ] )
-
-Alias for as_string (deprecated, use C<as_string> instead)
-
-=cut
-
-sub to_string { as_string( @_ ); }
-
 
 =head2 normalized ( [ $prefix ] )
 
@@ -1013,10 +1018,67 @@ sub write {
 
 The functions readpicarecord and writepicarecord are exported by default.
 On request you can also export the function picarecord which is a shortcut
-for the constructor PICA::Record::new. To export all functions, import the 
-module via:
+for the constructor PICA::Record::new and the functions pgrep and pmap.
+To export all functions, import the module via:
 
   use PICA::Record qw(:all);
+
+=head2 pgrep { COND } $record
+
+Evaluates the COND for each field of C<$record> (locally setting $_ to each field)
+and returns a new PICA::Record containing only those fields that match. Instead of
+a PICA::Record field you can also pass any values that will be passed to the record
+constructor. An example:
+
+  # all fields that contain a subfield 'a' which starts with '2'
+  pgrep { $_ =~ /^2/ if ($_ = $_->sf('a')); } $record;
+
+  # all fields that contain a subfield '0' in level 0
+  pgrep { defined $_->sf('0') } $record->main;
+
+=cut
+
+sub pgrep (&@) {
+    my $block  = shift;
+    my $record = (@_ == 1 and UNIVERSAL::isa( $_[0],'PICA::Record' )) 
+               ? $_[0] : PICA::Record->new( @_ );
+    my @fields;
+
+    for my $f ( $record->all_fields ) {
+        local $_ = $f;
+        push @fields, $f if $block->();
+    }
+
+    return PICA::Record->new( @fields );
+}
+
+=head2 pmap { COND } $record
+
+Evaluates the COND for each field of C<$record> (locally setting $_ to each field),
+treats the return value as L<PICA::Field> (optionally passed to its constructir),
+and returns a new record build if this fields. Instead of a PICA::Record field you
+can also pass any values that will be passed to the record constructor. 
+
+=cut
+
+sub pmap (&@) {
+    my $block  = shift;
+    my $record = (@_ == 1 and UNIVERSAL::isa( $_[0],'PICA::Record' )) 
+               ? $_[0] : PICA::Record->new( @_ );
+    my @fields;
+
+    for my $f ( $record->all_fields ) {
+        local $_ = $f;
+        my @r = $block->();
+        if (@r == 1 and UNIVERSAL::isa( $_[0],'PICA::Field' )) {
+            push @fields, $r[0];
+        } else {
+            push @fields, PICA::Field->new( @r );
+        }
+    }
+
+    return PICA::Record->new( @fields );
+}
 
 =head2 readpicarecord ( $filename [, %options ] )
 
@@ -1067,6 +1129,33 @@ Shortcut for PICA::Record->new( ... )
 
 *picarecord = *new;
 
+
+=head1 DEPRECATED ALIASES
+
+=head2 main_record
+
+Alias for C<main>.
+
+=cut
+
+*main_record = *main;
+
+=head2 delete_fields ( <tagspec(s)> )
+
+Alias for C<delete>.
+
+=cut
+
+*delete_fields = *remove;
+
+=head2 to_string ( [ %options ] )
+
+Alias for C<as_string>.
+
+=cut
+
+sub to_string { as_string( @_ ); }
+
 1;
 
 =head1 SEE ALSO
@@ -1083,7 +1172,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2010 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

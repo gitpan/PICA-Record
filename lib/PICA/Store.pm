@@ -13,7 +13,7 @@ use PICA::SQLiteStore;
 use Carp qw(croak);
 use Cwd qw(cwd abs_path);
 
-our $VERSION = '0.48';
+our $VERSION = '0.49';
 
 =head1 DESCRIPTION
 
@@ -49,37 +49,6 @@ later include WebDAV, and REST (for instance Jangle).
 
 =cut
 
-our $readconfigfile = sub {
-    my $params = shift; # hash reference
-
-    return unless exists $params->{conf} or exists $params->{config};
-
-    $params->{config} = $params->{conf} unless defined $params->{config};
-
-    if ( not defined $params->{config} ) {
-        if ($ENV{PICASTORE}) {
-            $params->{config} = $ENV{PICASTORE};
-        } elsif ( -e cwd.'/picastore.conf' ) {
-            $params->{config} = cwd.'/picastore.conf';
-        }
-    }
-
-    my $cfile = $params->{config};
-    return unless defined $cfile;
-
-    my %config;
-
-    croak("config file not found: $cfile") unless -e $cfile;
-    Config::Simple->import_from( $cfile, \%config)
-        or croak( "Failed to parse config file $cfile" );
-
-    while (my ($key, $value) = each %config) {
-        $key =~ s/default.//; # remove default namespace
-        # TODO: add support of blocks/namespaces in config file
-        $params->{$key} = $value unless exists $params->{$key};
-    }
-};
-
 =head1 METHODS
 
 =head2 new ( %parameters )
@@ -89,7 +58,7 @@ Return a new PICA::Store. You must either specify a parameter named
 to get a L<PICA::SQLiteStore>. Alternatively you can specify a
 parameter named 'config' that points to a configuration file. 
 If you set this parameter to undef, the file will be searched as
-environment variable PICASTORE or picastore.conf in the current 
+environment variable PICASTORE or pica.conf in the current 
 directory.
 
 =cut
@@ -97,7 +66,7 @@ directory.
 sub new {
     my ($class, %params) = (@_);
 
-    $readconfigfile->( \%params )
+    readconfigfile( \%params, $ENV{PICASTORE} )
         if exists $params{config} or exists $params{conf} ;
 
     return PICA::SOAPClient->new( %params ) if defined $params{webcat};
@@ -173,6 +142,59 @@ sub access {
 
     return $self;
 }
+
+=head2 about
+
+Return a string with printable information about this store, for
+instance a name and/or a base URL.
+
+=cut
+
+sub about {
+    my $self = shift;
+    return ref($self);
+}
+
+=head1 INTERNAL FUNCTIONS
+
+=head2 readconfigfile ( $hashref, $defaultfile )
+
+Expand a hash with config parameters by reading from a config file.
+The config file may be set in C<$hashref-E<gt>{config}> or the file
+C<$defaultfile> or in the file C<pica.conf> in the current directory.
+
+=cut
+
+sub readconfigfile {
+    my ($params, $defaultfile) = @_;
+
+    return unless exists $params->{conf} or exists $params->{config};
+
+    $params->{config} = $params->{conf} unless defined $params->{config};
+
+    if ( not defined $params->{config} ) {
+        if ( $defaultfile ) {
+            $params->{config} = $defaultfile;
+        } elsif (-e cwd.'/pica.conf' ) {
+            $params->{config} = cwd.'/pica.conf' ;   
+        }
+    }
+
+    my $cfile = $params->{config};
+    return unless defined $cfile;
+
+    my %config;
+
+    croak("config file not found: $cfile") unless -e $cfile;
+    Config::Simple->import_from( $cfile, \%config)
+        or croak( "Failed to parse config file $cfile" );
+
+    while (my ($key, $value) = each %config) {
+        $key =~ s/default.//; # remove default namespace
+        # TODO: add support of blocks/namespaces in config file
+        $params->{$key} = $value unless exists $params->{$key};
+    }
+};
 
 1;
 

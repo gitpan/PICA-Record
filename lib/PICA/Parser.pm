@@ -310,7 +310,7 @@ sub enable_binmode_encoding {
     foreach my $layer ( PerlIO::get_layers( $fh ) ) {
         return if $layer =~ /^encoding|^utf8/;
     }
-    binmode $fh, ':utf8';
+    binmode ($fh, ':utf8');
 }
 
 =head2 _getparser ( [ %params] )

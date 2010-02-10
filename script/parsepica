@@ -8,22 +8,47 @@ parsepica - parse PICA+ data and print summary information
 
 use strict;
 
-our $VERSION = '0.23';
+our $VERSION = '0.25';
 
-# include PICA packages
+=head1 SYNOPSIS
+
+parsepica [options] [file(s) or SRU-Server(s) and queries(s)..]
+
+=head1 OPTIONS
+
+ -help          brief help message
+ -man           full documentation with examples
+ -log FILE      print logging to a given file ('-': STDOUT, default)
+ -input FILE    file with input files on each line ('-': STDIN)
+ -output FILE   print all valid records to a given file ('-': STDOUT)
+ -xml           output of records in XML
+ -pretty        pretty output (useful for PICA XML)
+ -quiet         supress logging
+ -select FIELD  select a specific field or subfield (no XML output possible yet)
+ -config FILE   read configuration from a file ('-': search default file)
+ -auto          use default config file $PICASOURCE or ./pica.conf
+
+Not fully implemented yet:
+ -sru SRU       fetch records via SRU. command line arguments are cql
+                statements instead of files
+ -z3950         fetch records via Z39.50
+
+=cut
+
 use PICA::Record;
 use PICA::Field;
 use PICA::Parser;
 use PICA::Writer;
 use PICA::Source;
+use PICA::Store;
 
 # include other packages
 use Getopt::Long;
 use Pod::Usage;
 
-my ($outfilename, $logfile, $inputlistfile, $verbose);
+my ($outfilename, $logfile, $inputlistfile, $verbose, $configfile);
 my ($quiet, $help, $man, $select, $xmlmode, $loosemode, $countmode, $pretty);
-my ($unapimode);
+my ($unapimode, $defaultconfig);
 my ($limit, $offset);
 my %fieldstat_a; # all
 my %fieldstat_e; # exist?
@@ -32,7 +57,8 @@ my %fieldstat_r; # number of records
 # TODO read settings from config file (for instance SRU)
 
 GetOptions(
-    # TODO: add config file
+    'auto' => \$defaultconfig,
+    'config:s' => \$configfile,
     "output:s" => \$outfilename,   # print valid records to a file
     "log:s" => \$logfile,          # print messages to a file
     "files:s" => \$inputlistfile,  # read names of input files from a file
@@ -52,15 +78,18 @@ pod2usage(1) if $help;
 pod2usage(-verbose => 2) if $man;
 
 # Logfile
-if ($logfile and $logfile ne "-") {
+if ( defined $logfile and $logfile ne "-") {
     open LOG, ">$logfile" 
         or die("Error opening $logfile\n");
 } elsif( not $quiet and ($logfile eq "-" or $verbose) ) {
     *LOG = *STDOUT;
 } else {
     open LOG, '>/dev/null';
-
 }
+
+$configfile = '-' if $defaultconfig;
+my $source = PICA::Source->new( config => ($configfile eq '-' ? undef : $configfile) ) 
+    if $configfile;
 
 # Output writer
 $outfilename = "-" unless defined $outfilename;
@@ -113,7 +142,7 @@ if ($select) {
 my $remote_counter = 0;
 
 my %options;
-$options{Limit} = $limit if defined $limit;
+$options{Limit} = defined $limit ? $limit : 10;
 $options{Proceed} = 1;
 
 # init parser
@@ -130,54 +159,53 @@ if (@ARGV > 0) {
         print STDERR "You can only specify either an input file or a file list!\n";
         exit 0;
     }
+    if ( $source and $source->baseURL ) {
+        unshift @ARGV, $source->baseURL unless
+            $ARGV[0] =~ /^http:\/\// or
+            $ARGV[0] =~ /^[^\\:]+:\d+/;
+    }
     while (($filename = shift @ARGV)) {
-        my ($baseurl, $z3950host);
+        my $remote_parser;
         if ($filename =~ /^http:\/\//) { # SRU or unAPI (http://...)
-            $baseurl = $filename;
-        } elsif ($filename =~ /^[^\\:]+:\d+/) { # Z3950 (host:port[/db])
-            $z3950host = $filename;
-        }
-        if ($baseurl or $z3950host) {
-            my $query = shift @ARGV;
-            if (!$query) {
-                print STDERR "query missing!\n";
+            my $baseurl = $filename;
+            my $query = shift @ARGV || print STDERR "query missing!\n";
+
+            if ( $query =~ /=/) {
+                print LOG "SRU query '$query' to $baseurl\n";
+                my $server = PICA::Source->new( SRU => $baseurl );
+                $remote_parser = $server->cqlQuery( $query,
+                    # TODO: better pipe this to another parser (RecordParser)
+                    Field => $_field_handler,
+                    Record => $_record_handler
+                );
             } else {
-                my $remote_parser;
-                if ($baseurl && $query =~ /=/) {
-                    print LOG "SRU query '$query' to $baseurl\n";
-                    my $server = PICA::Source->new( SRU => $baseurl );
-                    $remote_parser = $server->cqlQuery( $query,
-                        # TODO: better pipe this to another parser (RecordParser)
-                        Field => $_field_handler,
-                        Record => $_record_handler
-                    );
-                } elsif ($baseurl) {
-                    my $r;
-                    if ($unapimode) {
-                        print LOG "unAPI query '$query' from $baseurl\n";
-                        my $source = PICA::Source->new( unAPI => $baseurl ); # TODO: document this
-                        $r = $source->getPPN($query,"gvk"); # TODO: prefix is bad unAPI usage
-                    } else {
-                        print LOG "PSI get PPN '$query' from $baseurl\n";
-                        my $source = PICA::Source->new( PSI => $baseurl ); # TODO: document this
-                        $r = $source->getPPN($query);
-                    }
-                    $parser->parsedata( $r ) if $r;
+                my $prefix = $unapimode ? "gvk" : ""; # TODO: prefix is bad unAPI usage
+                if ($unapimode) {
+                    print LOG "unAPI query '$query' from $baseurl\n";
+                    $source = PICA::Source->new( unAPI => $baseurl ); # TODO: document this
                 } else {
-                    print LOG "Z3950 query '$query' to $z3950host\n";
-                    my $server = PICA::Source->new( Z3950 => $z3950host );
-                    $remote_parser = $server->z3950Query( $query,
-                        # TODO: better pipe this to another parser (RecordParser)
-                        Field => $_field_handler,
-                        Record => $_record_handler
-                    );
+                    print LOG "PSI get PPN '$query' from $baseurl\n";
+                    $source = PICA::Source->new( PSI => $baseurl ); # TODO: document this
                 }
-                $remote_counter += $remote_parser->counter() if defined $remote_parser;
-            }
+                my $r = $source->getPPN( $query, $prefix );
+                $parser->parsedata( $r ) if $r;
+            } 
+        } elsif ($filename =~ /^[^\\:]+:\d+/) { # Z3950 (host:port[/db])
+            my $z3950host = $filename;
+            my $query = shift @ARGV || print STDERR "query missing!\n";
+
+            print LOG "Z3950 query '$query' to $z3950host\n";
+            my $server = PICA::Source->new( Z3950 => $z3950host );
+            $remote_parser = $server->z3950Query( $query,
+                # TODO: better pipe this to another parser (RecordParser)
+                Field => $_field_handler,
+                Record => $_record_handler
+            );
         } else {
             print LOG "Reading $filename\n";
             $parser->parsefile($filename);
         }
+        $remote_counter += $remote_parser->counter() if defined $remote_parser;
     }
 } elsif ($inputlistfile) {
     while(<INFILES>) {
@@ -276,28 +304,6 @@ sub record_handler {
     }
 }
 
-
-=head1 SYNOPSIS
-
-parsepica [options] [file(s) or SRU-Server(s) and queries(s)..]
-
-=head1 OPTIONS
-
- -help          brief help message
- -man           full documentation with examples
- -log FILE      print logging to a given file ('-': STDOUT, default)
- -input FILE    file with input files on each line ('-': STDIN)
- -output FILE   print all valid records to a given file ('-': STDOUT)
- -xml           output of records in XML
- -pretty        pretty output (useful for PICA XML)
- -quiet         supress logging
- -select FIELD  select a specific field or subfield (no XML output possible yet)
-
-Not fully implemented yet:
- -sru SRU       fetch records via SRU. command line arguments are cql
-                statements instead of files
- -z3950         fetch records via Z39.50
-
 =head1 DESCRIPTION
 
 This script demonstrates how to use the Perl PICA module. It can be used 
@@ -328,6 +334,11 @@ Select all fields '021A' from 'picadata' and write to STDOUT.
 =item parsepica http://gso.gbv.de/sru/DB=2.1/ pica.isb=3-423-31039-1
 
 Get records with ISBN 3-423-31039-1 via SRU.
+
+=item parsepica -c pica.isb=3-423-31039-1
+
+Get records with ISBN 3-423-31039-1 via SRU if the default config file
+contains C<SRU =.http://gso.gbv.de/sru/DB=2.1/>.
 
 =back
 

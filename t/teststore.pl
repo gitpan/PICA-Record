@@ -7,7 +7,7 @@ sub teststore {
     my (%result, $record);
 
     my $r = PICA::Record::readpicarecord('t/files/minimal.pica');
-    $r->delete_fields('003@');
+    $r->remove('003@');
     my @records = (
         $r,
         #PICA::Record->new("002@ \$0Aau\n021A \$aDas zweite Kapital\n028A \$dKarl\$aMarx"),

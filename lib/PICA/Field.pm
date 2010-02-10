@@ -30,6 +30,8 @@ use overload
     'bool' => sub { ! $_[0]->empty; },
     '""'   => sub { $_[0]->as_string; };
 
+use sort 'stable';
+
 =head1 SYNOPSIS
 
   use PICA::Field;
@@ -92,7 +94,8 @@ sub new($) {
 
     my $self = bless {
         _tag => $tagno,
-        _occurrence => $occurrence
+        _occurrence => $occurrence,
+        _subfields => [],
     }, $class;
 
     $self->add(@_);
@@ -171,8 +174,10 @@ sub parse {
     elsif ( $sf eq '$' ) { $sfreg = '\$'; }
     elsif( $sf eq "\x83" ) { $sfreg = '\x83'; }
     elsif( $sf eq "\x9f" ) { $sfreg = '\x9f'; }
-    else {
-        croak("No or not allowed subfield indicator (ord: " . ord($sf) . ") specified");
+    elsif( $sf eq '') {
+        return $self->new($tagno,'');
+    } else {
+        croak("not allowed subfield indicator (ord: " . ord($sf) . ") specified");
     }
     $sfreg = '('.$sfreg.'[0-9a-zA-Z])';
 
@@ -351,8 +356,7 @@ sub add {
     my $self = shift;
     my $nfields = @_ / 2;
 
-    ($nfields >= 1)
-        or croak( "Missing at least one subfield" );
+    ($nfields >= 1) or return 0;
 
     for my $i ( 1..$nfields ) {
         my $offset = ($i-1)*2;
@@ -484,6 +488,8 @@ to a boolean value.
 sub empty {
     my $self = shift;
 
+    return 1 unless @{$self->{_subfields}};
+
     my @data = @{$self->{_subfields}};
 
     while ( defined( my $code = shift @data ) ) {
@@ -544,6 +550,44 @@ sub normalized() {
       endfield => $END_OF_FIELD,
       startsubfield => $SUBFIELD_INDICATOR
     );
+}
+
+=head2 sort ( [ $order ] )
+
+Sort subfields by subfield indicators. You can optionally specify an order as string of subfield codes.
+
+=cut
+
+sub sort {
+    my ($self, $order) = @_;
+    return unless @{$self->{_subfields}};
+    $order = "" unless defined $order;
+
+    my (%pos,$i);
+    for (split('',$order.'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')) {
+        $pos{$_} = $i++ unless defined $pos{$_};
+    }
+
+    my @sf = @{$self->{_subfields}};
+    my $n = @sf / 2 - 1;
+    my @sorted = ();
+
+    @sorted = sort { 
+        $pos{$sf[2*$a]} <=> $pos{$sf[2*$b]}
+    } (0..$n);
+
+    $self->{_subfields} = [ map { $sf[2*$_] => $sf[2*$_+1] } @sorted ];
+}
+
+=head2 size
+
+Returns the number of subfields (no matter if empty or not).
+
+=cut
+
+sub size {
+    my $self = shift;
+    return @{$self->{_subfields}} / 2;
 }
 
 =head2 as_string ( [ %params ] )
@@ -767,7 +811,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2010 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

@@ -28,7 +28,7 @@ use ExtUtils::MakeMaker;
     EXE_FILES       => [ 
         'script/parsepica', 
         'script/picaimport',
-	'script/winibw2pica',
+        'script/winibw2pica',
     ],
     dist            => {
         COMPRESS => 'gzip -9f',

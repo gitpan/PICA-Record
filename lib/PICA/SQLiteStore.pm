@@ -29,8 +29,8 @@ sub new {
     my $class = shift;
     my ($filename, %params) = (@_ % 2) ? (@_) : (undef, @_);
 
-    $PICA::Store::readconfigfile->( \%params )
-        if exists $params{config} or exists $params{conf};
+    PICA::Store::readconfigfile( \%params, $ENV{PICASTORE} )
+        if exists $params{config} or exists $params{conf} ;
 
     $filename = $params{SQLite} unless defined $filename;
 

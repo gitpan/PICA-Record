@@ -6,7 +6,7 @@ use utf8;
 use Test::More qw(no_plan);
 
 use PICA::Field;
-use PICA::Record;
+use PICA::Record qw(:all);
 use IO::File;
 
 my $files = "t/files";
@@ -33,12 +33,18 @@ my $record = new PICA::Record();
 isa_ok( $record, 'PICA::Record');
 ok( $record->empty, 'empty record' );
 ok( !$record, 'empty record (overload)' );
+is( $record->size, 0, "size 0");
 
 # append a field
 $record->append($field);
 is( $record->normalized(), $normalized, 'Record->normalized()');
 ok( !$record->empty, 'not empty record' );
 ok( $record, 'not empty record (overload)' );
+is( $record->size, 1, "size 1");
+
+# do not append empty fields
+is( $record->append( PICA::Field->new('123A') ), 0, "ignore empty fields");
+is( $record->normalized(), $normalized, "ignore empty fields");
 
 # directly pass a field to new()
 $record = PICA::Record->new($field);
@@ -69,6 +75,7 @@ $record->append(
         '037A','a' => 'Third note',
 );
 is( scalar $record->all_fields(), 4 , "Record->append()" );
+is( $record->size, 4, "size 4");
 
 is( $record->ppn(), undef, "ppn() not existing" );
 is( $record->epn(), undef, "epn() not existing" );
@@ -105,7 +112,7 @@ is_deeply( [ $record->values('037A_a') ], [ '1st note', '2nd note' ], 'values' )
 # clone constructor
 my $recordclone = PICA::Record->new($record);
 is( scalar $recordclone->all_fields(), 2 , "PICA::Record clone constructor" );
-$record->delete_fields('037A');
+$record->remove('037A');
 is( scalar $recordclone->all_fields(), 2 , "PICA::Record cloned a new object" );
 
 # occurrence
@@ -170,33 +177,33 @@ is_deeply( \@v, [ 'eng', 'foo' ], 'values (4)' );
 @v = $record->values( '010@', 'a', '111@$x' );
 is_deeply( \@v, [ 'eng', 'foo' ], 'values (5)' );
 
-### delete_fields
+### remove
 my $r = PICA::Record->new($record);
-$r->delete_fields("037A");
+$r->remove("037A");
 is( scalar $r->all_fields(), 3 , "delete()" );
 
 $r = PICA::Record->new($record);
-$r->delete_fields("0...");
+$r->remove("0...");
 is( scalar $r->all_fields(), 2 , "delete()" );
 
 $r = PICA::Record->new($record);
-$r->delete_fields("0..@","111@");
+$r->remove(qr/0..@/,"111@");
 is( scalar $r->all_fields(), 3 , "delete()" );
 
 ### replace fields
 $record = $testrecord;
-$record->replace('010@', PICA::Field->new('010@', 'a' => 'ger'));
-is( $record->subfield('010@$a'), 'ger', "replace field");
+$record->update('010@', PICA::Field->new('010@', 'a' => 'ger'));
+is( $record->subfield('010@$a'), 'ger', "update field");
 
-$record->replace('010@', 'a' => 'fra');
-is( $record->subfield('010@$a'), 'fra', "replace field");
+$record->update('010@', 'a' => 'fra');
+is( $record->subfield('010@$a'), 'fra', "update field");
 
-$record->replace('037A', sub { 
+$record->update('037A', sub { 
     return unless $_[0]->sf('a') =~ /^2nd/;
     PICA::Field->new('037A','a' => 'xxx');
 } );
 
-is_deeply( [ $record->sf('037A$a') ], [ '1st note', 'xxx' ], 'replace by code' );
+is_deeply( [ $record->sf('037A$a') ], [ '1st note', 'xxx' ], 'update by code' );
 
 ### parse normalized by autodetection
 open PICA, "$files/bib.pica"; # TODO: bib.pica is bytestream, not character-stream!
@@ -259,8 +266,8 @@ $record->append('003@','0'=>'588923168');
 my @ppn = $record->subfield('003@_0');
 is_deeply( \@ppn, [ '588923168' ], 'only one PPN' );
 
-$record->replace('003@','0'=>'123456789');
-is( $record->ppn, '123456789', 'replace PPN' );
+$record->update('003@','0'=>'123456789');
+is( $record->ppn, '123456789', 'update PPN' );
 
 
 ### EPN
@@ -277,13 +284,9 @@ $record = PICA::Record->new( IO::File->new("$files/bgb.example") );
 
 my @holdings = $record->holdings();
 is( scalar @holdings, 56, 'holdings' );
-my @a = $record->local_records;
-is( scalar @a, scalar @holdings, 'local_records' );
 
 my @copies = $record->items();
 is( scalar @copies, 353, 'items' );
-@a = $record->copy_records;
-is( scalar @a, scalar @copies, 'copy_records' );
 
 is( scalar $holdings[0]->items(), 1, "items (1)");
 is( scalar $holdings[4]->items(), 2, "items (2)");
@@ -305,24 +308,70 @@ is( scalar @copies, 3, 'items' );
 
 ### UTF8 and encodings
 my $cjk = "我国民事立法的回顾与展望";
-$record = new PICA::Record( new IO::File("$files/cjk.pica") );
-is( $record->sf('021A_a'), $cjk, 'CJK record' );
+open CJK,"$files/cjk.pica";
+my @f = (\*CJK, new IO::File("$files/cjk.pica"));
+foreach my $fh (@f) {
+    $record = new PICA::Record( $fh );
+    is( $record->sf('021A_a'), $cjk, 'CJK record' );
+}
+close CJK;
+
+### pgrep and pmap
+
+@fields = ('037A', 'a' => '1st note', '037A', 'a' => '2nd note', '012A', 'x' => 'WTF' );
+$record = PICA::Record->new( @fields );
+
+$r2 = pgrep { $_ =~ /^2/ if ($_ = $_->sf('a')); } $record;
+is_deeply( $r2, PICA::Record->new('037A', 'a' => '2nd note'), 'pgrep');
+
+$r2 = pgrep { $_->tag eq '012A'; } @fields;
+is_deeply( $r2, PICA::Record->new('012A', 'x' => 'WTF'), 'pgrep' );
+
+$record = PICA::Record->new( @fields );
+$r2 = pmap { PICA::Field->new( $_->tag, 'x' => $_->sf('ax') ) } $record;
+
+$fields[1] = $fields[4] = 'x';
+is_deeply( $r2, PICA::Record->new(@fields) , 'pmap' );
+
+
+### sort
+$r = PICA::Record->new(
+  '101@','a'=>'123',
+  '203@/02','0'=>'543210',
+  '203@/01','0'=>'123456',
+  '021A','a' => 'bla',
+  '101@','a'=>'12',
+  '208@/01','a'=>'01-12-09',
+  '203@/01','0'=>'666666',
+  '102A','0'=>'x',
+);
+$r->sort;
+
+$r2 = PICA::Record->new(<<'PICA');
+021A $abla
+101@ $a12
+203@/01 $0666666
+208@/01 $a01-12-09
+101@ $a123
+203@/01 $0123456
+203@/02 $0543210
+102A $0x
+PICA
+
+is( "$r", "$r2", "sort" );
 
 
 __END__
 
-
 ### TODO: parse WinIBW output : this is possible via winibw2pica (test needed)
 if (1) {
   use PICA::Parser;
-
   PICA::Parser->parsefile( "$files/winibwsave.example", Record => sub { $record = shift; } );
   isa_ok( $record, 'PICA::Record' );
-
   # test bibliographic()
   my $main = $record->main_record();
   isa_ok( $main, 'PICA::Record' );
 }
-
 # TODO: test to_xml
+
 

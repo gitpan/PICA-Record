@@ -18,6 +18,7 @@ my ($field, $value, $writer, $string, $prefixmap);
 $field = PICA::Field->new("028A","9" => "117060275", "8" => "Martin Schrettinger", "d" => "Martin", "a" => "Schrettinger");
 isa_ok( $field, 'PICA::Field');
 is( $field->normalized(), $normalized, 'new with tag and list of subfields');
+is( $field->size, 4, "size 4");
 
 $field = PICA::Field->new( $plain );
 is( $field->normalized(), $normalized, 'new with plain PICA+');
@@ -111,6 +112,13 @@ $field->tag('012A');
 $field->update('9'=>'123456789');
 is( $fcopy->normalized(), $normalized, 'copy' );
 
+$field = PICA::Field->new("012A");
+ok( $field->empty, "empty field" );
+is( $field->size, 0, "size 0" );
+$field->add('a'=>'x');
+$field->add('a'=>'y');
+is( "$field", "012A \$ax\$ay\n", "repeated subfield" );
+
 $field = PICA::Field->new("028A","d" => "Karl", "a" => "Marx");
 isa_ok( $field, 'PICA::Field');
 ok( ! $field->empty, '!empty' );
@@ -128,7 +136,7 @@ ok( $field->empty, 'empty()' );
 is( join('', $field->empty_subfields() ), "da", 'empty_subfields' );
 is( $field->purged, undef, "purged empty field");
 
-# normally fields without subfields should not occur, but if...
+# empty fields without subfields
 is( $field->as_string(subfields=>'x'), "", "empty field");
 $field->{_subfields} = [];
 ok( $field->empty, 'empty field');
@@ -175,6 +183,13 @@ is_deeply ( \@sf, ['xx','yy'], 'Field->sf (multiple) - 4');
 $field = PICA::Field->new( '021A', 'a' => "This\nare\n\t\nlines" );
 is( $field->sf('a'), "This are lines", "newline in value (1)");
 is( $field, "021A \$aThis are lines\n", "newline in value (2)");
+
+$field = PICA::Field->new('123A','x'=>'3','x'=>'4','a'=>'2','A'=>'5','9'=>'1');
+$field->sort;
+
+is( "$field", '123A $91$a2$x3$x4$A5'."\n", "sort (default)" );
+$field->sort('Axa');
+is( "$field", '123A $A5$x3$x4$a2$91'."\n", "sort (custom)" );
 
 
 __DATA__

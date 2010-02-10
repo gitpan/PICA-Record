@@ -1,3 +1,10 @@
+0.54    2010-02-10
+        - added the useful functions pgrep and pmap
+        - removed deprecated methods (copy_record, local_records, replace)
+        - added parameter 'config' and 'auto' in parsepica
+        - added iktLink and ppnLink for PSI sources
+        - empty fields are allowed now
+        - fixed sorting of fields and subfields
 0.53    2009-12-09
         - minor additions to XMLParser and readpicarecord
         - extended winibw2pica to correctly read WinIBW3 "utf8"

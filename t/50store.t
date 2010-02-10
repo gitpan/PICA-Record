@@ -18,14 +18,28 @@ if ( $ENV{PICASTORE_TEST} ) {
 
     # create and update does not break UTF-8
     my $record = readpicarecord("t/files/minimal.pica");
-    $record->delete_fields('003@');
+    $record->remove('003@');
     my $record2 = PICA::Record->new( $record );
     my %result = $webcat->create( $record );
     my $ppn = $result{id};
+
     use utf8;
     $record->update('028A','d'=>'KÄRL','a'=>'MÖRX');
     %result = $webcat->update( $ppn, $record );
+    $result{record}->remove('001.') if $result{record};
     is( $result{record}, $record, "update does not break UTF-8" );
+
+    $record->update('028A','d'=>'X','a'=>'Y');
+    $record->ppn( $ppn );
+    %result = $webcat->update( $record );
+    $result{record}->remove('001.') if $result{record};
+    is( $record->ppn, $ppn, "PPN still there" );
+    $record->ppn( undef );
+    is( $result{record}, $record, "update with PPN in record" );
+
+
+    %result = $webcat->delete($ppn);
+    ok( $result{id}, "deleted $ppn" );
 
 } else {
     diag("Set PICASTORE_TEST to enable additional tests of PICA::Store!");
@@ -37,7 +51,7 @@ my $dir = tempdir( UNLINK => 1 );
 chdir $dir;
 
 my $fh;
-open $fh, ">picastore.conf";
+open $fh, ">pica.conf";
 print $fh "SQLite=tmp.db\n";
 close $fh;
 

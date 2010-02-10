@@ -82,7 +82,7 @@ is( scalar $record->all_fields(), 26, 'parse from function' );
 my $recordclone = $record;
 undef $record;
 PICA::Parser->parsedata( $recordclone, Record => \&handle_record );
-$recordclone->delete_fields('....');
+$recordclone->remove('....');
 is( scalar $record->all_fields(), 26 , "parse another PICA::Record" );
 
 # parse dump format
@@ -199,9 +199,9 @@ foreach my $junk ( @junks ) {
 
 foreach my $junk ( @junks ) {
     my $data = '021A $0Foo' . "\n$junk" . '021A $0Bar';
-    my $msg;
+    my $msg = "";
     my $parser = parsedata( $data, strict => 1, FieldError => sub { $msg = shift; return; } );
-    like( $msg, qr/No or not allowed subfield indicator/, 'junk in between not allowed in strict mode' );
+    ok( $msg, 'junk in between not allowed in strict mode' );
     is( $parser->counter, 1, 'junk in between not allowed in strict mode');
 
 }
@@ -280,7 +280,7 @@ push @r, readpicarecord( $filename );
 $fh = IO::File->new( "t/files/minimal.iso-8859-2" );
 binmode $fh,':encoding(iso-8859-2)';
 my $r = readpicarecord( $fh );
-$r->replace('021A', 'a' => 'Das $-Kapital mit ☎');
+$r->update('021A', 'a' => 'Das $-Kapital mit ☎');
 push @r, $r;
 
 is( scalar @r, 7, 'read a record in different ways' );

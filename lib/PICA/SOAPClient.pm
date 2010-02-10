@@ -9,13 +9,14 @@ PICA::SOAPClient - L<PICA::Store> via SOAP access (aka 'webcat')
 use strict;
 use warnings;
 
-our $VERSION = "0.45";
+our $VERSION = "0.46";
 
 use PICA::Record;
 use PICA::Store;
 use SOAP::Lite; # +trace => 'debug';
 use SOAP::Lite;
 use Carp qw(croak);
+use Cwd qw(cwd);
 use Encode qw(encode_utf8);
 
 our @ISA=qw(PICA::Store);
@@ -73,8 +74,8 @@ sub new {
     my ($soap, %params) = (@_ % 2) ? (@_) : (undef, @_);
     $params{SOAP} = $soap if defined $soap;
 
-    $PICA::Store::readconfigfile->( \%params )
-        if exists $params{config} or exists $params{conf};
+    PICA::Store::readconfigfile( \%params, $ENV{PICASTORE} )
+        if exists $params{config} or exists $params{conf} ;
 
     croak "Missing SOAP base url (webcat)" unless defined $params{webcat};
     $params{dbsid} = "" unless defined $params{dbsid};
@@ -91,7 +92,8 @@ sub new {
         'soap' => $soap,
         'format' => SOAP::Data->name( "format" )->type( string => "pp" ),
         'rectype_title' => SOAP::Data->name( "rectype" )->type( string => "title" ),
-        'rectype_entry' => SOAP::Data->name( "rectype" )->type( string => "entry" )
+        'rectype_entry' => SOAP::Data->name( "rectype" )->type( string => "entry" ),
+        'baseurl' => $params{webcat},
     }, $class;
 
     return $self->access( %params );
@@ -141,10 +143,11 @@ sub create {
     );
 }
 
-=head2 update ( $id, $record [, $version ] )
+=head2 update ( [ $id, ] $record [, $version ] )
 
 Update a record by ID, updated record (of type L<PICA::Record>),
-and version (of a previous get, create, or update command).
+and version (of a previous get, create, or update command). If
+no C<$id> parameter is given, it is taken from C<$record-E<gt>ppn>.
 
 Returns a hash with either 'errorcode' and 'errormessage'
 or a hash with 'id', 'record', and 'version'.
@@ -153,9 +156,19 @@ or a hash with 'id', 'record', and 'version'.
 
 sub update {
     my ($self, $id, $record, $version) = @_;
-    croak('update needs a PICA::Record object') unless ref($record) eq 'PICA::Record';
-
-    my $recorddata = encode_utf8( $record->to_string );
+    my $recorddata;
+    if ( UNIVERSAL::isa( $id, 'PICA::Record' ) ) { # TODO: Test this
+        $version = $record;
+        $record = $id;
+        $id = $id->ppn;
+        $record->ppn( undef );
+        $recorddata = encode_utf8( $record->to_string );
+        $record->ppn($id);
+    } else {
+        croak('update needs an ID and a PICA::Record object')
+          unless ref($record) eq 'PICA::Record';
+        $recorddata = encode_utf8( $record->to_string );
+    }
 
     if (not defined $version) {
         my %current = $self->get( $id );
@@ -203,6 +216,18 @@ sub access {
 
     return $self;
 }
+
+=head2 about
+
+Return a string "SOAPClient: $baseurl" with information about this store.
+
+=cut
+
+sub about {
+    my $self = shift;
+    return "CWS Webcat: " . $self->{baseurl};
+}
+
 
 =head1 INTERNAL METHODS
 

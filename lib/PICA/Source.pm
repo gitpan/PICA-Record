@@ -44,7 +44,9 @@ Create a new Server. You can specify an SRU interface with C<SRU>,
 a Z39.50 server with C<Z3950>, an unAPI base url with C<unAPI> or a
 raw PICA PSI interface with C<PSI>. Optional parameters include
 C<user> and C<password> for authentification. If you provide a C<config>
-parameter, configuration parameters will read from a file.
+parameter, configuration parameters will read from a file or from
+the file specified with the C<PICASOURCE> environment variable or
+from the file C<pica.conf> in the current directory.
 
 =cut
 
@@ -52,7 +54,7 @@ sub new {
     my ($class, %params) = @_;
     $class = ref $class || $class;
 
-    $PICA::Store::readconfigfile->( \%params )
+    PICA::Store::readconfigfile( \%params, $ENV{PICASOURCE} )
         if exists $params{config} or exists $params{conf} ;
 
     my $self = {
@@ -158,7 +160,7 @@ sub cqlQuery {
         my $options = "&startRecord=$startRecord";
         my $url = $baseurl . "&query=" . $cql . $options;
 
-         print "$url\n"; # TODO: logging
+         #print "$url\n"; # TODO: logging
 
         my $xml = LWP::Simple::get( $url );
         croak("SRU Request failed $url") unless $xml; # TODO: don't croak?
@@ -253,6 +255,39 @@ sub iktQuery {
     my $record = eval { PICA::Record->new( $raw ); };
     
     return ($record);
+}
+
+=head2 iktLink ( $ikt, $term )
+
+Returns a link to the result list of a search by IKT or undef. 
+Croaks if no PSI source has been defined.
+
+=cut
+
+sub iktLink {
+    my ($self, $ikt, $term) = @_;
+
+    croak('No PSI interface defined') unless $self->{PSI};
+
+    $ikt = url_encode($ikt);
+    $term =  url_encode($term);
+
+    return $self->{PSI} . "/CMD?ACT=SRCHA&IKT=$ikt&TRM=$term";
+}
+
+=head2 ppnLink ( $ppn )
+
+Returns a link to the record view of a record given by PPN.
+Croaks if no PSI source has been defined.
+
+=cut
+
+sub ppnLink {
+    my ($self, $ppn) = @_;
+
+    croak('No PSI interface defined') unless $self->{PSI};
+
+    return $self->{PSI} . "/PPNSET?PPN=$ppn";
 }
 
 =head2 baseURL

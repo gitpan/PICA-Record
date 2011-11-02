@@ -115,6 +115,10 @@ is( scalar $recordclone->all_fields(), 2 , "PICA::Record clone constructor" );
 $record->remove('037A');
 is( scalar $recordclone->all_fields(), 2 , "PICA::Record cloned a new object" );
 
+# remove fields via update
+$record->update( '037A', undef );
+is( $record->size, 0, 'removed both' );
+
 # occurrence
 $record = PICA::Record->new( '233A/03', 'x' => 'foo' );
 is( $record->occ, '03', 'occurrence' );
@@ -145,14 +149,14 @@ is( scalar @fields, 2 , "Record->field() with limit high" );
 @fields = $record->f( "037A", sub { return $_[0] if $_[0]->sf('a'); } );
 is( scalar @fields, 2 , "Record->field() with filter" );
 
-@fields = $record->f( ".*", sub { return unless $_[0]->sf('a'); $_[0]; } );
+@fields = $record->f( ".*", sub { return unless $_->sf('a'); $_; } );
 is( scalar @fields, 3 , "Record->field() with filter" );
 
 my $r2 = PICA::Record->new($record);
-@fields = $r2->f( "0.*", sub { return unless $_[0]->sf('a'); $_[0]->update('a'=>'xx'); $_[0]; } );
+@fields = $r2->f( "0.*", sub { return unless $_->sf('a'); $_->update('a'=>'xx'); $_; } );
 is_deeply( [ map { $_->sf('a'); } @fields ], ['xx','xx','xx'], "Record->field() with filter" );
 
-@fields = $r2->f( sub { return unless $_[0]->sf('a'); $_[0]->update('a'=>'xx'); $_[0]; } );
+@fields = $r2->f( sub { return unless $_->sf('a'); $_->update('a'=>'xx'); $_; } );
 is_deeply( [ map { $_->sf('a'); } @fields ], ['xx','xx','xx'], "Record->field() with filter" );
 
 ### subfield()
@@ -205,6 +209,15 @@ $record->update('037A', sub {
 
 is_deeply( [ $record->sf('037A$a') ], [ '1st note', 'xxx' ], 'update by code' );
 
+$record->update('037A');
+ok( $record->field('037A'), "ignore update without value" );
+
+# $record->update( '037A', undef );
+# $record->update( '009P/03', undef );
+# print $record . "\n";
+# remove fields via update
+# ok( $record->empty, 'removed both' );
+
 ### parse normalized by autodetection
 open PICA, "$files/bib.pica"; # TODO: bib.pica is bytestream, not character-stream!
 $normalized = join( "", <PICA> );
@@ -219,7 +232,7 @@ $file->seek(0,0);
 my $minimal = join('',$file->getlines());
 is( $record->to_string(), $minimal, "to_string()" );
 is( $record->as_string(), $minimal, "as_string()" );
-is( $record, $minimal, "stringify" );
+#is( $record, $minimal, "stringify" );
 
 # parse non-existing file
 $record = eval { PICA::Record->new( IO::File->new('xxx') ); };

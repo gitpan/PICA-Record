@@ -36,6 +36,7 @@ t/10field.t
 t/12subfield.t
 t/15parse_pp_tag.t
 t/20record.t
+t/22subclass.t
 t/30parser.t
 t/35XMLParser.t
 t/38source.t
@@ -56,6 +57,7 @@ t/files/graveyard.pica
 t/files/graveyard.xml
 t/files/searchRetrieveResponse-1.xml
 t/files/winibwsave.example
+t/files/winibwsave.example2
 t/files/dumpformat
 t/files/bgb.example
 t/files/bib.pica

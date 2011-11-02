@@ -9,7 +9,7 @@ PICA::Field - Perl extension for handling PICA+ fields
 use strict;
 
 use base qw(Exporter);
-our $VERSION = "0.51";
+our $VERSION = "0.55";
 
 use Carp qw(croak);
 use XML::Writer;
@@ -374,67 +374,85 @@ sub add {
     return $nfields;
 }
 
-=head2 update ( )
+=head2 update ( $sf => $value [ $sf => $value ...] )
 
-Allows you to change the values of the field. You can update indicators
-and subfields like this:
+Allows you to change the values of the field for one or more given subfields:
 
   $field->update( a => 'Little Science, Big Science' );
 
 If you attempt to update a subfield which does not currently exist in the field,
-then a new subfield will be appended to the field. If you don't like this
-auto-vivification you must check for the existence of the subfield prior to
-update.
+then a new subfield will be appended. If you don't like this auto-vivification
+you must check for the existence of the subfield prior to update.
 
-  if ( $field->subfield( 'a' ) ) {
+  if ( defined $field->subfield( 'a' ) ) {
       $field->update( 'a' => 'Cryptonomicon' );
   }
 
-When doing subfield updates be aware that C<update()> will only update 
-the first occurrence! If you need to do anything more complicated
-you will probably need to create a new field and use C<replace()>.
+Instead of a single value you can also pass an array reference. The following
+statements should have the same result:
 
-Returns the number of items modified.
+  $field->update( 'x', 'foo', 'x', 'bar' );
+  $field->update( 'x' => ['foo', 'bar'] );
+
+To remove a subfield, update it to undef or an empty array reference:
+
+  $field->update( 'a' => undef );
+  $field->update( 'a' => [] );
 
 =cut
 
 sub update {
     my $self = shift;
+    my %values;
+    my @order;
 
-    my @data = @{$self->{_subfields}};
+    # collect values into a hash of array references
+    while( @_ ) {
+        my $c = shift;
+        croak( "Subfield code \"$c\" is not a valid subfield code" )
+            unless $c =~ $SUBFIELD_CODE_REGEXP;
+        my $v = shift;
+        if ( exists $values{$c} ) {
+            push @{$values{$c}}, (UNIVERSAL::isa($v,'ARRAY') ? @{$v} : $v);
+        } else {
+            push @order, $c;
+            $values{$c} = UNIVERSAL::isa($v,'ARRAY') ? $v : [ $v ];
+        }
+    }
+
+    my @data;
     my $changes = 0;
 
-    while ( @_ ) {
-        my $code = shift;
-        my $value = shift;
+    while ( @{$self->{_subfields}} ) {
+        my $code = shift @{$self->{_subfields}};
+        my $value = shift @{$self->{_subfields}};
 
-        croak( "Subfield code \"$code\" is not a valid subfield code" )
-            if !($code =~ $SUBFIELD_CODE_REGEXP);
-
-        $value =~ s/\s+/ /mg;
-
-        my $found = 0;
-
-        ## update existing subfield
-        for ( my $i=0; $i<@data; $i+=2 ) {
-            if ($data[$i] eq $code) {
-                $data[$i+1] = $value;
-            $found = 1;
-            $changes++;
-            last;
-            }
+        if ( exists $values{$code} ) {
+            if ( defined $values{$code} ) {
+                my @vals = grep { defined $_ } @{$values{$code}};
+                push @data, map { $code => "$_" } @vals;
+                $changes += scalar @vals;
+                $values{$code} = undef;
+            } 
+            # TODO: better count
+        } else {
+            # keep subfield unchanged
+            push @data, $code => $value;
         }
+    }
 
-        ## append new subfield
-        if ( !$found ) {
-            push( @data, $code, $value );
-            $changes++;
-        }
+    ## append new subfields in their order
+    foreach my $code ( @order ) {
+        next unless defined $values{$code};
+        my @vals = grep { defined $_ } @{$values{$code}};
+        $changes += scalar @vals;
+        push @data, map { $code => "$_" } @vals;
     }
 
     ## synchronize our subfields
     $self->{_subfields} = \@data;
-    return($changes);
+
+    return $changes;
 }
 
 =head2 replace ( $field | ... )
@@ -449,7 +467,7 @@ sub replace {
     my $self = shift;
     my $new;
 
-    if (@_ and ref($_[0]) eq "PICA::Field") {
+    if (@_ and UNIVERSAL::isa($self,'PICA::Field')) {
         $new = shift;
     } else {
         $new = PICA::Field->new(@_);
@@ -540,7 +558,7 @@ If C<$subfields> is specified, then only those subfields will be included.
 
 =cut
 
-sub normalized() {
+sub normalized {
     my $self = shift;
     my $subfields = shift;
 

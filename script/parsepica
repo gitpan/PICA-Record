@@ -1,37 +1,38 @@
 #!/usr/bin/perl
 
+use strict;
+
 =head1 NAME
 
-parsepica - parse PICA+ data and print summary information
+parsepica - fetch, parse and transform PICA+ data
 
 =cut
 
-use strict;
-
-our $VERSION = '0.25';
+our $VERSION = '0.30';
 
 =head1 SYNOPSIS
 
-parsepica [options] [file(s) or SRU-Server(s) and queries(s)..]
+parsepica [options] [input file(s) or SRU-Server(s) and queries(s)]
 
 =head1 OPTIONS
 
- -help          brief help message
- -man           full documentation with examples
- -log FILE      print logging to a given file ('-': STDOUT, default)
- -input FILE    file with input files on each line ('-': STDIN)
- -output FILE   print all valid records to a given file ('-': STDOUT)
- -xml           output of records in XML
- -pretty        pretty output (useful for PICA XML)
- -quiet         supress logging
- -select FIELD  select a specific field or subfield (no XML output possible yet)
- -config FILE   read configuration from a file ('-': search default file)
- -auto          use default config file $PICASOURCE or ./pica.conf
-
-Not fully implemented yet:
- -sru SRU       fetch records via SRU. command line arguments are cql
-                statements instead of files
- -z3950         fetch records via Z39.50
+ -input FILE     file with input files on each line ('-': STDIN)
+ -files FILE     read input files from another file ('-': STDIN)
+ -output FILE    print all valid records to a given file ('-': STDOUT)
+ -xml [FILE]     print records in XML
+ -pxml [FILE]    print records in pretty XML (with linebreaks)
+ -pretty [FILE]  print records in pretty format
+ -null           supress record output
+ -quiet          supress logging
+ -select FIELD   select a specific field or subfield (not if XML output)
+ -count          print simple statistics
+ -stats 0|1|2    print full statistics (1: fields, 2: subfields)
+ -config FILE    read configuration from a file ('-': search default file)
+ -auto           use default config file $PICASOURCE or ./pica.conf
+ -log [FILE]     print logging to a given file ('-': STDOUT, default)
+ -help           brief help message
+ -limit N        limit the result set to N records (only for SRU)
+ -man            full documentation with examples
 
 =cut
 
@@ -47,14 +48,13 @@ use Getopt::Long;
 use Pod::Usage;
 
 my ($outfilename, $logfile, $inputlistfile, $verbose, $configfile);
-my ($quiet, $help, $man, $select, $xmlmode, $loosemode, $countmode, $pretty);
-my ($unapimode, $defaultconfig);
+my ($quiet, $help, $man, $select, $xmlmode, $loosemode, $pretty);
+my ($unapimode, $defaultconfig, $pxml, $nullmode, $countmode, $statmode);
 my ($limit, $offset);
+
 my %fieldstat_a; # all
 my %fieldstat_e; # exist?
 my %fieldstat_r; # number of records
-
-# TODO read settings from config file (for instance SRU)
 
 GetOptions(
     'auto' => \$defaultconfig,
@@ -62,22 +62,26 @@ GetOptions(
     "output:s" => \$outfilename,   # print valid records to a file
     "log:s" => \$logfile,          # print messages to a file
     "files:s" => \$inputlistfile,  # read names of input files from a file
-    "pretty" => \$pretty,
     "quiet" => \$quiet,            # suppress status messages
     "help|?" => \$help,            # show help message
     "man" => \$man,                # full documentation
     "select=s" => \$select,        # select a special field/subfield
     "count" => \$countmode,
+    "stats=s" => \$statmode,
     "limit=i" => \$limit,
     "unapi" => \$unapimode,
     "verbose" => \$verbose,
+    "null" => \$nullmode,
     #"loose" => \$loosemode,        # loose parsing
-    "xml" => \$xmlmode
+    "pxml:s" => \$pxml,
+    "pretty:s" => \$pretty,
+    "xml:s" => \$xmlmode
 ) or pod2usage(2);
 pod2usage(1) if $help;
 pod2usage(-verbose => 2) if $man;
 
 # Logfile
+$logfile = "-" if defined $logfile and $logfile eq "";
 if ( defined $logfile and $logfile ne "-") {
     open LOG, ">$logfile" 
         or die("Error opening $logfile\n");
@@ -91,12 +95,32 @@ $configfile = '-' if $defaultconfig;
 my $source = PICA::Source->new( config => ($configfile eq '-' ? undef : $configfile) ) 
     if $configfile;
 
+
 # Output writer
+if (defined $pretty) {
+    $outfilename = $pretty unless defined $outfilename || $pretty == "";
+    $pretty = 1;
+}
+if (defined $pxml and $pxml ne "") {
+    $xmlmode = $pxml;
+    $pretty = 1;
+}
+if (defined $xmlmode and $xmlmode ne "") {
+    $outfilename = $xmlmode if not defined $outfilename;
+}
+
+if (defined $statmode or defined $countmode) {
+    $nullmode = 1 if "$outfilename" eq "";
+}
+
+$outfilename = "/dev/null" if $nullmode;
+
 $outfilename = "-" unless defined $outfilename;
 print LOG "Output to $outfilename\n" if $outfilename ne "-";
 my @p = ($outfilename ne "-" ? $outfilename : \*STDOUT);
-push @p, ('format' => 'XML') if $xmlmode;
-my $writer = PICA::Writer->new( @p, pretty => $pretty );
+push @p, ('format' => 'XML') if defined $xmlmode;
+
+my $writer = PICA::Writer->new( @p, pretty => $pretty, stats => $statmode );
 
 
 # init input file list if specified
@@ -142,7 +166,7 @@ if ($select) {
 my $remote_counter = 0;
 
 my %options;
-$options{Limit} = defined $limit ? $limit : 10;
+# $options{Limit} = defined $limit ? $limit : 10;
 $options{Proceed} = 1;
 
 # init parser
@@ -230,13 +254,15 @@ print LOG "Input records:\t" . ($parser->counter() + $remote_counter) .
       "\nOutput fields:\t" . $writer->fields() .
       "\n";
 
-if ($countmode) {
-    print "Frequency of tags in all records:\n";
+if ($countmode) { # TODO: move to writer
     foreach my $tag (sort keys %fieldstat_a) {
         print "$tag\t" . $fieldstat_a{$tag} . "\t";
         print $fieldstat_r{$tag};
         print "\n";
     }
+}
+if ($statmode) {
+    print join("\n", $writer->statlines)."\n";
 }
 
 
@@ -258,12 +284,6 @@ sub field_handler {
 
     return $field;
 }
-
-# flushing field handler
-#sub flush_field_handler {
-#    my $field = shift;
-#    $writer->writefield( $field );
-#}
 
 # selecting field handler
 sub select_field_handler {
@@ -306,30 +326,33 @@ sub record_handler {
 
 =head1 DESCRIPTION
 
-This script demonstrates how to use the Perl PICA module. It can be used 
-to check and count records. Input files can be specified as arguments or
-from an input file list. Compressed files (C<.gz>) can directly be read.
-If no input file is specified then input is read from STDIN.
+This script provides a simple command line client to fetch and transform
+PICA+ records. You can parse and transform local files (compressed C<.gz>
+files can directly be read) or query records from a server via various
+protocols. You can also specify a configuration file for L<PICA::Source>
+which includes a pointer to an SRU, Z39.50, PSI, or unAPI source.
 
-Logging information is printed to STDOUT (unless quiet mode is set) or to 
-a specified logfile. Read records can be written back to a given file or 
-to STDOUT ('-') . Records that cannot be parseded produce error messages 
-to STDERR.
-
+The records can then be written to a file or STDOUT in PICA+ or PICA/XML
+format. Instead of writing full records you can select single PICA+ fields.
 Selecting fields with parsepica is around half as fast as using 
 grep, but grep does not really parse and check for wellformedness.
+
+By default input is read from STDIN and written to STDOUT ('-') without
+logging. On request logging information is printed to STDOUT or to a 
+specified logfile. Records that cannot be parseded produce error messages 
+to STDERR.
 
 =head1 EXAMPLES
 
 =over 4
 
-=item parsepica picadata -o checkedrecords
+=item parsepica file1 -o file2
 
-Read records from 'picadata' and print parseable records to 'checkedrecords'.
+Read from 'file1' and print parseable records to 'file2'
 
-=item parsepica picadata -s 021A -o - -q
+=item parsepica file1 -px file2.xml
 
-Select all fields '021A' from 'picadata' and write to STDOUT.
+Parse from 'file1' and pretty print XML format to 'file2.xml'.
 
 =item parsepica http://gso.gbv.de/sru/DB=2.1/ pica.isb=3-423-31039-1
 
@@ -340,22 +363,29 @@ Get records with ISBN 3-423-31039-1 via SRU.
 Get records with ISBN 3-423-31039-1 via SRU if the default config file
 contains C<SRU =.http://gso.gbv.de/sru/DB=2.1/>.
 
+=item parsepica -se 021A -o - -q picadata
+
+Select all fields '021A' from 'picadata' and write to STDOUT.
+
+=item parsepica -log -count -null file1
+
+Parse from 'file1' and count fileds
+
+=item parsepica -log -stat 2 file1
+
+Parse from 'file1' and print detailed statistics
+
 =back
 
-=head1 TODO
+=head1 LIMITATIONS
 
-Error handling needs to be implemented to collect broken records.
+Error handling for broken records is not fully implemented. If you want to
+parse PICA+ records downloaded via WinIBW, you may need to first clean them 
+with the script L<winibw2pica>.
 
-Examples to implement:
-
-parsepica -b errors picadata
-
-Parse records in C<picadata>. The number of records will be reported.
-
-parsepica -out checked -quiet picadata.gz
-
-Parse records in C<picadata.gz>. Print records that are wellformed 
-to C<checked> and the other records to C<errors>. Supress any messages. 
+The limit parameter should also be implemented for other sources but SRU and
+an offset parameter would be useful. Fetching records via other protocols but
+SRU has not been tested. The statistics method can be improved a lot.
 
 =head1 AUTHOR
 

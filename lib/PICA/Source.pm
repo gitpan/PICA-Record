@@ -64,6 +64,7 @@ sub new {
         PSI => $params{PSI} ? $params{PSI} : undef,
         user => $params{user} ? $params{user} : undef,
         password => $params{password} ? $params{password} : undef,
+        idprefix => ($params{idprefix} || undef),
         prev_record => undef,
     };
 
@@ -97,9 +98,14 @@ sub getPPN {
         if ( $self->{PSI} ) {
             $url = $self->{PSI} . "/PLAIN=ON/CHARSET=UTF8/PLAINTTLCHARSET=UTF8/URLENCODE=Y/PPN?PPN=$id";
         } else {
-            my $url = $self->{unAPI}
-                    . ((index($self->{unAPI},'?') == -1) ? '?' : '&')
-                    . "format=pp&id=$id";
+            $url = $self->{unAPI}
+                 . ((index($self->{unAPI},'?') == -1) ? '?' : '&')
+                 . "format=pp&id=";
+            if ( !($id =~ /ppn:/) and $self->{idprefix} ) {
+                $url .= $self->{idprefix} . ":ppn:$id";
+            } else {
+                $url .= $id;
+            }
             # TODO: unapi server does not set encoding header (utf8)?
         }
 
@@ -139,12 +145,13 @@ parameters as listed at L<PICA::Parser>. Only available for API type C<SRU>.
 =cut
 
 sub cqlQuery {
-    my ($self, $cql) = @_;
+    my $self = shift;
+    my $cql  = shift;
 
     croak("No SRU interface defined") unless $self->{SRU};
 
-    my $xmlparser = UNIVERSAL::isa( $_[2], "PICA::XMLParser" ) 
-                  ? $_[2] : PICA::XMLParser->new( @_ );
+    my $xmlparser = UNIVERSAL::isa( $_[0], "PICA::XMLParser" ) 
+                  ? $_[0] : PICA::XMLParser->new( @_ );
     my $sruparser = PICA::SRUSearchParser->new( $xmlparser );
 
     my $options = "";

@@ -8,7 +8,7 @@ PICA::PlainParser - Parse normalized PICA+
 
 use strict;
 
-our $VERSION = "0.50";
+our $VERSION = "0.52";
 
 =head1 SYNOPSIS
 
@@ -283,6 +283,7 @@ sub _parseline {
     if ( $line eq "\x1D" or (not $self->{strict} and $line =~ /^\s*$|^#|^SET/) ) {
         $self->handle_record() if $self->{active} and @{$self->{fields}};
     } else {
+        $line =~ s/^\x1D//;
         my $field = eval { PICA::Field->parse($line); };
         if ($@) {
             $@ =~ s/ at .*\n//; # remove line number

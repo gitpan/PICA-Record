@@ -129,7 +129,8 @@ with 'id', 'record', and 'version'.
 
 sub create {
     my ($self, $record) = @_;
-    croak('create needs a PICA::Record object') unless ref($record) eq 'PICA::Record';
+    croak('create needs a PICA::Record object') 
+        unless UNIVERSAL::isa($record,'PICA::Record');
     my $rectype = $self->{"rectype_title"};
 
     my $sf = $record->subfield('002@$0');
@@ -166,7 +167,7 @@ sub update {
         $record->ppn($id);
     } else {
         croak('update needs an ID and a PICA::Record object')
-          unless ref($record) eq 'PICA::Record';
+            unless UNIVERSAL::isa ($record,'PICA::Record');
         $recorddata = encode_utf8( $record->to_string );
     }
 

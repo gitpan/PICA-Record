@@ -124,8 +124,11 @@ is( $parser->counter, 2, "proceed" );
 $parser = PICA::Parser->parsedata($picadata);
 is( $parser->counter, 1, "one call" );
 
+my @r = PICA::Parser->new->records();
+is( scalar @r, 0, "empty parser" );
+
 # stored records
-my @r = PICA::Parser->parsedata($picadata)->records();
+@r = PICA::Parser->parsedata($picadata)->records();
 is( scalar @r, 1, "one call (->records)" );
 
 # run parsefile in many ways
@@ -289,6 +292,10 @@ $r = shift @r;
 foreach my $r2 (@r) {
     is ($r2->to_string, $r->to_string, 'read record is the same');
 }
+
+PICA::Parser->parsedata( "\x1D101\@ \$0foo", Field => sub {  
+   is( shift->tag, '101@', "start-of-record-marker" ); undef;
+} );
 
 __END__
 

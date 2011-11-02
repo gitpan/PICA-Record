@@ -7,7 +7,7 @@ PICA::Writer - Write and count PICA+ records and fields
 =cut
 
 use strict;
-our $VERSION = "0.52";
+our $VERSION = "0.55";
 
 =head1 DESCRIPTION
 
@@ -15,6 +15,7 @@ This module contains a simple class to write PICA+ records and fields.
 Several output targets (file, GLOB, L<IO:Handle>, string, null) and formats 
 (XML, plain, normalized) are supported. The number of written records
 and fields is counted so you can also use the class as a simple counter.
+Additional statistics of fields and subfields can also be enabled.
 
 =head1 SYNOPSIS
 
@@ -54,6 +55,7 @@ use PICA::Parser;
 use IO::Handle;
 use IO::Scalar;
 use IO::File;
+use String::Escape qw(qqbackslash elide);
 use Carp qw(croak);
 
 use constant ERROR   => 0;
@@ -73,6 +75,10 @@ The status of the new writer is set to C<PICA::Writer::NEW> (1) or
 C<PICA::Writer::ERROR> (0). Boolean conversion is overloaded to return
 the status so you can easily check whether a writer is in error status.
 
+The writer can also be used for statistics if you set the 'stats' option.
+With stats = 1 statistics is created on field level and with stats = 2
+also on subfield level.
+
 =cut
 
 sub new {
@@ -82,7 +88,7 @@ sub new {
         io => undef,
         options => {},
         recordcounter => 0,
-        fieldcounter => 0
+        fieldcounter => 0,
     }, $class;
     return $self->reset( @_ ? @_ : undef );
 }
@@ -94,7 +100,8 @@ not reset but the writer is ended with the C<end> method if it had been
 started before. The output handler can be a filename, a GLOB, an
 L<IO:Handle> object, a string reference, or C<undef>. In addition you
 can specify the output format with the C<format> parameter (C<plain> or
-C<xml>) and some options depending on the format, for instance 'pretty => 1'.
+C<xml>) and some options depending on the format, for instance 'pretty =E<gt> 1'
+and 'stats =E<gt> 0|1|2'.
 
 The status of the writer is set to C<PICA::Writer::NEW> or C<PICA::Writer::ERROR>.
 This methods returns the writer itself which boolean conversion is overloaded to
@@ -146,6 +153,14 @@ sub output {
         $self->{status} = ERROR;
     }
 
+    if ( $self->{options}->{stats} ) {
+        $self->{fieldstat} = {};
+        $self->{subfieldstat} = {} if $self->{options}->{stats} > 1;
+    } else {
+        $self->{subfieldstat} = undef;
+        $self->{fieldstat} = undef;
+    }
+
     return $self;
 }
 
@@ -168,7 +183,7 @@ sub reset {
 
     $self->{recordcounter} = 0;
     $self->{fieldcounter} = 0;
-
+    
     return $self;
 }
 
@@ -210,7 +225,7 @@ sub write {
                 } elsif ($format eq 'xml' and defined $self->{xmlwriter} ) {
                     $field->xml( $self->{xmlwriter} );
                 }
-                $self->{fieldcounter}++;
+                $self->addfieldstat( $field );
             } else {
                 croak("Cannot write object of unknown type (PICA::Field expected)!");
             }
@@ -231,8 +246,7 @@ sub write {
                 } elsif ($format eq 'xml' and defined $self->{xmlwriter} ) {
                     $record->xml( $self->{xmlwriter} );
                 }
-                $self->{recordcounter}++;
-                $self->{fieldcounter} += scalar $record->all_fields;
+                $self->addrecordstat( $record );
             } elsif (ref(\$record) eq 'SCALAR') {
                 next if !$record;
                 $comment = '# ' . join("\n# ", split(/\n/,$record)) . "\n";
@@ -333,16 +347,24 @@ sub status {
     return $self->{status};
 }
 
-=head2 counter ( )
+=head2 records ( )
 
 Returns the number of written records.
 
 =cut
 
-sub counter {
+sub records {
     my $self = shift;
     return $self->{recordcounter};
 }
+
+=head2 counter ( )
+
+Alias for records().
+
+=cut
+
+*counter = *records;
 
 =head2 fields ( )
 
@@ -354,6 +376,41 @@ sub fields {
     my $self = shift;
     return $self->{fieldcounter};
 }
+
+=head2 statlines ( )
+
+Return a list of lines with statistics (if stats option had been set).
+
+=cut
+
+sub statlines {
+    my $self = shift;
+
+    my @STRINGS = ('?',' ','*','+');
+    my @stats = ();
+
+    my $fieldstat = $self->{fieldstat} || { };
+    my $subfieldstat = $self->{subfieldstat};
+
+    foreach my $tag (sort { $a cmp $b } keys %{$fieldstat}) {
+        my $line = length($tag) < 5 ? "$tag    " : "$tag ";
+        $line .= $STRINGS[ $fieldstat->{$tag} ];
+        if ( defined $subfieldstat ) {
+            my $s = $subfieldstat->{$tag};
+            foreach (keys %{$s}) {
+                $line .= "\$$_ ";
+                $line .= $STRINGS[ $s->{$_}->{occ} ];
+                $line .= qqbackslash(elide($s->{$_}->{val},40))
+                    if defined $s->{$_}->{val};
+                $line .= " "; # TODO: join!
+            }
+        }
+        push @stats, $line;
+    }
+
+    return @stats;
+}
+
 
 =head1 FUNCTIONS
 
@@ -380,6 +437,113 @@ sub xmlwriter {
     }
 
     return $writer;
+}
+
+=head2 PRIVATE METHDOS
+
+=head2 addfieldstat ( $field )
+
+Add a field to the statistics.
+
+=cut
+
+sub addfieldstat {
+    my ($self, $field) = @_;
+    $self->{fieldcounter}++;
+
+    return unless defined $self->{subfieldstat};
+
+    my $tag = $field->tag;
+    my (%o,%v);
+
+    my @content = $field->content;
+      #print Dumper($field->content);
+    foreach (@content) {
+        my ($sf,$value) = @{$_};
+
+        $o{ $sf }++;
+        if ( exists $v{ $sf } ) {
+            $v{ $sf } = undef unless defined $v{ $sf } and $v{ $sf } eq $value;
+        } else {
+            $v{ $sf } = $value;
+        }
+    }
+
+    my $sfstat = $self->{subfieldstat};
+
+    # TODO: order of subfields
+    my $all = $sfstat->{$tag};
+    if ( $sfstat->{$tag} ) {
+        foreach my $sf (keys %{$sfstat->{$tag}}) {
+            my $cur = $sfstat->{$tag}->{$sf};
+            if ( $o{$sf} ) { # this time also
+                # ..
+                $cur->{occ} += 2
+                    if $o{$sf} > 1 and $cur->{occ} < 2;
+
+                $cur->{val} = undef unless
+                    defined $v{$sf} and defined $cur->{val} and $v{$sf} eq $cur->{val};
+                delete $v{$sf};
+                delete $o{$sf};
+            } else { # not this time but before
+                $cur->{occ} = $cur->{occ} > 1  ? 0 : 2; 
+            }
+        }
+
+        # fehlende subfields hinzufügen
+        foreach (keys %o) {
+            $sfstat->{$tag}->{$_} = { val => $v{$_}, occ => $o{$_} };
+        }
+    } else {
+        $sfstat->{$tag} = {
+            map { $_ => { val => $v{$_}, occ => $o{$_} }  } keys %o
+        };
+    }
+    
+    # ...stats...
+}
+
+=head2 addrecordstat ( $record )
+
+Add a record to the statistics.
+
+=cut
+
+sub addrecordstat {
+    my ($self, $record) = @_;
+    $self->{recordcounter}++;
+
+    if ( not defined $self->{fieldstat} ) {
+        $self->{fieldcounter} += scalar $record->all_fields;
+        return;
+    }
+    my $fieldstat = $self->{fieldstat};
+    
+    # add field stats
+    my %count; # undef, one, repeatable
+    foreach my $field ($record->all_fields) {
+        $self->addfieldstat( $field );
+        $count{ $field->tag }++;
+    }
+
+    # 1, 3 : unique
+    # 0,1,2,3 ?: optional, 1: mandatory, +: repeatable
+
+    foreach my $tag (keys %{$fieldstat}) {
+        if ( $count{$tag} ) { # does exist this time but before only once
+            if ( $count{$tag} > 1 and $fieldstat->{$tag} < 2 ) {
+                $fieldstat->{$tag} += 2;
+            } #if $fieldstat->{$tag} < 2;
+            delete $count{$tag};
+        } else { # has existed before but not this time
+            $fieldstat->{$tag} = $fieldstat->{$tag} > 1  ? 0 : 2; 
+        }
+    }
+
+    # new fields are '1' or '+'
+    foreach my $tag (keys %count) {
+        $fieldstat->{$tag} = $count{$tag} > 1 ? 3 : 1; # 
+    }
 }
 
 1;

@@ -24,6 +24,7 @@ use ExtUtils::MakeMaker;
         'DBI' => '1.0',
         'DBD::SQLite' => '1.23',
         'Unicode::Normalize' => '0.23',
+        'String::Escape' => '0',
     },
     EXE_FILES       => [ 
         'script/parsepica', 

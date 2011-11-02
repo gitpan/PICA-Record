@@ -1,3 +1,10 @@
+0.56    2011-11-02
+        - fixed some unit tests
+0.55    2010-03-23
+        - improved methods 'field' (Record) and 'update' (Record and Field)
+        - PICA::Record is now subclassable
+        - started to add statistic function to PICA::Writer and 'parsepica'
+        - fixed unAPI
 0.54    2010-02-10
         - added the useful functions pgrep and pmap
         - removed deprecated methods (copy_record, local_records, replace)

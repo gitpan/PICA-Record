@@ -14,7 +14,7 @@ our @EXPORT = qw(readpicarecord writepicarecord);
 our @EXPORT_OK = qw(picarecord pgrep pmap);
 our %EXPORT_TAGS = (all => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.54';
+our $VERSION = '0.56';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);
@@ -229,10 +229,10 @@ it. Each of the following four lines has the same result:
 =cut
 
 sub new {
-    my $class = 'PICA::Record';
-    shift if defined $_[0] and $_[0] eq $class; # called as function
+    my $class = shift; # if $_[0] and UNIVERSAL::isa( $_[0], 'PICA::Record'
+    # shift if defined $_[0] and $_[0] eq $class; # called as function
 
-    $class = ref($class) || $class; # Handle cloning
+    $class = $class || ref($class); # Handle cloning
     my $self = bless {
         _fields => [],
         _ppn => undef
@@ -264,7 +264,7 @@ sub new {
                 return;
             });
         } else {
-            $self->append(@_);
+            $self->append( @_ );
         }
     } else {
         croak('Undefined parameter in PICA::Record->new');
@@ -311,7 +311,7 @@ The last parameter can be a function to filter returned fields
 in the same way as a field handler of L<PICA::Parser>. For instance
 you can filter out all fields with a given subfield:
 
-  my @fields = $record->field( "021A", sub { $_[0] if $_[0]->sf('a'); } );
+  my @fields = $record->field( "021A", sub { $_ if $_->sf('a'); } );
 
 =cut
 
@@ -331,6 +331,7 @@ sub field {
 
         for my $maybe ( $self->all_fields ) {
             if ( $maybe->tag() =~ $regex ) {
+                local $_ = $maybe;
                 if ( not $test or $test->($maybe) ) {
                     return $maybe unless wantarray;
                     push( @list, $maybe );
@@ -579,7 +580,7 @@ Return true if the record is empty (no fields or all fields empty).
 
 =cut
 
-sub empty() {
+sub empty {
     my $self = shift;
     foreach my $field (@{$self->{_fields}}) {
         return 0 if !$field->empty;
@@ -692,32 +693,30 @@ sub append {
 
     while (@_) {
         # Append a field (whithout creating a copy)
-        while (@_ and ref($_[0]) eq 'PICA::Field') {
+        while (@_ and UNIVERSAL::isa($_[0],'PICA::Field') ) {
             $c += $append_field->( $self, shift );
         }
         # Append a whole record (copy all its fields)
-        while (@_ and ref($_[0]) eq 'PICA::Record') {
+        while (@_ and UNIVERSAL::isa($_[0],'PICA::Record')) {
             my $record = shift;
             for my $field ( $record->all_fields ) {
                 $c += $append_field->( $self, $field->copy );
             }
         }
         if (@_) {
-            my @params = (shift);
-            while (@_ and ref($_[0]) ne 'PICA::Field') {
-                push @params, shift;
-                push @params, shift;
-                last if (@_ and ref($_[0]) ne 'PICA::Field' and length($_[0]) > 1);
+            my @params = (shift); # tag
+            while (@_ and defined $_[0] and length($_[0]) == 1) {
+                push @params, shift; # subfield
+                push @params, shift; # value
             }
-            if (@params) {
-
-                # pass croak without including Record.pm at the stack trace
-                local $Carp::CarpLevel = 1;
-
-                $c += $append_field->( $self, PICA::Field->new( @params ) );
-            }
+            $c += $append_field->( $self, PICA::Field->new( @params ) ) if @params > 1;
         }
     }
+
+#use Data::Dumper;
+#print Dumper(\@_)."\n";
+#        local $Carp::CarpLevel = 1;
+
 
     return $c;
 }
@@ -725,7 +724,7 @@ sub append {
 =head2 appendif ( ...fields or records... )
 
 Optionally appends one or more fields to the end of the record. Parameters can
-be L<PICA::Field> objects or parameters that are passed to C<PICA::Field->new>.
+be L<PICA::Field> objects or parameters that are passed to C<PICA::Field-E<gt>new>.
 
 In contrast to the append method this method always copies values, it ignores
 empty subfields and empty fields (that are fields without subfields or with
@@ -749,10 +748,12 @@ sub appendif {
 
 =head2 update ( $tag, ( $field | @fieldspec | $coderef ) )
 
-Replace a field. You must pass a tag and a field. By default only the first
-matching field will be replaced, so be sure not to replace repeatable fields.
-If you pass a code reference, the code will be called for each field and the
-field is replaced by the result unless the result is C<undef>.
+Replace a field. You must pass a tag and a field. If you pass a code reference,
+the code will be called for each field and the field is replaced by the result
+unless the result is C<undef>.
+
+Please do not use this to replace repeatbale fields because they would all be
+set to the same values.
 
 =cut
 
@@ -765,7 +766,11 @@ sub update {
 
     my $replace;
 
-    if (@_ and ref($_[0]) eq 'PICA::Field' or  ref($_[0]) eq 'CODE') {
+    return unless @_; # ignore
+
+    if ( not defined $_[0] ) {
+        $replace = shift;
+    } elsif ( UNIVERSAL::isa( $_[0], 'PICA::Field' ) or ref($_[0]) eq 'CODE' ) {
         $replace = shift;
     } else {
         $replace = PICA::Field->new($tag, @_);
@@ -776,24 +781,23 @@ sub update {
     for my $field ( $self->all_fields ) {
         if ( $field->tag() =~ $regex ) {
             my $rep = $replace;
-            if (ref($replace) eq 'CODE') {
+            if ( UNIVERSAL::isa( $replace, 'CODE' ) ) {
                 $rep = $rep->( $field );
                 $rep = undef unless UNIVERSAL::isa( $rep, 'PICA::Field' );
             }
             if (defined $rep) {
                 $self->{_ppn} = $rep->sf('0') if $rep->tag eq '003@';
                 $field->replace( $rep );
-            }
+            } 
             return unless ref($replace) eq 'CODE';
         }
     }
 }
 
-=head2 remove ( <tagspec(s)> )
+=head2 remove ( $tag(s) )
 
-Delete fields specified by tags. You can also use wildcards, and compiled
-regular expressions. see C<field()> for examples Returns the number of 
-deleted fields.
+Delete fields specified by tags and returns the number of deleted fields. 
+You can also use wildcards, and compiled regular expressions as tag selectors.
 
 =cut
 
@@ -1018,7 +1022,7 @@ sub write {
 
 The functions readpicarecord and writepicarecord are exported by default.
 On request you can also export the function picarecord which is a shortcut
-for the constructor PICA::Record::new and the functions pgrep and pmap.
+for the constructor PICA::Record->new and the functions pgrep and pmap.
 To export all functions, import the module via:
 
   use PICA::Record qw(:all);
@@ -1127,8 +1131,9 @@ Shortcut for PICA::Record->new( ... )
 
 =cut
 
-*picarecord = *new;
-
+sub picarecord {
+    return PICA::Record->new( @_ );
+}
 
 =head1 DEPRECATED ALIASES
 
@@ -1142,7 +1147,7 @@ Alias for C<main>.
 
 =head2 delete_fields ( <tagspec(s)> )
 
-Alias for C<delete>.
+Alias for C<remove>.
 
 =cut
 

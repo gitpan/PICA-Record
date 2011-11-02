@@ -101,18 +101,18 @@ is( $record->ppn, '588923168', "ppn (xml)" );
 $xmlfile = "$files/records.xml";
 my @collection = PICA::Parser->parsefile($xmlfile)->records();
 is( scalar @collection, 2, "parsed multiple records" );
-is( $collection[0], "021A \$0Test 1\n");
-is( $collection[1], "021A \$0Test 2\n");
+is( "".$collection[0], "021A \$0Test 1\n");
+is( "".$collection[1], "021A \$0Test 2\n");
 
 @collection = readpicarecord($xmlfile);
 is( scalar @collection, 1, "parsed the first record with readpicarecord" );
-is( $collection[0], "021A \$0Test 1\n");
+is( "".$collection[0], "021A \$0Test 1\n");
 
 use PICA::Parser qw(parsefile);
 @collection = parsefile($xmlfile)->records();
 is( scalar @collection, 2, "parsed multiple records with parsefile" );
-is( $collection[0], "021A \$0Test 1\n");
-is( $collection[1], "021A \$0Test 2\n");
+is( "".$collection[0], "021A \$0Test 1\n");
+is( "".$collection[1], "021A \$0Test 2\n");
 
 @collection = readpicarecord( $xmlfile, Limit => 99 );
 is( scalar @collection, 2, "parsed multiple records with readpicarecord" );

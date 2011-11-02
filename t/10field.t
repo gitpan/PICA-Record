@@ -119,6 +119,15 @@ $field->add('a'=>'x');
 $field->add('a'=>'y');
 is( "$field", "012A \$ax\$ay\n", "repeated subfield" );
 
+is( $field->update( 'a' => 'foo', 'c' => 9, 'b' => 'bar' ), 3, "update three subfields" );
+is( "$field", "012A \$afoo\$c9\$bbar\n", "." );
+$field->update( 'b', 3, 'b', 4, 'x' => undef );
+is( "$field", "012A \$afoo\$c9\$b3\$b4\n", "update two subfields" );
+
+$field->update( c => undef ); #, 1, "delete subfield" );
+$field->update( b => ['f','o','o'], a => [] );
+is( "$field", "012A \$bf\$bo\$bo\n", "updated four subfields" );
+
 $field = PICA::Field->new("028A","d" => "Karl", "a" => "Marx");
 isa_ok( $field, 'PICA::Field');
 ok( ! $field->empty, '!empty' );
@@ -141,7 +150,7 @@ is( $field->as_string(subfields=>'x'), "", "empty field");
 $field->{_subfields} = [];
 ok( $field->empty, 'empty field');
 is( $field->as_string, "", "empty field (as_string)");
-is( $field, "", "empty field (as_string, overload)");
+is( "$field", "", "empty field (as_string, overload)");
 my $emptyxml = '<pica:datafield tag="028A" xmlns:pica="info:srw/schema/5/picaXML-v1.0"></pica:datafield>';
 is( $field->xml, $emptyxml, "empty field (xml)");
 is( $field->purged, undef, "purged empty field");
@@ -182,7 +191,7 @@ is_deeply ( \@sf, ['xx','yy'], 'Field->sf (multiple) - 4');
 # newlines in field values
 $field = PICA::Field->new( '021A', 'a' => "This\nare\n\t\nlines" );
 is( $field->sf('a'), "This are lines", "newline in value (1)");
-is( $field, "021A \$aThis are lines\n", "newline in value (2)");
+is( "$field", "021A \$aThis are lines\n", "newline in value (2)");
 
 $field = PICA::Field->new('123A','x'=>'3','x'=>'4','a'=>'2','A'=>'5','9'=>'1');
 $field->sort;

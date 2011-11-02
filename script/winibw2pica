@@ -9,7 +9,7 @@ winibw2pica - convert WinIBW PICA+ download to valid PICA+
 use strict;
 use warnings;
 
-our $VERSION = '0.3';
+our $VERSION = '0.32';
 
 use PICA::Parser qw(parsedata);
 use PICA::Field qw(parse_pp_tag);
@@ -17,7 +17,7 @@ use Getopt::Long;
 use Encode;
 use Pod::Usage;
 
-my ($outfile, $pretty, $xml, $help, $man, $utf8, $version);
+my ($outfile, $pretty, $xml, $help, $man, $utf8, $version, $addppn);
 
 GetOptions(
     "output:s" => \$outfile,
@@ -25,6 +25,7 @@ GetOptions(
     "prettyxml" => \$pretty,
     "help|?" => \$help,
     "man" => \$man,
+    "ppn" => \$addppn,
     "version" => \$version,
     "xml" => \$xml
 ) or pod2usage(2);
@@ -40,6 +41,7 @@ my $writer = PICA::Writer->new( @p, pretty => $pretty );
 
 my $FILE;
 my @buffer;
+my $setppn; # z.B. "077405625" in "SET: S2 [1] TTL: 1 PPN: 077405625 SEITE1"
 
 sub nextline {
     return @buffer ? shift @buffer : readline($FILE);
@@ -49,9 +51,21 @@ sub lookahead {
     return $buffer[0];
 }
 
+sub handle_record {
+    my $record = shift;
+    return if $record->empty;
+
+    if (not $record->ppn && $addppn && defined $setppn) {
+        $record->ppn( $setppn );
+    }
+
+    $record->sort;
+    $writer->write( $record );
+}
+
 foreach my $infile (@ARGV) {
     open $FILE, $infile or die("Failed to open file $infile");
-    parsedata( \&winibw2pica, Record => $writer );
+    parsedata( \&winibw2pica, Record => \&handle_record );
     close $FILE;
 }
 
@@ -59,7 +73,10 @@ $writer->end;
 
 sub winibw2pica {
     my $line = nextline();
-    $line = nextline() if defined $line and $line =~ /^SET/;
+    if (defined $line and $line =~ /^SET/) {
+        $setppn = ($line =~ /PPN:\s*([0-9xX]+)/ ? $1 : undef); 
+        $line = nextline();
+    }
     return unless defined $line;
 
     if ( $line =~ /\x83/ ) {
@@ -102,6 +119,7 @@ winibw2pica [options] inputfile(s)
  -output FILE   write PICA+ records to a given file (default: '-' for STDOUT)
  -xml           print records in PICA/XML
  -prettyxml     pretty print records in PICA/XML
+ -ppn           add a PPN from the 'SET...' line if no PPN is in the record
  -utf8          read input field values as UTF-8
  -version       show version information
 

@@ -7,7 +7,7 @@ PICA::SQLiteStore - Store L<PICA::Record>s in a SQLite database with versioning
 =cut
 
 use strict;
-our $VERSION = "0.20";
+our $VERSION = "0.21";
 
 use PICA::Record;
 use PICA::Store;
@@ -41,7 +41,7 @@ sub new {
 
     my $dbh = DBI->connect( "dbi:SQLite:dbname=$filename","","",
         { AutoCommit => 0, RaiseError => 1 } );
-    $dbh->{unicode} = 1;
+    $dbh->{sqlite_unicode} = 1;
 
     croak("SQLite database connection failed: $filename: " . DBD->errstr) unless $dbh;
 
@@ -211,7 +211,7 @@ sub create {
     my ($self, $record) = @_;
 
     croak('create needs a PICA::Record object')
-        unless ref($record) eq 'PICA::Record';
+        unless UNIVERSAL::isa($record,'PICA::Record');
 
     my %result = eval {
         my $recorddata = $record->to_string();
@@ -244,7 +244,7 @@ sub update {
     my ($self, $id, $record, $version) = @_;
 
     croak('update needs a PICA::Record object') 
-      unless ref($record) eq 'PICA::Record';
+        unless UNIVERSAL::isa($record,'PICA::Record');
 
     my %result = eval {
         if ($version) {

@@ -8,7 +8,7 @@ PICA::Parser - Parse PICA+ data
 
 use strict;
 use base qw(Exporter);
-our $VERSION = "0.49";
+our $VERSION = "0.50";
 
 use Carp qw(croak);
 our @EXPORT_OK = qw(parsefile parsedata);
@@ -270,12 +270,12 @@ to collect the records but directly use them with a record handler.
 
 sub records {
     my $self = shift;
-    return [] unless ref $self;
+    return () unless ref $self;
 
     return $self->{plainparser}->records() if $self->{plainparser};
     return $self->{xmlparser}->records() if $self->{xmlparser};
 
-    return [];
+    return ();
 }
 
 =head2 counter ( )

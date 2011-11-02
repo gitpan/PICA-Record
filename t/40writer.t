@@ -3,7 +3,7 @@
 use strict;
 use utf8;
 
-use Test::More tests => 19;
+use Test::More tests => 27;
 use Encode;
 use File::Temp qw(tempfile);
 use XML::Writer;
@@ -107,6 +107,26 @@ $w = PICA::Writer->new( \$s, format => 'xml' );
 PICA::Parser->parsefile( "t/files/graveyard.pica", Record => $w );
 $w->end();
 is ("$s", file2string("t/files/graveyard.xml"), "default XML conversion");
+is ($w->records, 1, "records=1");
+
+# statistics
+$w = PICA::Writer->new( stats => 1 );
+PICA::Parser->parsefile( "t/files/dumpformat", Record => $w );
+is ($w->records, 3, "records=3");
+is ($w->fields, 92, "fields=92");
+
+my @stat = $w->statlines;
+is ($stat[5], "003@     ","stat");
+is ($stat[6], "006G    *","stat");
+is ($stat[10], '008@    +',"stat");
+is ($stat[17], '029F    ?',"stat");
+is ($stat[27], '045Q/01 ?',"stat");
+
+$w = PICA::Writer->new( stats => 2 );
+PICA::Parser->parsefile( "t/files/dumpformat", Record => $w );
+@stat = $w->statlines;
+#print join("'\n'", @stat)."\n";
+
 
 # error handling
 #$w = writepicarecord( $record, "/" );

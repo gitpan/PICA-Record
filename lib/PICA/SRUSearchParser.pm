@@ -8,7 +8,7 @@ PICA::SRUSearchParser - Parse a SRU response in XML and extract PICA+ records.
 
 use strict;
 
-our $VERSION = "0.48";
+our $VERSION = "0.49";
 
 =head1 SYNOPSIS
 
@@ -23,7 +23,8 @@ our $VERSION = "0.48";
 
 use Carp qw(croak);
 use PICA::XMLParser;
-use XML::Parser;
+use XML::SAX::ParserFactory;
+use base qw(XML::SAX::Base);
 
 =head1 METHODS
 
@@ -62,16 +63,14 @@ and return the L<PICA::XMLParser> object that has been used.
 
 sub parse {
     my ($self, $document) = @_;
-    my $sruparser = XML::Parser->new(
-       Handlers => {    # TODO: memory leak (?)
-          Start => sub {$self->StartTag(@_)},
-          End   => sub {$self->EndTag(@_)},
-          Char  => sub {$self->Text(@_)}
-#         # TODO: Init and Final are never called. Do we need them?
-       }
-    );
+
+    my $parser = XML::SAX::ParserFactory->new(
+        RequiredFeatures => { 'http://xml.org/sax/features/namespaces' => 1 }
+      )->parser( Handler => $self );
+
     $self->{currentNumber} = 0;
-    $sruparser->parse($document);
+    $parser->parse_string($document);
+
     return $self->{xmlparser};
 }
 
@@ -114,7 +113,7 @@ sub resultSetId {
 
 This methods are private SAX handlers to parse the XML.
 
-=head2 StartTag
+=head2 start_element
 
 SAX handler for XML start tag. On PICA+ records this calls 
 the start handler of L<PICA::XMLParser>, outside of records
@@ -122,58 +121,78 @@ it parses the SRU response.
 
 =cut
 
-sub StartTag {
-    my ($self, $parser, $name, %attrs) = @_;
+sub start_element {
+    my ($self, $el) = @_;
+
     if ($self->{in_record}) {
-        $self->{xmlparser}->start_handler($parser, $name, %attrs);
+
+        # TODO: nasty hack because sru.gbv.de is broken:
+        my ($tag) = grep { $_->{LocalName} eq 'tag' } values %{ $el->{Attributes} };
+        if (defined $tag and $tag->{Value} eq '') {
+            $self->{skip_field} = 1;
+        } else {
+            $self->{xmlparser}->start_element($el);
+        }
+
     } else {
         $self->{char_data} = "";
-        if ($name eq "srw:recordData") {
+        if ( _sru_element($el,"recordData") ) {
+            #print "$name\n";
             $self->{in_record} = 1;
         }
     }
 }
 
-=head2 EndTag
+sub _sru_element {
+    my ($el, $name) = @_; 
+    return $el->{LocalName} eq $name and $el->{NamespaceURI} eq 'http://www.loc.gov/zing/srw/';
+}
+
+=head2 end_element
 
 SAX handler for XML end tag. On PICA+ records this calls 
 the end handler of L<PICA::XMLParser>.
 
 =cut
 
-sub EndTag {
-    my ($self, $parser, $name) = @_;
+sub end_element {
+    my ($self, $el) = @_;
 
     if ($self->{in_record}) {
-        if ($name eq "srw:recordData") {
+        if ( _sru_element($el,"recordData") ) {
             $self->{currentNumber}++;
             $self->{in_record} = 0;
         } else {
-            $self->{xmlparser}->end_handler($parser, $name);
+            if ( $self->{skip_field} ) { # nasty hack because sru.gbv.de is broken
+                $self->{skip_field} = 0 if $el->{LocalName} eq 'datafield';
+            } else {
+                $self->{xmlparser}->end_element($el);
+            }
         }
     } else {
-        if ($name eq "srw:numberOfRecords") {
+        if ( _sru_element($el,"numberOfRecords") ) {
             $self->{numberOfRecords} = $self->{char_data};
-        } elsif ($name eq "srw:resultSetId") {
+        } elsif ( _sru_element($el,"resultSetId") ) {
             $self->{resultSetId} = $self->{char_data};
         }
     }
 }
 
-=head2 Text
+=head2 characters
 
 SAX handler for XML character data. On PICA+ records this calls 
 the character data handler of L<PICA::XMLParser>.
 
 =cut
 
-sub Text {
-    my ($self, $parser, $string) = @_;
+sub characters {
+    my ($self, $data) = @_;
 
     if ($self->{in_record}) {
-        $self->{xmlparser}->char_handler($parser, $string);
+        $self->{xmlparser}->characters($data);
     } else {
-        $self->{char_data} .= $string;
+        ($data) = values %$data;
+        $self->{char_data} .= $data;
     }
 }
 

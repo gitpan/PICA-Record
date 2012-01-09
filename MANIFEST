@@ -26,7 +26,6 @@ examples/soapserver.pl
 examples/.htaccess
 
 script/parsepica
-script/picawebcat
 script/picaimport
 script/winibw2pica
 script/pica2html.xsl
@@ -65,3 +64,4 @@ t/files/holdings.pica
 
 pica-xml-v1-0.xsd
 META.yml                                 Module meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)

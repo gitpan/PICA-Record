@@ -7,9 +7,9 @@ PICA::XMLParser - Parse PICA+ XML
 =cut
 
 use strict;
-our $VERSION = "0.51";
+our $VERSION = "0.52";
 
-use base qw(Exporter);
+use base qw(XML::SAX::Base Exporter);
 use Carp qw(croak);
 our @EXPORT_OK = qw(parsefile parsedata);
 
@@ -56,7 +56,7 @@ C<Collection> handler to parse files with multiple collections.
 
 use PICA::Field;
 use PICA::Record;
-require XML::Parser;
+use XML::SAX::ParserFactory;
 use Carp qw(croak);
 
 =head1 PUBLIC METHODS
@@ -130,10 +130,9 @@ sub parsedata {
         }
       }
 
-      my $parser = new XML::Parser(
-          Handlers => $self->_getHandlers,
-          Namespaces => 1
-      );
+      my $parser = XML::SAX::ParserFactory->new(
+        RequiredFeatures => { 'http://xml.org/sax/features/namespaces' => 1 }
+      )->parser( Handler => $self );
 
       if (ref($data) eq 'ARRAY') {
           $data = join('',@{$data})
@@ -147,7 +146,7 @@ sub parsedata {
           }
       }
 
-      $parser->parse($data);
+      $parser->parse_string($data);
 
       $self;
 
@@ -176,15 +175,15 @@ sub parsefile {
         }
 
         $self->{filename} = $file if ref(\$file) eq 'SCALAR';
-        my $parser = new XML::Parser(
-            Handlers => $self->_getHandlers,
-            Namespaces => 1
-        );
+
+        my $parser = XML::SAX::ParserFactory->new(
+          RequiredFeatures => { 'http://xml.org/sax/features/namespaces' => 1 }
+        )->parser( Handler => $self );
 
         if (ref($file) eq 'GLOB' or eval { $file->isa("IO::Handle") }) {
-            $parser->parse($file);
+            $parser->parse_file($file);
         } else {
-            $parser->parsefile($file);
+            $parser->parse_uri($file);
         }
 
         $self;
@@ -236,14 +235,14 @@ sub finished {
 
 Do not directly call this methods.
 
-=head2 init_handler
+=head2 start_document
 
 Called at the beginning.
 
 =cut
 
-sub init_handler {
-    my ($self, $parser) = @_;
+sub start_document {
+    my ($self, $doc) = @_;
 
     $self->{subfield_code} = "";
     $self->{tag} = "";
@@ -251,26 +250,28 @@ sub init_handler {
     $self->{record} = ();
 }
 
-=head2 final_handler
+=head2 end_document
 
 Called at the end. Does nothing so far.
 
 =cut
 
-sub final_handler {
-    my ($self, $parser) = @_;
+sub end_document {
+    my ($self, $doc) = @_;
 }
 
-=head2 start_handler
+=head2 start_element
 
 Called for each start tag.
 
 =cut
 
-sub start_handler {
-    my ($self, $parser, $name, %attrs) = @_;
+sub start_element {
+    my ($self, $el) = @_;
+    my $name = $el->{LocalName};
+    my %attrs = map { $_->{LocalName} => $_->{Value} } values %{ $el->{Attributes} };
 
-    my $ns = $parser->namespace($name);
+    my $ns = $el->{NamespaceURI};
     $name = '{'.$ns.'}:'.$name if $ns and $ns ne $PICA::Record::XMLNAMESPACE;
 
     if ($name eq "subfield") {
@@ -281,23 +282,23 @@ sub start_handler {
                 $self->{subfield_code} = $code;
                 $self->{subfield_value} = "";
             } else {
-               croak("Invalid subfield code '$code'" . $self->_getPosition($parser));
+               croak "Invalid subfield code '$code'"; # . $self->_getPosition($parser));
             }
         } else {
-            croak("Missing attribute 'code'" . $self->_getPosition($parser));
+            croak "Missing attribute 'code'"; # . $self->_getPosition($parser));
         }
     } elsif ($name eq "field" or $name eq "datafield") {
         my $tag = $attrs{tag};
         if (defined $tag) {
             if (!($tag =~ $PICA::Field::FIELD_TAG_REGEXP)) {
-                croak("Invalid field tag '$tag'" . $self->_getPosition($parser));
+                croak "Invalid field tag '$tag'"; # . $self->_getPosition($parser));
             }
         } else {
-            croak("Missing attribute 'tag'" . $self->_getPosition($parser));
+            croak "Missing attribute 'tag'"; # . $self->_getPosition($parser));
         }
         my $occurrence = $attrs{occurrence};
         if ($occurrence && !($occurrence =~ $PICA::Field::FIELD_OCCURRENCE_REGEXP)) {
-            croak("Invalid occurrence '$occurrence'" . $self->_getPosition($parser));
+            croak "Invalid occurrence '$occurrence'"; # . $self->_getPosition($parser));
         }
 
         $self->{tag} = $tag;
@@ -309,24 +310,29 @@ sub start_handler {
     } elsif ($name eq "collection") {
         $self->{records} = [];
     } else {
-        croak("Unknown element '$name'" . $self->_getPosition($parser));
+        croak "Unknown element '$name'"; # . $self->_getPosition($parser));
     }
 }
 
-=head2 end_handler
+=head2 end_element
 
 Called for each end tag.
 
 =cut
 
-sub end_handler {
-    my ($self, $parser, $name) = @_;
+sub end_element {
+    my ($self, $el) = @_;
+    my $name = $el->{LocalName};
+    # TODO: $el->{NamespaceURI}
 
     if ($name eq "subfield") {
         push (@{$self->{subfields}}, ($self->{subfield_code}, $self->{subfield_value}));
     } elsif ($name eq "field" or $name eq "datafield") {
 
-        croak ("Field " . $self->{tag} . " is empty" . $self->_getPosition($parser)) unless $self->{subfields};
+#        return if $self->{tag} eq ''; # ignore
+
+#        croak ("Field " . $self->{tag} . " is empty" . $self->_getPosition($parser)) unless $self->{subfields};
+        croak ("Field " . $self->{tag} . " is empty") unless $self->{subfields};
 
         my $field = bless {
             _tag => $self->{tag},
@@ -361,18 +367,19 @@ sub end_handler {
         $self->{collection_handler}( $self->records() )
             if $self->{collection_handler};
     } else {
-        croak("Unknown element '$name'" . $self->_getPosition($parser));
+        croak("Unknown element '$name'"); # . $self->_getPosition($parser));
     }
 }
 
-=head2 char_handler
+=head2 characters
 
 Called for character data.
 
 =cut
 
-sub char_handler {
-    my ($self, $parser, $string) = @_;
+sub characters {
+    my ($self, $string) = @_;
+    ($string) = values %$string;
 
     # all character data outside of subfield content will be ignored without warning
     if (defined $self->{subfield_code}) {
@@ -381,28 +388,9 @@ sub char_handler {
     }
 }
 
-=head2 _getHandlers
-
-Get the handlers (init_handler, final_handler, start_handler, end_handler, char_handler).
-
-=cut
-
-
-sub _getHandlers {
-    my $self = shift;
-    my %handlers = (
-        Init  => sub {$self->init_handler(@_)},
-        Final => sub {$self->final_handler(@_)},
-        Start => sub {$self->start_handler(@_)},
-        End   => sub {$self->end_handler(@_)},
-        Char  => sub {$self->char_handler(@_)}
-    );
-    return \%handlers;
-}
-
 =head2 _getPosition
 
-Get the current position (file name and line number).
+Get the current position (file name and line number). This method is deprecated.
 
 =cut
 
@@ -426,7 +414,7 @@ Jakob Voss C<< <jakob.voss@gbv.de> >>
 
 =head1 LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+Copyright (C) 2007-2011 by Verbundzentrale Goettingen (VZG) and Jakob Voss
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.8.8 or, at

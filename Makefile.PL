@@ -19,7 +19,7 @@ use ExtUtils::MakeMaker;
         'IO::File' => '1.11',
         'IO::Scalar' => '1.126',
         'Encode' => '2.33',
-        'XML::Parser' => '2.32',
+        'XML::SAX' => '0.96',
         'XML::Writer' => '0.605',
         'DBI' => '1.0',
         'DBD::SQLite' => '1.23',

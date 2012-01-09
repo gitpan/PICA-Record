@@ -38,9 +38,7 @@ is( $@, "Failed to parse PICA::Record" );
 use PICA::SRUSearchParser;
 use PICA::XMLParser;
 
-open SRU, "t/files/searchRetrieveResponse-1.xml";
-my $xml = join("",<SRU>);
-close SRU;
+my $xml = do { local (@ARGV, $/) = "t/files/searchRetrieveResponse-1.xml"; <>; };
 
 my $xmlparser = new PICA::XMLParser();
 my $parser = PICA::SRUSearchParser->new( $xmlparser );
@@ -64,5 +62,13 @@ $source = PICA::Source->new( SRU => "http://example.com" );
 my @records = $source->cqlQuery("pica.ppn=123")->records();
 is( scalar @records, 2, 'SRU cql query' );
 
+# differen SRU response
+exit;
+$xml = do { local (@ARGV, $/) = "t/files/searchRetrieveResponse-2.xml"; <>; };
+print $xml;
+
+$parser = PICA::SRUSearchParser->new();
+$parser->parse( $xml );
+is( $parser->numberOfRecords, 1, 'SRU response' );
 
 # TODO: read from config file

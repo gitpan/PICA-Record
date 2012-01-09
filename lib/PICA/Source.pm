@@ -66,6 +66,7 @@ sub new {
         password => $params{password} ? $params{password} : undef,
         idprefix => ($params{idprefix} || undef),
         prev_record => undef,
+        Limit => ($params{Limit} || 10),
     };
 
     if ($self->{SRU} and not $self->{SRU} =~ /[\?&]$/) {
@@ -153,10 +154,13 @@ sub cqlQuery {
     my $xmlparser = UNIVERSAL::isa( $_[0], "PICA::XMLParser" ) 
                   ? $_[0] : PICA::XMLParser->new( @_ );
     my $sruparser = PICA::SRUSearchParser->new( $xmlparser );
+    shift if ref($_[0]);
+    my %params = (@_);
+    my $limit = $params{Limit} || $self->{Limit};
 
     my $options = "";
     $cql = url_encode($cql); #url_unicode_encode($cql);
-    my $baseurl = $self->{SRU} . "&recordSchema=pica&version=1.1&operation=searchRetrieve";
+    my $baseurl = $self->{SRU} . "recordSchema=picaxml&version=1.1&operation=searchRetrieve&maximumRecords=$limit";
 
     my $startRecord = 1;
     if ($xmlparser->{offset} > 0) {
@@ -167,7 +171,7 @@ sub cqlQuery {
         my $options = "&startRecord=$startRecord";
         my $url = $baseurl . "&query=" . $cql . $options;
 
-         #print "$url\n"; # TODO: logging
+         print "$url\n"; # TODO: logging
 
         my $xml = LWP::Simple::get( $url );
         croak("SRU Request failed $url") unless $xml; # TODO: don't croak?

@@ -166,7 +166,8 @@ if ($select) {
 my $remote_counter = 0;
 
 my %options;
-# $options{Limit} = defined $limit ? $limit : 10;
+$limit = 10 if !$limit or $limit <= 0;
+$options{Limit} = $limit;
 $options{Proceed} = 1;
 
 # init parser
@@ -196,11 +197,12 @@ if (@ARGV > 0) {
 
             if ( $query =~ /=/) {
                 print LOG "SRU query '$query' to $baseurl\n";
-                my $server = PICA::Source->new( SRU => $baseurl );
+                my $server = PICA::Source->new( SRU => $baseurl, Limit => $limit );
                 $remote_parser = $server->cqlQuery( $query,
                     # TODO: better pipe this to another parser (RecordParser)
                     Field => $_field_handler,
-                    Record => $_record_handler
+                    Record => $_record_handler,
+                    Limit  => $limit,
                 );
             } else {
                 my $prefix = $unapimode ? "gvk" : ""; # TODO: prefix is bad unAPI usage

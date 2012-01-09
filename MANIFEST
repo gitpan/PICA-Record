@@ -55,6 +55,7 @@ t/files/records.xml
 t/files/graveyard.pica
 t/files/graveyard.xml
 t/files/searchRetrieveResponse-1.xml
+t/files/searchRetrieveResponse-2.xml
 t/files/winibwsave.example
 t/files/winibwsave.example2
 t/files/dumpformat

@@ -1,4 +1,4 @@
-0.58    2012-01-09
+0.581   2012-01-09
         - migrated from XML::Parser to XML::SAX and improved SRU
 0.56    2011-11-02
         - fixed some unit tests

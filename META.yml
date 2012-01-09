@@ -33,4 +33,4 @@ requires:
   Unicode::Normalize: 0.23
   XML::SAX: 0.96
   XML::Writer: 0.605
-version: 0.58
+version: 0.581

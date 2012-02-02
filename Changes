@@ -1,3 +1,5 @@
+0.582   2012-02-02
+        - fix in winibw2pica
 0.581   2012-01-09
         - migrated from XML::Parser to XML::SAX and improved SRU
 0.56    2011-11-02

@@ -9,7 +9,7 @@ winibw2pica - convert WinIBW PICA+ download to valid PICA+
 use strict;
 use warnings;
 
-our $VERSION = '0.32';
+our $VERSION = '0.33';
 
 use PICA::Parser qw(parsedata);
 use PICA::Field qw(parse_pp_tag);
@@ -73,27 +73,31 @@ $writer->end;
 
 sub winibw2pica {
     my $line = nextline();
-    if (defined $line and $line =~ /^SET/) {
-        $setppn = ($line =~ /PPN:\s*([0-9xX]+)/ ? $1 : undef); 
-        $line = nextline();
-    }
     return unless defined $line;
-
+  
     if ( $line =~ /\x83/ ) {
         $line =~ s/\x83/\x1F/g;
     } elsif ( $line =~ /\xC6\x92/ ) {
         $line =~ s/\xC6\x92/\x1F/g;
     }
 
-    my $next = lookahead();    
-    while ( defined $next and not $next =~ /^\s*$/ and not
-             $next =~ /^\[\d+\s*\].+$/ and not
-            ( $next =~  /^(....(\/..)?) / && parse_pp_tag($1) )
-          ) {
-        chomp($line);
-        $line .= nextline();
-        $next = lookahead();
+    if ( $line !~ /^SET/ ) {
+        my $next = lookahead();    
+        while ( defined $next and not $next =~ /^\s*$/ and not
+                 $next =~ /^\[\d+\s*\].+$/ and not
+                ( $next =~  /^(....(\/..)?) / && parse_pp_tag($1) )
+              ) {
+            chomp($line);
+            $line .= nextline();
+            $next = lookahead();
+        }
     }
+
+    if (defined $line and $line =~ /^SET/) {
+        $setppn = ($line =~ /PPN:\s*([0-9xX]+)/) ? $1 : undef; 
+        $line = nextline();
+    }
+    return unless defined $line;
 
     # fake level 1
     if ( $line =~ /^\[(\d+)\s*\]\s*(.+)$/ ) { # /^\[(\d+)\s*\]([^<]+)(<.*>)?/ 

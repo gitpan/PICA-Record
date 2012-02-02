@@ -14,7 +14,7 @@ our @EXPORT = qw(readpicarecord writepicarecord);
 our @EXPORT_OK = qw(picarecord pgrep pmap);
 our %EXPORT_TAGS = (all => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.581';
+our $VERSION = '0.582';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);

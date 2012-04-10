@@ -26,7 +26,7 @@ undef $record;
 
 $record = PICA::Record->new( new IO::File("< $plainpicafile") );
 isa_ok( $record, 'PICA::Record' );
-is( scalar $record->all_fields(), 26, "read via IO::File" );
+is( scalar $record->fields(), 26, "read via IO::File" );
 undef $record;
 
 open (F, "<", $plainpicafile);
@@ -76,14 +76,14 @@ open $fh, "<", $plainpicafile;
 PICA::Parser->parsedata( sub {return readline $fh;}, Record => \&handle_record );
 close $fh;
 isa_ok( $record, 'PICA::Record' );
-is( scalar $record->all_fields(), 26, 'parse from function' );
+is( scalar $record->fields(), 26, 'parse from function' );
 
 # parse a PICA::Record (by clone constructor)
 my $recordclone = $record;
 undef $record;
 PICA::Parser->parsedata( $recordclone, Record => \&handle_record );
 $recordclone->remove('....');
-is( scalar $record->all_fields(), 26 , "parse another PICA::Record" );
+is( scalar $record->fields(), 26 , "parse another PICA::Record" );
 
 # parse dump format
 my $writer = PICA::Writer->new();
@@ -290,7 +290,7 @@ is( scalar @r, 7, 'read a record in different ways' );
 
 $r = shift @r;
 foreach my $r2 (@r) {
-    is ($r2->to_string, $r->to_string, 'read record is the same');
+    is ($r2->string, $r->string, 'read record is the same');
 }
 
 PICA::Parser->parsedata( "\x1D101\@ \$0foo", Field => sub {  

@@ -33,7 +33,7 @@ require PICA::Field;
 
   sub field_handler {
       my $field = shift;
-      print $field->to_string();
+      print $field->string;
       # no need to save the field so do not return it
   }
 
@@ -122,11 +122,10 @@ sub parsedata {
       }
 
       if( UNIVERSAL::isa( $data, 'PICA::Record' ) ) {
-        my @fields = $data->all_fields();
-        foreach (@fields) {
+        foreach ( $data->fields ) {
             # TODO: we could improve performance here
             # TODO: merge this into PICA::Parser
-            $self->_parseline( $_->to_string() );
+            $self->_parseline( $_->string );
         }
       }
 

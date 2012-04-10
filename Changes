@@ -1,3 +1,7 @@
+0.583   2012-03-10
+        - fixed sorting of level 2 fields
+        - renamed all_fields to fields in PICA::Record
+        - renamed (to|as)_string to string
 0.582   2012-02-02
         - fix in winibw2pica
 0.581   2012-01-09

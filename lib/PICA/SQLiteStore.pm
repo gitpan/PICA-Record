@@ -214,7 +214,7 @@ sub create {
         unless UNIVERSAL::isa($record,'PICA::Record');
 
     my %result = eval {
-        my $recorddata = $record->to_string();
+        my $recorddata = $record->string;
         $self->{insert_record}->execute( $recorddata, $self->{user} );
         my $version = $self->{dbh}->func('last_insert_rowid');
         $self->get( undef, $version );
@@ -250,7 +250,7 @@ sub update {
         if ($version) {
             # TODO (version is ignored so far)
         }
-        $self->{update_record}->execute( $id, $record->to_string(), $self->{user} );
+        $self->{update_record}->execute( $id, $record->string, $self->{user} );
         $self->get( $id );    
     };
     if ($@) {

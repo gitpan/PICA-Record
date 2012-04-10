@@ -136,7 +136,7 @@ sub create {
     my $sf = $record->subfield('002@$0');
     $rectype = $self->{"rectype_entry"} if ($sf && $sf =~ /^T/); # authority record
 
-    my $recorddata = encode_utf8( $record->to_string );
+    my $recorddata = encode_utf8( $record->string );
 
     return $self->_soap_query( "create",
         SOAP::Data->name( "record" )->type( string => $recorddata ),
@@ -163,12 +163,12 @@ sub update {
         $record = $id;
         $id = $id->ppn;
         $record->ppn( undef );
-        $recorddata = encode_utf8( $record->to_string );
+        $recorddata = encode_utf8( $record->string );
         $record->ppn($id);
     } else {
         croak('update needs an ID and a PICA::Record object')
             unless UNIVERSAL::isa ($record,'PICA::Record');
-        $recorddata = encode_utf8( $record->to_string );
+        $recorddata = encode_utf8( $record->string );
     }
 
     if (not defined $version) {

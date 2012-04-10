@@ -21,7 +21,7 @@ our $VERSION = "0.52";
 
   sub field_handler {
       my $field = shift;
-      print $field->to_string();
+      print $field->string;
       # no need to save the field so do not return it
   }
 
@@ -193,9 +193,8 @@ sub parsedata {
         }
     } elsif( UNIVERSAL::isa( $data, "PICA::Record" ) ) {
         # re-parse the record (could obviously be speed up by dropping tests)
-        my @fields = $data->all_fields();
-        foreach (@fields) {
-            $self->_parseline( $_->to_string() );
+        foreach ( $data->fields ) {
+            $self->_parseline( $_->string );
         }
     } else {
         $self->_parsedata($data);

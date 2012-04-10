@@ -138,7 +138,7 @@ ok( $field, 'overloaded bool' );
 
 $field = PICA::Field->new("028A","d" => "", "a" => "Marx");
 ok( !$field->empty, '!empty()' );
-is( $field->purged->to_string, "028A \$aMarx\n", "purged empty field");
+is( $field->purged->string, "028A \$aMarx\n", "purged empty field");
 
 $field = PICA::Field->new("028A", "d"=>"", "a"=>"" );
 ok( $field->empty, 'empty()' );
@@ -146,11 +146,11 @@ is( join('', $field->empty_subfields() ), "da", 'empty_subfields' );
 is( $field->purged, undef, "purged empty field");
 
 # empty fields without subfields
-is( $field->as_string(subfields=>'x'), "", "empty field");
+is( $field->string(subfields=>'x'), "", "empty field");
 $field->{_subfields} = [];
 ok( $field->empty, 'empty field');
-is( $field->as_string, "", "empty field (as_string)");
-is( "$field", "", "empty field (as_string, overload)");
+is( $field->string, "", "empty field (string)");
+is( "$field", "", "empty field (string, overload)");
 my $emptyxml = '<pica:datafield tag="028A" xmlns:pica="info:srw/schema/5/picaXML-v1.0"></pica:datafield>';
 is( $field->xml, $emptyxml, "empty field (xml)");
 is( $field->purged, undef, "purged empty field");
@@ -167,11 +167,11 @@ my $enc = '021A $aGet a $$, loose a $$!$btest';
 is( "$field", "$enc\n", 'dollar signs in field values (1)' );
 
 $field = PICA::Field->parse($enc);
-is( $field->as_string(endfield=>''), $enc, 'dollar signs in field values (2)' );
+is( $field->string(endfield=>''), $enc, 'dollar signs in field values (2)' );
 
 $enc = '021A $aGet a $$, loose a $$';
 $field = PICA::Field->parse($enc);
-is( $field->as_string(endfield=>''), $enc, 'dollar signs in field values (3)' );
+is( $field->string(endfield=>''), $enc, 'dollar signs in field values (3)' );
 
 ok( $field->sf('a') eq 'Get a $, loose a $', 'Field->sf (scalar)' );
 $field = PICA::Field->parse('123A $axx$ayy');

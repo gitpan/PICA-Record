@@ -36,13 +36,13 @@ is ( $s, "042A \$1bar\n\n045B \$Xdoz\n", "multiple records" );
 ($record) = PICA::Parser->parsefile("t/files/minimal.xml")->records();
 isa_ok($record, "PICA::Record");
 my $r2 = readpicarecord("t/files/minimal.pica");
-is( $record->to_string, $r2->to_string, "parse XML == read PICA" );
+is( $record->string, $r2->string, "parse XML == read PICA" );
 
 # writefile
 ($fh, $filename) = tempfile(UNLINK => 1);
 writepicarecord( $record, $fh );
 $r2 = readpicarecord( $filename );
-is( $record->to_string, $r2->to_string, "read/write pica record" );
+is( $record->string, $r2->string, "read/write pica record" );
 
 # open XML file
 my $fxml;

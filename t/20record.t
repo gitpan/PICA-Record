@@ -65,7 +65,7 @@ is( $record->normalized(), $normalized, 'Record->normalized()');
 
 $record = PICA::Record->new();
 $record->append($field, '037A','a' => 'First note');
-is( scalar $record->all_fields(), 2 , "Record->append()" );
+is( scalar $record->fields(), 2 , "Record->append()" );
 
 $record = PICA::Record->new();
 $record->append(
@@ -74,7 +74,7 @@ $record->append(
         PICA::Field->new('037A','a' => 'Second note'),
         '037A','a' => 'Third note',
 );
-is( scalar $record->all_fields(), 4 , "Record->append()" );
+is( scalar $record->fields(), 4 , "Record->append()" );
 is( $record->size, 4, "size 4");
 
 is( $record->ppn(), undef, "ppn() not existing" );
@@ -91,19 +91,19 @@ is( $record->subfield('028A','9'), '12345', "Field value modified" );
 # appendif
 $record = PICA::Record->new();
 $record->appendif('037A','a' => undef);
-is( scalar $record->all_fields(), 0 , "Record->appendif()" );
+is( scalar $record->fields(), 0 , "Record->appendif()" );
 $record->appendif('037A','a' => 123);
-is( scalar $record->all_fields(), 1 , "Record->appendif()" );
+is( scalar $record->fields(), 1 , "Record->appendif()" );
 $record->appendif('028A','9' => undef, 'd'=>'Max');
-is( scalar $record->all_fields(), 2 , "Record->appendif()" );
-is( $record->to_string(), "037A \$a123\n028A \$dMax\n" , "Record->appendif()" );
+is( scalar $record->fields(), 2 , "Record->appendif()" );
+is( $record->string, "037A \$a123\n028A \$dMax\n" , "Record->appendif()" );
 
 $record = PICA::Record->new();
 $record->append(
     '037A', 'a' => '1st note',
     '037A', 'a' => '2nd note',
 );
-is( scalar $record->all_fields(), 2 , "Record->append()" );
+is( scalar $record->fields(), 2 , "Record->append()" );
 
 # values
 is_deeply( [ $record->values('037A$a') ], [ '1st note', '2nd note' ], 'values' );
@@ -111,9 +111,9 @@ is_deeply( [ $record->values('037A_a') ], [ '1st note', '2nd note' ], 'values' )
 
 # clone constructor
 my $recordclone = PICA::Record->new($record);
-is( scalar $recordclone->all_fields(), 2 , "PICA::Record clone constructor" );
+is( scalar $recordclone->fields(), 2 , "PICA::Record clone constructor" );
 $record->remove('037A');
-is( scalar $recordclone->all_fields(), 2 , "PICA::Record cloned a new object" );
+is( scalar $recordclone->fields(), 2 , "PICA::Record cloned a new object" );
 
 # remove fields via update
 $record->update( '037A', undef );
@@ -135,7 +135,7 @@ is( scalar @fields, 1 , "Record->field()" );
 is( scalar @fields, 4 , "Record->field()" );
 @fields = $record->field( qr/^0...(\/..)?$/ );
 is( scalar @fields, 4 , "Record->field(qr)" );
-@fields = $record->all_fields();
+@fields = $record->fields();
 is( scalar @fields, 5 , "Record->field()" );
 @fields = $record->field(2, "0...(/..)?");
 is( scalar @fields, 2, "Record->field() with limit" );
@@ -184,15 +184,15 @@ is_deeply( \@v, [ 'eng', 'foo' ], 'values (5)' );
 ### remove
 my $r = PICA::Record->new($record);
 $r->remove("037A");
-is( scalar $r->all_fields(), 3 , "delete()" );
+is( scalar $r->fields(), 3 , "delete()" );
 
 $r = PICA::Record->new($record);
 $r->remove("0...");
-is( scalar $r->all_fields(), 2 , "delete()" );
+is( scalar $r->fields(), 2 , "delete()" );
 
 $r = PICA::Record->new($record);
 $r->remove(qr/0..@/,"111@");
-is( scalar $r->all_fields(), 3 , "delete()" );
+is( scalar $r->fields(), 3 , "delete()" );
 
 ### replace fields
 $record = $testrecord;
@@ -224,14 +224,13 @@ $normalized = join( "", <PICA> );
 close PICA;
 
 $r = PICA::Record->new( $normalized );
-is( $r->all_fields(), 24, "detect and read normalized pica" );
+is( $r->fields(), 24, "detect and read normalized pica" );
 
 my $file = IO::File->new("$files/minimal.pica");
 $record = PICA::Record->new( $file );
 $file->seek(0,0);
 my $minimal = join('',$file->getlines());
-is( $record->to_string(), $minimal, "to_string()" );
-is( $record->as_string(), $minimal, "as_string()" );
+is( $record->string, $minimal, "string()" );
 #is( $record, $minimal, "stringify" );
 
 # parse non-existing file
@@ -242,11 +241,11 @@ ok( $@ && !$record, 'failed to read from not-existing file' );
 $record = PICA::Record->new( '021A', 'a' => "This\nare\n\t\nlines" );
 is( $record->sf('021A$a'), "This are lines", "newline in value (1, \$)" );
 is( $record->sf('021A_a'), "This are lines", "newline in value (1, _)" );
-is( $record->to_string(), "021A \$aThis are lines\n", "newline in value (2)" );
+is( $record->string, "021A \$aThis are lines\n", "newline in value (2)" );
 
 # also test readpicarecord
 $record = readpicarecord("$files/graveyard.pica");
-is( scalar $record->all_fields(), 62, "parsed graveyard.pica" );
+is( scalar $record->fields, 62, "parsed graveyard.pica" );
 
 # writepicarecord
 use File::Temp qw(tempfile);
@@ -351,12 +350,13 @@ is_deeply( $r2, PICA::Record->new(@fields) , 'pmap' );
 $r = PICA::Record->new(
   '101@','a'=>'123',
   '203@/02','0'=>'543210',
+  '209A/01','a'=>'jur',
   '203@/01','0'=>'123456',
   '021A','a' => 'bla',
   '101@','a'=>'12',
   '208@/01','a'=>'01-12-09',
   '203@/01','0'=>'666666',
-  '102A','0'=>'x',
+  '102A','0'=>'x','a'=>'11',
 );
 $r->sort;
 
@@ -367,8 +367,9 @@ $r2 = PICA::Record->new(<<'PICA');
 208@/01 $a01-12-09
 101@ $a123
 203@/01 $0123456
+209A/01 $ajur
 203@/02 $0543210
-102A $0x
+102A $0x$a11
 PICA
 
 is( "$r", "$r2", "sort" );

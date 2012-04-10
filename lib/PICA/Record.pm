@@ -14,7 +14,7 @@ our @EXPORT = qw(readpicarecord writepicarecord);
 our @EXPORT_OK = qw(picarecord pgrep pmap);
 our %EXPORT_TAGS = (all => [@EXPORT, @EXPORT_OK]);
 
-our $VERSION = '0.582';
+our $VERSION = '0.583';
 our $XMLNAMESPACE = 'info:srw/schema/5/picaXML-v1.0';
 
 our @CARP_NOT = qw(PICA::Field PICA::Parser);
@@ -31,7 +31,7 @@ use Carp qw(croak confess);
 
 use overload 
     'bool' => sub { ! $_[0]->empty },
-    '""'   => sub { $_[0]->as_string };
+    '""'   => sub { $_[0]->string };
 
 use sort 'stable';
 
@@ -329,7 +329,7 @@ sub field {
     for my $tag ( @specs ) {
         my $regex = $get_regex->($tag);
 
-        for my $maybe ( $self->all_fields ) {
+        for my $maybe ( $self->fields ) {
             if ( $maybe->tag() =~ $regex ) {
                 local $_ = $maybe;
                 if ( not $test or $test->($maybe) ) {
@@ -407,7 +407,7 @@ sub subfield {
             unless defined $subfield;
 
         my $tag_regex = $get_regex->($tag);
-        for my $f ( $self->all_fields ) {
+        for my $f ( $self->fields ) {
             if ( $f->tag() =~ $tag_regex ) {
                 my @s = $f->subfield($subfield);
                 if (@s) {
@@ -444,7 +444,7 @@ sub values {
     return @values;
 }
 
-=head2 all_fields
+=head2 fields
 
 Returns an array of all the fields in the record. The array contains 
 a C<PICA::Field> object for each field in the record. An empty array 
@@ -452,7 +452,7 @@ is returns if the record is empty.
 
 =cut
 
-sub all_fields() {
+sub fields() {
     my $self = shift;
     croak("You called all_fields() but you probably want field()") if @_;
     return @{$self->{_fields}};
@@ -699,7 +699,7 @@ sub append {
         # Append a whole record (copy all its fields)
         while (@_ and UNIVERSAL::isa($_[0],'PICA::Record')) {
             my $record = shift;
-            for my $field ( $record->all_fields ) {
+            for my $field ( $record->fields ) {
                 $c += $append_field->( $self, $field->copy );
             }
         }
@@ -739,7 +739,7 @@ For instance this command will not add a field if C<$country> is undef or C<"">:
 sub appendif {
     my $self = shift;
     my $append = PICA::Record->new( @_ );
-    for my $field ( $append->all_fields ) {
+    for my $field ( $append->fields ) {
         $field = $field->purged();
         $append_field->( $self, $field ) if $field;
     }
@@ -778,7 +778,7 @@ sub update {
 
     my $regex = $get_regex->($tag);
 
-    for my $field ( $self->all_fields ) {
+    for my $field ( $self->fields ) {
         if ( $field->tag() =~ $regex ) {
             my $rep = $replace;
             if ( UNIVERSAL::isa( $replace, 'CODE' ) ) {
@@ -812,7 +812,7 @@ sub remove {
         my $regex = $get_regex->($tag);
 
         my $i=0;
-        for my $maybe ( $self->all_fields ) {
+        for my $maybe ( $self->fields ) {
             if ( $maybe->tag() =~ $regex ) {
                 $self->{_ppn} = undef if $maybe->tag() eq '003@';
                 splice( @{$self->{_fields}}, $i, 1);
@@ -844,10 +844,16 @@ sub sort {
     my @hx = grep { not defined $_->iln } $self->holdings;
     push @holdings, @hx if @hx;
 
-    @{$self->{_fields}} = sort {$a->tag() cmp $b->tag()} @{$main->{_fields}};
+    # level 0
+    @{$self->{_fields}} = sort { $a->tag cmp $b->tag } @{$main->{_fields}};
 
     foreach my $h ( @holdings ) {
-        push @{$self->{_fields}}, sort {$a->tag() cmp $b->tag()} @{$h->{_fields}};
+        push @{$self->{_fields}}, sort {
+            my ($ta,$tb) = ($a->tag, $b->tag);
+            $ta =~ s{^(2...)/(..)$}{2$2$1};
+            $tb =~ s{^(2...)/(..)$}{2$2$1};
+            $ta cmp $tb;
+        } @{$h->{_fields}};
     }
 }
 
@@ -896,21 +902,21 @@ sub add_headers {
 
 =head1 SERIALIZATION METHODS
 
-=head2 as_string ( [ %options ] )
+=head2 string ( [ %options ] )
 
 Returns a string representation of the record for printing.
 See also L<PICA::Writer> for printing to a file or file handle.
 
 =cut
 
-sub as_string {
+sub string {
     my ($self, %args) = @_;
 
     $args{endfield} = "\n" unless defined($args{endfield});
 
     my @lines = ();
     for my $field ( @{$self->{_fields}} ) {
-        push( @lines, $field->as_string(%args) );
+        push( @lines, $field->string(%args) );
     }
     return join('', @lines);
 }
@@ -1048,7 +1054,7 @@ sub pgrep (&@) {
                ? $_[0] : PICA::Record->new( @_ );
     my @fields;
 
-    for my $f ( $record->all_fields ) {
+    for my $f ( $record->fields ) {
         local $_ = $f;
         push @fields, $f if $block->();
     }
@@ -1071,7 +1077,7 @@ sub pmap (&@) {
                ? $_[0] : PICA::Record->new( @_ );
     my @fields;
 
-    for my $f ( $record->all_fields ) {
+    for my $f ( $record->fields ) {
         local $_ = $f;
         my @r = $block->();
         if (@r == 1 and UNIVERSAL::isa( $_[0],'PICA::Field' )) {
@@ -1143,7 +1149,10 @@ Alias for C<main>.
 
 =cut
 
-*main_record = *main;
+sub main_record {
+    warn 'PICA::Record::main_record is deprecated. use ::main instead!';
+    shift->main(@_);
+}
 
 =head2 delete_fields ( <tagspec(s)> )
 
@@ -1151,7 +1160,12 @@ Alias for C<remove>.
 
 =cut
 
-*delete_fields = *remove;
+sub delete_fields {
+    warn 'PICA::Record::delete_fields is deprecated. use ::remove instead!';
+    shift->remove(@_);
+}
+
+=head2 as_string ( [ %options ] )
 
 =head2 to_string ( [ %options ] )
 
@@ -1159,7 +1173,26 @@ Alias for C<as_string>.
 
 =cut
 
-sub to_string { as_string( @_ ); }
+sub to_string {
+    warn 'PICA::Record::to_string is deprecated. use ::string instead!';
+    shift->string( @_ ); 
+}
+
+sub as_string {
+    warn 'PICA::Record::to_string is deprecated. use ::string instead!';
+    shift->string( @_ ); 
+}
+
+=head2 all_fields
+
+Alias for C<fields>.
+
+=cut
+
+sub all_fields() {
+    warn 'PICA::Record::all_fields is deprecated. Use ::fields instead';
+    shift->fields(@_);
+}
 
 1;
 

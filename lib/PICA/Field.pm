@@ -28,7 +28,7 @@ our $SUBFIELD_CODE_REGEXP = qr/^[0-9a-zA-Z]$/;
 
 use overload 
     'bool' => sub { ! $_[0]->empty; },
-    '""'   => sub { $_[0]->as_string; };
+    '""'   => sub { $_[0]->string; };
 
 use sort 'stable';
 
@@ -562,7 +562,7 @@ sub normalized {
     my $self = shift;
     my $subfields = shift;
 
-    return $self->as_string( 
+    return $self->string( 
       subfields => $subfields,
       startfield => $START_OF_FIELD,
       endfield => $END_OF_FIELD,
@@ -621,7 +621,7 @@ Fields without subfields return an empty string.
 
 =cut
 
-sub as_string {
+sub string {
     my $self = shift;
     my (%args) = @_ ? @_ : ();
 
@@ -656,13 +656,23 @@ sub as_string {
            $endfield;
 }
 
-=head2 to_string
+=head2 as_string ( [ %options ] )
 
-Alias for as_string (deprecated)
+=head2 to_string ( [ %options ] )
+
+Alias for C<as_string>.
 
 =cut
 
-sub to_string { $_[0]->as_string; }
+sub to_string {
+    warn 'PICA::Field::to_string is deprecated. use ::string instead!';
+    shift->string( @_ ); 
+}
+
+sub as_string {
+    warn 'PICA::Field::as_string is deprecated. use ::string instead!';
+    shift->string( @_ ); 
+}
 
 # Write the field to a L<XML::Writer> object
 my $write_xml = sub {

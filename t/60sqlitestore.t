@@ -50,7 +50,7 @@ my %h = $store->create( $record );
 my $id = $h{id};
 
 %h = $store->get($id);
-is( $h{record}->to_string, $record->to_string, "reuse database file" );
+is( $h{record}->string, $record->string, "reuse database file" );
 
 # recreate the database file
 $store->{dbh}->disconnect;

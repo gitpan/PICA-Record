@@ -31,6 +31,8 @@ our $VERSION = "0.1";
 
 =head1 DESCRIPTION
 
+THIS CLASS WILL BE REMOVED IN A FUTURE RELEASE!
+
 This class wraps the CRUD-methods (create, get, update, delete) of 
 a given L<PICA::Store> and makes them accessible via SOAP. This way
 you can provide a so called PICA Webcat interface for a database
@@ -147,7 +149,7 @@ sub get {
     
     return $pack->(
         ppn => $r{id},
-        record => $r{record}->to_string(),
+        record => $r{record}->string,
         version => $r{version},
         dbsid => $params{dbsid}
     );
@@ -170,7 +172,7 @@ sub create {
 
     return $pack->(
         ppn => $r{id},
-        record => $r{record}->to_string(),
+        record => $r{record}->string,
         version => $r{version},
         dbsid => $params{dbsid}
     );
@@ -195,7 +197,7 @@ sub update {
 
     return $pack->(
         ppn => $r{id},
-        record => $r{record}->to_string(),
+        record => $r{record}->string,
         version => $r{version},
         dbsid => $params{dbsid}
     );
@@ -223,7 +225,7 @@ sub delete {
 
     return $pack->(
         ppn => $r{id},
-        record => $r{record}->to_string(),
+        record => $r{record}->string,
         version => $r{version},
         dbsid => $params{dbsid}
     );

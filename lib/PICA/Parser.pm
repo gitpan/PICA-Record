@@ -46,7 +46,7 @@ You can also export C<parsedata> and C<parsefile>:
 
   parsefile( $filename, Record => sub {
       my $record = shift;
-      print $record->to_string() . "\n";
+      print $record->string . "\n";
   });
 
 Both function return the parser, so you can use

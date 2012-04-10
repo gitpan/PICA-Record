@@ -219,7 +219,7 @@ sub write {
             my $field = shift;
             if (UNIVERSAL::isa($field,'PICA::Field')) {
                 if ($format eq 'plain') {
-                    print { $self->{io} } $field->to_string() if $self->{io};
+                    print { $self->{io} } $field->string if $self->{io};
                 } elsif ($format eq 'normalized') {
                     print { $self->{io} } $field->normalized() if $self->{io};
                 } elsif ($format eq 'xml' and defined $self->{xmlwriter} ) {
@@ -238,7 +238,7 @@ sub write {
                 if ($format eq 'plain') {
                     print { $self->{io} } "\n"
                         if ($self->{recordcounter} > 0 && $self->{io});
-                    print { $self->{io} } $record->to_string() if $self->{io};
+                    print { $self->{io} } $record->string if $self->{io};
                 } elsif ($format eq 'normalized') {
                     print { $self->{io} }  "\x1D\x0A" # next record
                         if ($self->{recordcounter} > 0 && $self->{io});
@@ -514,14 +514,14 @@ sub addrecordstat {
     $self->{recordcounter}++;
 
     if ( not defined $self->{fieldstat} ) {
-        $self->{fieldcounter} += scalar $record->all_fields;
+        $self->{fieldcounter} += scalar $record->fields;
         return;
     }
     my $fieldstat = $self->{fieldstat};
     
     # add field stats
     my %count; # undef, one, repeatable
-    foreach my $field ($record->all_fields) {
+    foreach my $field ($record->fields) {
         $self->addfieldstat( $field );
         $count{ $field->tag }++;
     }

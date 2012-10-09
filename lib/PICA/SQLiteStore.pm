@@ -1,13 +1,9 @@
 package PICA::SQLiteStore;
-
-=head1 NAME
-
-PICA::SQLiteStore - Store L<PICA::Record>s in a SQLite database with versioning
-
-=cut
-
+{
+  $PICA::SQLiteStore::VERSION = '0.584';
+}
+#ABSTRACT: Store L<PICA::Record>s in a SQLite database with versioning
 use strict;
-our $VERSION = "0.21";
 
 use PICA::Record;
 use PICA::Store;
@@ -17,13 +13,6 @@ use DBI;
 
 our @ISA=qw(PICA::Store);
 
-=head1 METHODS
-
-=head2 new ( [ SQLite => ] $filename [, %params ] )
-
-Create a new or connect to an existing SQLite database.
-
-=cut
 
 sub new {
     my $class = shift;
@@ -159,13 +148,6 @@ WHERE rev_user=? ORDER BY version DESC LIMIT ? OFFSET ?
     return $self;
 }
 
-=head2 get ( $id [, $version ] )
-
-Retrieve the latest revision of record or a specific version.
-Returns a hash with either 'errorcode' and 'errormessage' or a hash with 
-'id', 'record' (a L<PICA::Record> object), 'version', and 'timestamp'.
-
-=cut
 
 sub get {
     my ($self, $id, $version) = @_;
@@ -199,13 +181,6 @@ sub get {
     return %result;
 }
 
-=head2 create ( $record )
-
-Insert a new record. The parameter must be a L<PICA::Record> object.
-Returns a hash with either 'errorcode' and 'errormessage' or a hash
-with 'id', 'record', 'version', and 'timestamp'.
-
-=cut
 
 sub create {
     my ($self, $record) = @_;
@@ -228,17 +203,6 @@ sub create {
     return %result;
 }
 
-=head2 update ( $id, $record [, $version ] )
-
-Update a record by ID, updated record (of type L<PICA::Record>),
-and version (of a previous get, create, or update command).
-
-Returns a hash with either 'errorcode' and 'errormessage'
-or a hash with 'id', 'record', 'version', and 'timestamp'.
-
-The version parameter is ignore so far (this will be changed).
-
-=cut
 
 sub update {
     my ($self, $id, $record, $version) = @_;
@@ -262,13 +226,6 @@ sub update {
     return %result;
 }
 
-=head2 delete ( $id )
-
-Delete a record by ID.
-
-Returns a hash with either 'errorcode' and 'errormessage' or a hash with 'id'.
-
-=cut
 
 sub delete {
     my ($self, $id) = @_;
@@ -288,17 +245,6 @@ sub delete {
     return %result;
 }
 
-=head2 access ( $key => $value, ... )
-
-Set general access parameters (userkey, password, dbsid and/or language).
-Returns the store itself so you can chain anothe method call.
-
-Any client that wants to access should first set these parameters and then
-perform the actual access method (create, get, update, delete...).
-
-Up to now only the userkey parameters is used.
-
-=cut
 
 sub access {
     my ($self, %params) = @_;
@@ -312,11 +258,6 @@ sub access {
     return $self;
 }
 
-=head2 history ( $id, $offset, $limit )
-
-Return the version history of a given record.
-
-=cut
 
 sub history {
     my ($self, $id, $offset, $limit) = @_;
@@ -332,12 +273,6 @@ sub history {
     };
 }
 
-=head2 prevnext ( $id, $version [, $limit ] )
-
-Get previous and next revisions of a given record version.
-Returns a hash reference indexed by version id.
-
-=cut
 
 sub prevnext {
     my ($self, $id, $version, $limit) = @_;
@@ -360,12 +295,6 @@ sub prevnext {
     return $revisions;
 }
 
-=head2 recentchanges ( $offset, $limit )
-
-Get a list of recent changes as array of hashref.
-Deleted records are included.
-
-=cut
 
 sub recentchanges {
     my ($self, $offset, $limit) = @_;
@@ -381,12 +310,6 @@ sub recentchanges {
     };
 }
 
-=head2 contributions ( $user, $offset, $limit )
-
-Get a list of contributions of a user as array of hashref.
-Deleted records are included.
-
-=cut
 
 sub contributions {
     my ($self, $user, $offset, $limit) = @_;
@@ -402,11 +325,6 @@ sub contributions {
     };
 }
 
-=head2 deletions ( $offset, $limit )
-
-Get a list of deleted records.
-
-=cut
 
 sub deletions {
     my ($self, $offset, $limit) = @_;
@@ -422,12 +340,6 @@ sub deletions {
     };
 }
 
-=head2 DESTROY (destructor)
-
-Disconnect the database before exit. This method is only called 
-automatically as destructor, so don't call it explicitely!
-
-=cut
 
 sub DESTROY {
     my $self = shift;
@@ -437,14 +349,102 @@ sub DESTROY {
 
 1;
 
+
+__END__
+=pod
+
+=head1 NAME
+
+PICA::SQLiteStore - Store L<PICA::Record>s in a SQLite database with versioning
+
+=head1 VERSION
+
+version 0.584
+
+=head1 METHODS
+
+=head2 new ( [ SQLite => ] $filename [, %params ] )
+
+Create a new or connect to an existing SQLite database.
+
+=head2 get ( $id [, $version ] )
+
+Retrieve the latest revision of record or a specific version.
+Returns a hash with either 'errorcode' and 'errormessage' or a hash with 
+'id', 'record' (a L<PICA::Record> object), 'version', and 'timestamp'.
+
+=head2 create ( $record )
+
+Insert a new record. The parameter must be a L<PICA::Record> object.
+Returns a hash with either 'errorcode' and 'errormessage' or a hash
+with 'id', 'record', 'version', and 'timestamp'.
+
+=head2 update ( $id, $record [, $version ] )
+
+Update a record by ID, updated record (of type L<PICA::Record>),
+and version (of a previous get, create, or update command).
+
+Returns a hash with either 'errorcode' and 'errormessage'
+or a hash with 'id', 'record', 'version', and 'timestamp'.
+
+The version parameter is ignore so far (this will be changed).
+
+=head2 delete ( $id )
+
+Delete a record by ID.
+
+Returns a hash with either 'errorcode' and 'errormessage' or a hash with 'id'.
+
+=head2 access ( $key => $value, ... )
+
+Set general access parameters (userkey, password, dbsid and/or language).
+Returns the store itself so you can chain anothe method call.
+
+Any client that wants to access should first set these parameters and then
+perform the actual access method (create, get, update, delete...).
+
+Up to now only the userkey parameters is used.
+
+=head2 history ( $id, $offset, $limit )
+
+Return the version history of a given record.
+
+=head2 prevnext ( $id, $version [, $limit ] )
+
+Get previous and next revisions of a given record version.
+Returns a hash reference indexed by version id.
+
+=head2 recentchanges ( $offset, $limit )
+
+Get a list of recent changes as array of hashref.
+Deleted records are included.
+
+=head2 contributions ( $user, $offset, $limit )
+
+Get a list of contributions of a user as array of hashref.
+Deleted records are included.
+
+=head2 deletions ( $offset, $limit )
+
+Get a list of deleted records.
+
+=head2 DESTROY (destructor)
+
+Disconnect the database before exit. This method is only called 
+automatically as destructor, so don't call it explicitely!
+
+=encoding utf-8
+
 =head1 AUTHOR
 
-Jakob Voss <jakob.voss@gbv.de>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

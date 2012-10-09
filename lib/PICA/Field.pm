@@ -1,15 +1,11 @@
 package PICA::Field;
-
-=head1 NAME
-
-PICA::Field - Perl extension for handling PICA+ fields
-
-=cut
-
+{
+  $PICA::Field::VERSION = '0.584';
+}
+#ABSTRACT: Perl extension for handling PICA+ fields
 use strict;
 
 use base qw(Exporter);
-our $VERSION = "0.55";
 
 use Carp qw(croak);
 use XML::Writer;
@@ -31,50 +27,6 @@ use overload
     '""'   => sub { $_[0]->string; };
 
 use sort 'stable';
-
-=head1 SYNOPSIS
-
-  use PICA::Field;
-  my $field = PICA::Field->new( '028A',
-    '9' => '117060275',
-    '8' => 'Martin Schrettinger'
-  );
-
-  $field->add( 'd' => 'Martin', 'a' => 'Schrettinger' );
-  $field->update( "8", "Schrettinger, Martin" );
-
-  print $field->normalized;
-  print $field->xml;
-
-=head1 DESCRIPTION
-
-Defines PICA+ fields for use in the PICA::Record module.
-
-=head1 EXPORT
-
-The method C<parse_pp_tag> is exported.
-
-=head1 METHODS
-
-=head2 new ( [...] )
-
-The constructor, which will return a C<PICA::Field> object or croak on error.
-You can call the constructor with a tag and a list of subfields:
-
-  PICA::Field->new( '028A',
-    '9' => '117060275',
-    '8' => 'Martin Schrettinger'
-  );
-
-With a string of normalized PICA+ data of one field:
-
-  PICA::Field->new("\x1E028A \x1F9117060275\x1F8Martin Schrettinger\x0A');
-
-With a string of readable PICA+ data:
-
-  PICA::Field->new('028A $9117060275$8Martin Schrettinger');
-
-=cut
 
 
 sub new($) {
@@ -103,11 +55,6 @@ sub new($) {
     return $self;
 }
 
-=head2 copy ( $field )
-
-Creates and returns a copy of this object.
-
-=cut
 
 sub copy {
     my $self = shift;
@@ -125,28 +72,6 @@ sub copy {
     return $copy;
 }
 
-=head2 parse ( $string, [, \&tag_filter_func ] )
-
-The constructur will return a PICA::Field object based on data that is 
-parsed if null if the filter dropped the field. Dropped fields will not 
-be parsed so they are also not validated.
-
-The C<$tag_filter_func> is an optional reference to a user-supplied 
-function that determines on a tag-by-tag basis if you want the tag to 
-be parsed or dropped. The function is passed the tag number (including 
-occurrence), and must return a boolean. 
-
-For example, if you only want to 021A fields, try this:
-
-The filter function can be used to select only required fields
-
-   sub filter {
-        my $tagno = shift;
-        return $tagno eq "021A";
-    }
-    my $field = PICA::Field->parse( $string, \&filter );
-
-=cut
 
 sub parse {
     my $class = shift;
@@ -190,6 +115,7 @@ sub parse {
         $code = shift @sfields;
         $code = substr($code, 1);
         $value = shift @sfields;
+        next unless defined $value;
         $value =~ s/\$\$/\$/g if $sf eq '$';
         $value =~ s/\s+/ /gm;
         push(@subfields, ($code, $value));
@@ -198,11 +124,6 @@ sub parse {
     return $self->new($tagno, @subfields);
 }
 
-=head2 tag ( [ $tag ] )
-
-Returns the PICA+ tag and occurrence of the field. Optionally sets tag (and occurrence) to a new value.
-
-=cut
 
 sub tag {
     my $self = shift;
@@ -219,11 +140,6 @@ sub tag {
     return $self->{_tag} . ($self->{_occurrence} ?  ("/" . $self->{_occurrence}) : "");
 }
 
-=head2 occurrence ( [ $occurrence ] ) or occ ( ... )
-
-Returns the ocurrence or undef. Optionally sets the ocurrence to a new value.
-
-=cut
 
 sub occurrence {
     my $self = shift;
@@ -240,40 +156,12 @@ sub occurrence {
 # Shortcut
 *occ = \&occurrence;
 
-=head2 level ( )
-
-Returns the level (0: main, 1: local, 2: copy) of this field.
-
-=cut
 
 sub level {
     my $self = shift;
     return substr($self->{_tag},0,1);
 }
 
-=head2 subfield ( [ $code(s) ] ) or sf ( ... )
-
-Return selected or all subfield values. If you specify 
-one ore more subfield codes, only matching subfields are 
-returned. When called in a scalar context returns only the
-first (matching) subfield. You may specify multiple subfield codes:
-
-    my $subfield = $field->subfield( 'a' );   # first $a
-    my $subfield = $field->subfield( 'acr' ); # first of $a, $c, $r
-    my $subfield = $field->subfield( 'a', 'c', 'r' ); # the same
-
-    my @subfields = $field->subfield( '0-9' );     # $0 ... $9
-    my @subfields = $field->subfield( qr/[0-9]/ ); # $0 ... $9
-
-    my @subfields = $field->subfield( 'a' );
-    my @all_subfields = $field->subfield();
-
-If no matching subfields are found, C<undef> is returned in a scalar
-context or an empty list in a list context.
-
-Remember that there can be more than one subfield of a given code!
-
-=cut
 
 sub subfield {
     my $self = shift;
@@ -308,21 +196,6 @@ sub subfield {
 # Shortcut
 *sf = \&subfield;
 
-=head2 content ( [ $code(s) ] )
-
-Return selected or all subfields as an array of arrays. If you specify 
-one ore more subfield codes, only matching subfields are returned. See
-the C<subfield> method for more examples.
-
-This shows the subfields from a 021A field:
-
-        [
-          [ 'a', '@Traité de documentation' ],
-          [ 'd', 'Le livre sur le livre ; Théorie et pratique' ],
-          [ 'h', 'Paul Otlet' ]
-        ]
-
-=cut
 
 sub content {
     my $self = shift;
@@ -341,16 +214,6 @@ sub content {
     return @list;
 }
 
-=head2 add ( $code, $value [, $code, $value ...] )
-
-Adds subfields to the end of the subfield list.
-Whitespace in subfield values is normalized.
-
-    $field->add( 'c' => '1985' );
-
-Returns the number of subfields added. 
-
-=cut
 
 sub add {
     my $self = shift;
@@ -374,32 +237,6 @@ sub add {
     return $nfields;
 }
 
-=head2 update ( $sf => $value [ $sf => $value ...] )
-
-Allows you to change the values of the field for one or more given subfields:
-
-  $field->update( a => 'Little Science, Big Science' );
-
-If you attempt to update a subfield which does not currently exist in the field,
-then a new subfield will be appended. If you don't like this auto-vivification
-you must check for the existence of the subfield prior to update.
-
-  if ( defined $field->subfield( 'a' ) ) {
-      $field->update( 'a' => 'Cryptonomicon' );
-  }
-
-Instead of a single value you can also pass an array reference. The following
-statements should have the same result:
-
-  $field->update( 'x', 'foo', 'x', 'bar' );
-  $field->update( 'x' => ['foo', 'bar'] );
-
-To remove a subfield, update it to undef or an empty array reference:
-
-  $field->update( 'a' => undef );
-  $field->update( 'a' => [] );
-
-=cut
 
 sub update {
     my $self = shift;
@@ -455,13 +292,6 @@ sub update {
     return $changes;
 }
 
-=head2 replace ( $field | ... )
-
-Allows you to replace an existing field with a new one. You may pass a
-C<PICA::Field> object or parameters for a new field to replace the
-existing field with. Replace does not return a meaningful or reliable value.
-
-=cut
 
 sub replace {
     my $self = shift;
@@ -476,11 +306,6 @@ sub replace {
     %$self = %$new;
 }
 
-=head2 empty_subfields ( )
-
-Returns a list of all codes of empty subfields.
-
-=cut
 
 sub empty_subfields {
     my $self = shift;
@@ -495,13 +320,6 @@ sub empty_subfields {
     return @list;
 }
 
-=head2 empty ( )
-
-Test whether there are no subfields or all subfields are empty. This method 
-is automatically called by overloading whenever a PICA::Field is converted 
-to a boolean value.
-
-=cut
 
 sub empty {
     my $self = shift;
@@ -517,12 +335,6 @@ sub empty {
     return 1;
 }
 
-=head2 purged ( )
-
-Remove a copy of this field with empty subfields
-removed or undef if the whole field is empty.
-
-=cut
 
 sub purged {
     my $self = shift;
@@ -549,14 +361,6 @@ sub purged {
     return $copy;
 }
 
-=head2 normalized ( [$subfields] )
-
-Returns the field as a string. The tag number, occurrence and 
-subfield indicators are included. 
-
-If C<$subfields> is specified, then only those subfields will be included.
-
-=cut
 
 sub normalized {
     my $self = shift;
@@ -570,11 +374,6 @@ sub normalized {
     );
 }
 
-=head2 sort ( [ $order ] )
-
-Sort subfields by subfield indicators. You can optionally specify an order as string of subfield codes.
-
-=cut
 
 sub sort {
     my ($self, $order) = @_;
@@ -597,29 +396,12 @@ sub sort {
     $self->{_subfields} = [ map { $sf[2*$_] => $sf[2*$_+1] } @sorted ];
 }
 
-=head2 size
-
-Returns the number of subfields (no matter if empty or not).
-
-=cut
 
 sub size {
     my $self = shift;
     return @{$self->{_subfields}} / 2;
 }
 
-=head2 as_string ( [ %params ] )
-
-Returns a pretty string for printing.
-
-Returns the field as a string. The tag number, occurrence and 
-subfield indicators are included. 
-
-If C<subfields> is specified, then only those subfields will be included.
-
-Fields without subfields return an empty string.
-
-=cut
 
 sub string {
     my $self = shift;
@@ -654,24 +436,6 @@ sub string {
            $self->{_tag} . $occ . ' ' .
            $startsubfield . join( $startsubfield, @subs ) .
            $endfield;
-}
-
-=head2 as_string ( [ %options ] )
-
-=head2 to_string ( [ %options ] )
-
-Alias for C<as_string>.
-
-=cut
-
-sub to_string {
-    warn 'PICA::Field::to_string is deprecated. use ::string instead!';
-    shift->string( @_ ); 
-}
-
-sub as_string {
-    warn 'PICA::Field::as_string is deprecated. use ::string instead!';
-    shift->string( @_ ); 
 }
 
 # Write the field to a L<XML::Writer> object
@@ -710,17 +474,6 @@ my $write_xml = sub {
     $writer;
 };
 
-=head2 xml ( [ [ writer => ] $writer | [ OUTPUT ] => \$sref | %param ] )
-
-Return the field in PICA-XML format or write it to an L<XML::Writer>
-and return the writer. If you provide parameters, they will be passed
-to a newly created XML::Writer that is used to write to a string.
-
-By default the PICA-XML namespaces with namespace prefix 'pica' is 
-included. In addition to XML::Writer this methods knows the 'header'
-parameter that first adds the XML declaration.
-
-=cut
 
 sub xml {
     my $self = shift;
@@ -752,13 +505,6 @@ sub xml {
     }
 }
 
-=head2 html ( [ %options ] )
-
-Returns a HTML representation of the field for browser display. See also
-the C<pica2html.xsl> script to generate a more elaborated HTML view from
-PICA-XML.
-
-=cut
 
 sub html  {
     my $self = shift;
@@ -800,20 +546,6 @@ sub html  {
     return $html . "</div>\n";
 }
 
-=head1 STATIC METHODS
-
-=head2 parse_pp_tag tag ( $tag )
-
-Tests whether a string can be used as a tag/occurrence specifier. A tag
-indicator consists of a 'type' (00-99) and an 'indicator' (A-Z and @),
-both conflated as the 'tag', and an optional occurrence (00-99). This
-method returns a list of two values: occurrence and tag (this order!).
-It can be used to parse and test tag specifiers this ways:
-
-  ($occurrence, $tag) = parse_pp_tag( $t );
-  parse_pp_tag( $t ) or print STDERR "Not a valid tag: $t\n";
-
-=cut
 
 sub parse_pp_tag {
     my $tag = shift;
@@ -827,20 +559,259 @@ sub parse_pp_tag {
 
 1;
 
+
 __END__
+=pod
+
+=head1 NAME
+
+PICA::Field - Perl extension for handling PICA+ fields
+
+=head1 VERSION
+
+version 0.584
+
+=head1 SYNOPSIS
+
+  use PICA::Field;
+  my $field = PICA::Field->new( '028A',
+    '9' => '117060275',
+    '8' => 'Martin Schrettinger'
+  );
+
+  $field->add( 'd' => 'Martin', 'a' => 'Schrettinger' );
+  $field->update( "8", "Schrettinger, Martin" );
+
+  print $field->normalized;
+  print $field->xml;
+
+=head1 DESCRIPTION
+
+Defines PICA+ fields for use in the PICA::Record module.
+
+=head1 EXPORT
+
+The method C<parse_pp_tag> is exported.
+
+=head1 METHODS
+
+=head2 new ( [...] )
+
+The constructor, which will return a C<PICA::Field> object or croak on error.
+You can call the constructor with a tag and a list of subfields:
+
+  PICA::Field->new( '028A',
+    '9' => '117060275',
+    '8' => 'Martin Schrettinger'
+  );
+
+With a string of normalized PICA+ data of one field:
+
+  PICA::Field->new("\x1E028A \x1F9117060275\x1F8Martin Schrettinger\x0A');
+
+With a string of readable PICA+ data:
+
+  PICA::Field->new('028A $9117060275$8Martin Schrettinger');
+
+=head2 copy ( $field )
+
+Creates and returns a copy of this object.
+
+=head2 parse ( $string, [, \&tag_filter_func ] )
+
+The constructur will return a PICA::Field object based on data that is 
+parsed if null if the filter dropped the field. Dropped fields will not 
+be parsed so they are also not validated.
+
+The C<$tag_filter_func> is an optional reference to a user-supplied 
+function that determines on a tag-by-tag basis if you want the tag to 
+be parsed or dropped. The function is passed the tag number (including 
+occurrence), and must return a boolean. 
+
+For example, if you only want to 021A fields, try this:
+
+The filter function can be used to select only required fields
+
+   sub filter {
+        my $tagno = shift;
+        return $tagno eq "021A";
+    }
+    my $field = PICA::Field->parse( $string, \&filter );
+
+=head2 tag ( [ $tag ] )
+
+Returns the PICA+ tag and occurrence of the field. Optionally sets tag (and occurrence) to a new value.
+
+=head2 occurrence ( [ $occurrence ] ) or occ ( ... )
+
+Returns the ocurrence or undef. Optionally sets the ocurrence to a new value.
+
+=head2 level ( )
+
+Returns the level (0: main, 1: local, 2: copy) of this field.
+
+=head2 subfield ( [ $code(s) ] ) or sf ( ... )
+
+Return selected or all subfield values. If you specify 
+one ore more subfield codes, only matching subfields are 
+returned. When called in a scalar context returns only the
+first (matching) subfield. You may specify multiple subfield codes:
+
+    my $subfield = $field->subfield( 'a' );   # first $a
+    my $subfield = $field->subfield( 'acr' ); # first of $a, $c, $r
+    my $subfield = $field->subfield( 'a', 'c', 'r' ); # the same
+
+    my @subfields = $field->subfield( '0-9' );     # $0 ... $9
+    my @subfields = $field->subfield( qr/[0-9]/ ); # $0 ... $9
+
+    my @subfields = $field->subfield( 'a' );
+    my @all_subfields = $field->subfield();
+
+If no matching subfields are found, C<undef> is returned in a scalar
+context or an empty list in a list context.
+
+Remember that there can be more than one subfield of a given code!
+
+=head2 content ( [ $code(s) ] )
+
+Return selected or all subfields as an array of arrays. If you specify 
+one ore more subfield codes, only matching subfields are returned. See
+the C<subfield> method for more examples.
+
+This shows the subfields from a 021A field:
+
+        [
+          [ 'a', '@Traité de documentation' ],
+          [ 'd', 'Le livre sur le livre ; Théorie et pratique' ],
+          [ 'h', 'Paul Otlet' ]
+        ]
+
+=head2 add ( $code, $value [, $code, $value ...] )
+
+Adds subfields to the end of the subfield list.
+Whitespace in subfield values is normalized.
+
+    $field->add( 'c' => '1985' );
+
+Returns the number of subfields added. 
+
+=head2 update ( $sf => $value [ $sf => $value ...] )
+
+Allows you to change the values of the field for one or more given subfields:
+
+  $field->update( a => 'Little Science, Big Science' );
+
+If you attempt to update a subfield which does not currently exist in the field,
+then a new subfield will be appended. If you don't like this auto-vivification
+you must check for the existence of the subfield prior to update.
+
+  if ( defined $field->subfield( 'a' ) ) {
+      $field->update( 'a' => 'Cryptonomicon' );
+  }
+
+Instead of a single value you can also pass an array reference. The following
+statements should have the same result:
+
+  $field->update( 'x', 'foo', 'x', 'bar' );
+  $field->update( 'x' => ['foo', 'bar'] );
+
+To remove a subfield, update it to undef or an empty array reference:
+
+  $field->update( 'a' => undef );
+  $field->update( 'a' => [] );
+
+=head2 replace ( $field | ... )
+
+Allows you to replace an existing field with a new one. You may pass a
+C<PICA::Field> object or parameters for a new field to replace the
+existing field with. Replace does not return a meaningful or reliable value.
+
+=head2 empty_subfields ( )
+
+Returns a list of all codes of empty subfields.
+
+=head2 empty ( )
+
+Test whether there are no subfields or all subfields are empty. This method 
+is automatically called by overloading whenever a PICA::Field is converted 
+to a boolean value.
+
+=head2 purged ( )
+
+Remove a copy of this field with empty subfields
+removed or undef if the whole field is empty.
+
+=head2 normalized ( [$subfields] )
+
+Returns the field as a string. The tag number, occurrence and 
+subfield indicators are included. 
+
+If C<$subfields> is specified, then only those subfields will be included.
+
+=head2 sort ( [ $order ] )
+
+Sort subfields by subfield indicators. You can optionally specify an order as string of subfield codes.
+
+=head2 size
+
+Returns the number of subfields (no matter if empty or not).
+
+=head2 string ( [ %params ] )
+
+Returns a pretty string for printing.
+
+Returns the field as a string. The tag number, occurrence and 
+subfield indicators are included. 
+
+If C<subfields> is specified, then only those subfields will be included.
+
+Fields without subfields return an empty string.
+
+=head2 xml ( [ [ writer => ] $writer | [ OUTPUT ] => \$sref | %param ] )
+
+Return the field in PICA-XML format or write it to an L<XML::Writer>
+and return the writer. If you provide parameters, they will be passed
+to a newly created XML::Writer that is used to write to a string.
+
+By default the PICA-XML namespaces with namespace prefix 'pica' is 
+included. In addition to XML::Writer this methods knows the 'header'
+parameter that first adds the XML declaration.
+
+=head2 html ( [ %options ] )
+
+Returns a HTML representation of the field for browser display. See also
+the C<pica2html.xsl> script to generate a more elaborated HTML view from
+PICA-XML.
+
+=head1 STATIC METHODS
+
+=head2 parse_pp_tag tag ( $tag )
+
+Tests whether a string can be used as a tag/occurrence specifier. A tag
+indicator consists of a 'type' (00-99) and an 'indicator' (A-Z and @),
+both conflated as the 'tag', and an optional occurrence (00-99). This
+method returns a list of two values: occurrence and tag (this order!).
+It can be used to parse and test tag specifiers this ways:
+
+  ($occurrence, $tag) = parse_pp_tag( $t );
+  parse_pp_tag( $t ) or print STDERR "Not a valid tag: $t\n";
 
 =head1 SEE ALSO
 
 This module was inspired by L<MARC::Field> by Andy Lester.
 
+=encoding utf-8
+
 =head1 AUTHOR
 
-Jakob Voss C<< <jakob.voss@gbv.de> >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2010 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

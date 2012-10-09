@@ -1,13 +1,9 @@
 package PICA::XMLParser;
-
-=head1 NAME
-
-PICA::XMLParser - Parse PICA+ XML
-
-=cut
-
+{
+  $PICA::XMLParser::VERSION = '0.584';
+}
+#ABSTRACT: Parse PICA+ XML
 use strict;
-our $VERSION = "0.52";
 
 use base qw(XML::SAX::Base Exporter);
 use Carp qw(croak);
@@ -15,60 +11,12 @@ our @EXPORT_OK = qw(parsefile parsedata);
 
 require PICA::Field;
 
-=head1 SYNOPSIS
-
-  my $rcount = 1;
-  my $parser = PICA::XMLParser->new( 
-      Field => \&field_handler,
-      Record => \&record_handler
-  );
-  $parser->parsefile($filename);
-
-  # equivalent:
-  PICA::Parser->parsefile($filename,
-      Field => \&field_handler,
-      Record => \&record_handler,
-      Format => 'xml'  
-  );
-
-  sub field_handler {
-      my $field = shift;
-      print $field->string;
-      # no need to save the field so do not return it
-  }
-
-  sub record_handler {
-      print "$rcount\n"; $rcount++;
-  }
-
-=head1 DESCRIPTION
-
-This module contains a parser to parse PICA+ XML. Up to now
-PICA+ XML is not fully standarized yet so this parser may 
-slightly change in the future.
-
-This module can read multiple collections per file or data 
-stream but only the records of the current collection are
-saved and returned with the <records> method. Use the 
-C<Collection> handler to parse files with multiple collections.
-
-=cut
 
 use PICA::Field;
 use PICA::Record;
-use XML::SAX::ParserFactory;
+use XML::SAX::ParserFactory 1.01;
 use Carp qw(croak);
 
-=head1 PUBLIC METHODS
-
-=head2 new ( [ %params ] )
-
-Creates a new Parser. See L<PICA::Parser> for a description of 
-parameters to define handlers (Field and Record). In addition
-this parser supports the C<Collection> handler that is called
-on a C<collection> end tag.
-
-=cut
 
 sub new {
     my ($class, %params) = @_;
@@ -101,14 +49,6 @@ sub new {
     return $self;
 }
 
-=head2 parsedata
-
-Parses data from a string, array reference or function. 
-Data from arrays and functions will be read and buffered 
-before parsing. Do not directly call this method without 
-a C<PICA::XMLParser> object that was created with C<new()>.
-
-=cut
 
 sub parsedata {
     my $self = shift;
@@ -156,11 +96,6 @@ sub parsedata {
     }
 }
 
-=head2 parsefile ( $filename | $handle )
-
-Parses data from a file or filehandle or L<IO::Handle>.
-
-=cut
 
 sub parsefile {
     my $self = shift;
@@ -194,51 +129,24 @@ sub parsefile {
     }
 }
 
-=head2 records ( )
-
-Get an array of the read records (if they have been stored)
-
-=cut
 
 sub records {
    my $self = shift; 
    return @{ $self->{read_records} };
 }
 
-=head2 counter ( )
-
-Get the number of read records so far. Please note that the number
-of records as returned by the C<records> method may be lower because
-you may have filtered out some records.
-
-=cut
 
 sub counter {
    my $self = shift; 
    return $self->{read_counter};
 }
 
-=head2 finished ( ) 
-
-Return whether the parser will not parse any more records. This
-is the case if the number of read records is larger then the limit.
-
-=cut
 
 sub finished {
     my $self = shift; 
     return $self->{limit} && $self->counter() >= $self->{limit};
 }
 
-=head1 PRIVATE HANDLERS
-
-Do not directly call this methods.
-
-=head2 start_document
-
-Called at the beginning.
-
-=cut
 
 sub start_document {
     my ($self, $doc) = @_;
@@ -249,21 +157,11 @@ sub start_document {
     $self->{record} = ();
 }
 
-=head2 end_document
-
-Called at the end. Does nothing so far.
-
-=cut
 
 sub end_document {
     my ($self, $doc) = @_;
 }
 
-=head2 start_element
-
-Called for each start tag.
-
-=cut
 
 sub start_element {
     my ($self, $el) = @_;
@@ -313,11 +211,6 @@ sub start_element {
     }
 }
 
-=head2 end_element
-
-Called for each end tag.
-
-=cut
 
 sub end_element {
     my ($self, $el) = @_;
@@ -370,11 +263,6 @@ sub end_element {
     }
 }
 
-=head2 characters
-
-Called for character data.
-
-=cut
 
 sub characters {
     my ($self, $string) = @_;
@@ -387,11 +275,6 @@ sub characters {
     }
 }
 
-=head2 _getPosition
-
-Get the current position (file name and line number). This method is deprecated.
-
-=cut
 
 sub _getPosition {
     my ($self, $parser) = @_;
@@ -405,17 +288,130 @@ sub _getPosition {
 
 1;
 
+
 __END__
+=pod
+
+=head1 NAME
+
+PICA::XMLParser - Parse PICA+ XML
+
+=head1 VERSION
+
+version 0.584
+
+=head1 SYNOPSIS
+
+  my $rcount = 1;
+  my $parser = PICA::XMLParser->new( 
+      Field => \&field_handler,
+      Record => \&record_handler
+  );
+  $parser->parsefile($filename);
+
+  # equivalent:
+  PICA::Parser->parsefile($filename,
+      Field => \&field_handler,
+      Record => \&record_handler,
+      Format => 'xml'  
+  );
+
+  sub field_handler {
+      my $field = shift;
+      print $field->string;
+      # no need to save the field so do not return it
+  }
+
+  sub record_handler {
+      print "$rcount\n"; $rcount++;
+  }
+
+=head1 DESCRIPTION
+
+This module contains a parser to parse PICA+ XML. Up to now
+PICA+ XML is not fully standarized yet so this parser may 
+slightly change in the future.
+
+This module can read multiple collections per file or data 
+stream but only the records of the current collection are
+saved and returned with the <records> method. Use the 
+C<Collection> handler to parse files with multiple collections.
+
+=head1 PUBLIC METHODS
+
+=head2 new ( [ %params ] )
+
+Creates a new Parser. See L<PICA::Parser> for a description of 
+parameters to define handlers (Field and Record). In addition
+this parser supports the C<Collection> handler that is called
+on a C<collection> end tag.
+
+=head2 parsedata
+
+Parses data from a string, array reference or function. 
+Data from arrays and functions will be read and buffered 
+before parsing. Do not directly call this method without 
+a C<PICA::XMLParser> object that was created with C<new()>.
+
+=head2 parsefile ( $filename | $handle )
+
+Parses data from a file or filehandle or L<IO::Handle>.
+
+=head2 records ( )
+
+Get an array of the read records (if they have been stored)
+
+=head2 counter ( )
+
+Get the number of read records so far. Please note that the number
+of records as returned by the C<records> method may be lower because
+you may have filtered out some records.
+
+=head2 finished ( ) 
+
+Return whether the parser will not parse any more records. This
+is the case if the number of read records is larger then the limit.
+
+=head1 PRIVATE HANDLERS
+
+Do not directly call this methods.
+
+=head2 start_document
+
+Called at the beginning.
+
+=head2 end_document
+
+Called at the end. Does nothing so far.
+
+=head2 start_element
+
+Called for each start tag.
+
+=head2 end_element
+
+Called for each end tag.
+
+=head2 characters
+
+Called for character data.
+
+=head2 _getPosition
+
+Get the current position (file name and line number). This method is deprecated.
+
+=encoding utf-8
 
 =head1 AUTHOR
 
-Jakob Voss C<< <jakob.voss@gbv.de> >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2011 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
 

@@ -1,15 +1,9 @@
 #!/usr/bin/perl
-
-=head1 NAME
-
-winibw2pica - convert WinIBW PICA+ download to valid PICA+
-
-=cut
+#PODNAME: winibw2pica
+#ABSTRACT: convert WinIBW PICA+ download to valid PICA+
 
 use strict;
 use warnings;
-
-our $VERSION = '0.33';
 
 use PICA::Parser qw(parsedata);
 use PICA::Field qw(parse_pp_tag);
@@ -112,20 +106,22 @@ sub winibw2pica {
     return $line;
 }
 
+
+
+__END__
+=pod
+
+=head1 NAME
+
+winibw2pica - convert WinIBW PICA+ download to valid PICA+
+
+=head1 VERSION
+
+version 0.584
+
 =head1 SYNOPSIS
 
 winibw2pica [options] inputfile(s)
-
-=head1 OPTIONS
-
- -help          brief help message
- -man           full documentation with examples
- -output FILE   write PICA+ records to a given file (default: '-' for STDOUT)
- -xml           print records in PICA/XML
- -prettyxml     pretty print records in PICA/XML
- -ppn           add a PPN from the 'SET...' line if no PPN is in the record
- -utf8          read input field values as UTF-8
- -version       show version information
 
 =head1 DESCRIPTION
 
@@ -152,15 +148,34 @@ WinIBW commands you performed to produce the download.
 More information about WinIBW3 can be found in the WinIBW3 manual in German at
 L<http://www.gbv.de/wikis/cls/WinIBW3>.
 
+=head1 OPTIONS
+
+ -help          brief help message
+ -man           full documentation with examples
+ -output FILE   write PICA+ records to a given file (default: '-' for STDOUT)
+ -xml           print records in PICA/XML
+ -prettyxml     pretty print records in PICA/XML
+ -ppn           add a PPN from the 'SET...' line if no PPN is in the record
+ -utf8          read input field values as UTF-8
+ -version       show version information
+
 =head1 EXAMPLES
 
 winib2wpica -prettyxml mydownload.txt
 winib2wpica -utf8 -out mydownload.pica mydownload.txt
 
+=encoding utf8
+
 =head1 AUTHOR
 
-Jakob Voss C<< jakob.voss@gbv.de >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-This script is published as Public Domain. Feel free to reuse as you like!
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

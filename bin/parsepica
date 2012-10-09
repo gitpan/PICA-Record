@@ -1,40 +1,8 @@
 #!/usr/bin/perl
-
+#PODNAME: parsepica
+#ABSTRACT: fetch, parse and transform PICA+ data
 use strict;
 
-=head1 NAME
-
-parsepica - fetch, parse and transform PICA+ data
-
-=cut
-
-our $VERSION = '0.30';
-
-=head1 SYNOPSIS
-
-parsepica [options] [input file(s) or SRU-Server(s) and queries(s)]
-
-=head1 OPTIONS
-
- -input FILE     file with input files on each line ('-': STDIN)
- -files FILE     read input files from another file ('-': STDIN)
- -output FILE    print all valid records to a given file ('-': STDOUT)
- -xml [FILE]     print records in XML
- -pxml [FILE]    print records in pretty XML (with linebreaks)
- -pretty [FILE]  print records in pretty format
- -null           supress record output
- -quiet          supress logging
- -select FIELD   select a specific field or subfield (not if XML output)
- -count          print simple statistics
- -stats 0|1|2    print full statistics (1: fields, 2: subfields)
- -config FILE    read configuration from a file ('-': search default file)
- -auto           use default config file $PICASOURCE or ./pica.conf
- -log [FILE]     print logging to a given file ('-': STDOUT, default)
- -help           brief help message
- -limit N        limit the result set to N records (only for SRU)
- -man            full documentation with examples
-
-=cut
 
 use PICA::Record;
 use PICA::Field;
@@ -326,6 +294,23 @@ sub record_handler {
     }
 }
 
+
+
+__END__
+=pod
+
+=head1 NAME
+
+parsepica - fetch, parse and transform PICA+ data
+
+=head1 VERSION
+
+version 0.584
+
+=head1 SYNOPSIS
+
+parsepica [options] [input file(s) or SRU-Server(s) and queries(s)]
+
 =head1 DESCRIPTION
 
 This script provides a simple command line client to fetch and transform
@@ -343,6 +328,26 @@ By default input is read from STDIN and written to STDOUT ('-') without
 logging. On request logging information is printed to STDOUT or to a 
 specified logfile. Records that cannot be parseded produce error messages 
 to STDERR.
+
+=head1 OPTIONS
+
+ -input FILE     file with input files on each line ('-': STDIN)
+ -files FILE     read input files from another file ('-': STDIN)
+ -output FILE    print all valid records to a given file ('-': STDOUT)
+ -xml [FILE]     print records in XML
+ -pxml [FILE]    print records in pretty XML (with linebreaks)
+ -pretty [FILE]  print records in pretty format
+ -null           supress record output
+ -quiet          supress logging
+ -select FIELD   select a specific field or subfield (not if XML output)
+ -count          print simple statistics
+ -stats 0|1|2    print full statistics (1: fields, 2: subfields)
+ -config FILE    read configuration from a file ('-': search default file)
+ -auto           use default config file $PICASOURCE or ./pica.conf
+ -log [FILE]     print logging to a given file ('-': STDOUT, default)
+ -help           brief help message
+ -limit N        limit the result set to N records (only for SRU)
+ -man            full documentation with examples
 
 =head1 EXAMPLES
 
@@ -389,6 +394,18 @@ The limit parameter should also be implemented for other sources but SRU and
 an offset parameter would be useful. Fetching records via other protocols but
 SRU has not been tested. The statistics method can be improved a lot.
 
+=encoding utf8
+
 =head1 AUTHOR
 
-Jakob Voss C<< jakob.voss@gbv.de >>
+Jakob Voß <voss@gbv.de>
+
+=head1 COPYRIGHT AND LICENSE
+
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

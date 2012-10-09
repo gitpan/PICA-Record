@@ -1,53 +1,10 @@
 package PICA::Writer;
-
-=head1 NAME
-
-PICA::Writer - Write and count PICA+ records and fields
-
-=cut
-
+{
+  $PICA::Writer::VERSION = '0.584';
+}
+#ABSTRACT: Write and count PICA+ records and fields
 use strict;
-our $VERSION = "0.55";
 
-=head1 DESCRIPTION
-
-This module contains a simple class to write PICA+ records and fields.
-Several output targets (file, GLOB, L<IO:Handle>, string, null) and formats 
-(XML, plain, normalized) are supported. The number of written records
-and fields is counted so you can also use the class as a simple counter.
-Additional statistics of fields and subfields can also be enabled.
-
-=head1 SYNOPSIS
-
-  $writer = PICA::Writer->new( \*STDOUT );
-  $writer = PICA::Writer->new( "output.pica" );
-  $writer = PICA::Writer->new( \$string, format => 'xml' );
-  $writer = PICA::Writer->new( ); # no output
-
-  $writer->start();  # called implicitely by default
-
-  $writer->write( $record );
-  $writer->write( @records );
-  $writer->write( $field1, $field2, $field3 );
-  $writer->write( $comment, $record );
-
-  $writer->output( "output.xml" );  
-  $writer->output( \*STDOUT, format => 'plain' );  
-  print "Failed to open writer" unless $writer; # PICA::Writer::ERROR == 0
-
-  print $writer->counter() . " records written\n";
-  print $writer->fields()  . " fields written\n";
-
-  $writer->reset();  # reset counters
-
-  print $writer->status() == PICA::Writer::ENDED ? "open" : "ended";
- 
-  $writer->end(); # essential to close end tags in XML and such
-
-  use PICA::Record qw(writerecord);
-  writerecord( $record, $file );
-
-=cut
 
 use PICA::Record;
 use XML::Writer;
@@ -66,20 +23,6 @@ use constant ENDED   => 3;
 use overload 
     'bool' => sub { $_[0]->status };
 
-=head1 METHODS
-
-=head2 new ( [ $output ] [ format => $format ] [ %options ] )
-
-Create a new writer. See the C<output> method for possible parameters. 
-The status of the new writer is set to C<PICA::Writer::NEW> (1) or
-C<PICA::Writer::ERROR> (0). Boolean conversion is overloaded to return
-the status so you can easily check whether a writer is in error status.
-
-The writer can also be used for statistics if you set the 'stats' option.
-With stats = 1 statistics is created on field level and with stats = 2
-also on subfield level.
-
-=cut
 
 sub new {
     my $class = shift;
@@ -93,21 +36,6 @@ sub new {
     return $self->reset( @_ ? @_ : undef );
 }
 
-=head2 output ( [ $output ] [ format => $format ] [ %options ] )
-
-Define the output handler for this writer. Record and field counters are
-not reset but the writer is ended with the C<end> method if it had been 
-started before. The output handler can be a filename, a GLOB, an
-L<IO:Handle> object, a string reference, or C<undef>. In addition you
-can specify the output format with the C<format> parameter (C<plain> or
-C<xml>) and some options depending on the format, for instance 'pretty =E<gt> 1'
-and 'stats =E<gt> 0|1|2'.
-
-The status of the writer is set to C<PICA::Writer::NEW> or C<PICA::Writer::ERROR>.
-This methods returns the writer itself which boolean conversion is overloaded to
-return the status so you can easily check the return value whether an error occurred.
-
-=cut
 
 sub output {
     my $self = shift;
@@ -164,18 +92,6 @@ sub output {
     return $self;
 }
 
-=head2 reset ( [ $output ] )
-
-Reset the writer by setting record and field counters to zero and returning
-the writer object. Optionally you can define a new output handler, so the 
-following two lines are equal:
-
-  $writer->output( $output )->reset();
-  $writer->reset( $output );
-
-The status of the writer will only be changed if you specify a new output handler.
-
-=cut
 
 sub reset {
     my $self = shift;
@@ -187,25 +103,6 @@ sub reset {
     return $self;
 }
 
-=head2 write ( [ $comment | $record | $field ]* )
-
-Write L<PICA::Field>, L<PICA::Record> objects, and comments (as strings)
-and record the writer object. The number of written records and fields is
-counted and can be queried with methods counter and fields.
-
-  $writer->write( $record );
-  $writer->write( @records );
-  $writer->write( "record number " . $writer->counter(), $record );
-  $writer->write( $field1, $field2 );
-
-Writing single fields or mixing records and fields may not be possible 
-depending on the output format and output handler. 
-
-Returns the writer object so you can chain calls:
-
-  $writer->write( $r1 )->write( $r2 )->end;
-
-=cut
 
 sub write {
     my $self = shift;
@@ -266,21 +163,6 @@ sub write {
     return $self;
 }
 
-=head2 start ( [ %options ] )
-
-Start writing and return the writer object. Depending on the format and 
-output handler a header is written. Afterwards the status is set to
-PICA::Writer::STARTED. You can pass optional parameters depending on the
-format.
-
-  $writer->start( ); # default
-  $writer->start( xslt => 'mystylesheet.xsl' );
-  $writer->start( nsprefix => 'pica' );
-
-This method is implicitely called the first time you write to a PICA::Writer
-that is not in status PICA::Writer::STARTED..
-
-=cut
 
 sub start {
     my $self = shift;
@@ -302,17 +184,6 @@ sub start {
 }
 
 
-=head2 end ( )
-
-Finish writing. Depending on the format and output handler a footer is
-written (for instance an XML end tag) and the output handler is closed. 
-Afterwards the status is set to PICA::Writer::ENDED. If the writer had
-not been started before, the start method is called first. 
-
-Ending or writing to an already ended writer will throw an error. You can
-restart an ended writer with the output method or with the start method.
-
-=cut
 
 sub end {
     my $self = shift;
@@ -335,53 +206,27 @@ sub end {
     return $self;
 }
 
-=head2 status ( )
-
-Return the status which can be PICA::Writer::NEW, PICA::Writer::STARTED, 
-PICA::Writer::ENDED, or PICA::Writer::ERROR.
-
-=cut
 
 sub status {
     my $self = shift;
     return $self->{status};
 }
 
-=head2 records ( )
-
-Returns the number of written records.
-
-=cut
 
 sub records {
     my $self = shift;
     return $self->{recordcounter};
 }
 
-=head2 counter ( )
-
-Alias for records().
-
-=cut
 
 *counter = *records;
 
-=head2 fields ( )
-
-Returns the number of written fields.
-
-=cut
 
 sub fields {
     my $self = shift;
     return $self->{fieldcounter};
 }
 
-=head2 statlines ( )
-
-Return a list of lines with statistics (if stats option had been set).
-
-=cut
 
 sub statlines {
     my $self = shift;
@@ -412,15 +257,6 @@ sub statlines {
 }
 
 
-=head1 FUNCTIONS
-
-=head2 xmlwriter ( %params )
-
-Create a new L<XML::Writer> instance and optionally write XML header
-and processing instruction. Relevant parameters include 'header' (boolean),
-'xslt', NAMESPACES, PREFIX_MAP.
-
-=cut
 
 sub xmlwriter {
     my %params = @_;
@@ -439,13 +275,6 @@ sub xmlwriter {
     return $writer;
 }
 
-=head2 PRIVATE METHDOS
-
-=head2 addfieldstat ( $field )
-
-Add a field to the statistics.
-
-=cut
 
 sub addfieldstat {
     my ($self, $field) = @_;
@@ -503,11 +332,6 @@ sub addfieldstat {
     # ...stats...
 }
 
-=head2 addrecordstat ( $record )
-
-Add a record to the statistics.
-
-=cut
 
 sub addrecordstat {
     my ($self, $record) = @_;
@@ -548,14 +372,187 @@ sub addrecordstat {
 
 1;
 
+
+__END__
+=pod
+
+=head1 NAME
+
+PICA::Writer - Write and count PICA+ records and fields
+
+=head1 VERSION
+
+version 0.584
+
+=head1 SYNOPSIS
+
+  $writer = PICA::Writer->new( \*STDOUT );
+  $writer = PICA::Writer->new( "output.pica" );
+  $writer = PICA::Writer->new( \$string, format => 'xml' );
+  $writer = PICA::Writer->new( ); # no output
+
+  $writer->start();  # called implicitely by default
+
+  $writer->write( $record );
+  $writer->write( @records );
+  $writer->write( $field1, $field2, $field3 );
+  $writer->write( $comment, $record );
+
+  $writer->output( "output.xml" );  
+  $writer->output( \*STDOUT, format => 'plain' );  
+  print "Failed to open writer" unless $writer; # PICA::Writer::ERROR == 0
+
+  print $writer->counter() . " records written\n";
+  print $writer->fields()  . " fields written\n";
+
+  $writer->reset();  # reset counters
+
+  print $writer->status() == PICA::Writer::ENDED ? "open" : "ended";
+ 
+  $writer->end(); # essential to close end tags in XML and such
+
+  use PICA::Record qw(writerecord);
+  writerecord( $record, $file );
+
+=head1 DESCRIPTION
+
+This module contains a simple class to write PICA+ records and fields.
+Several output targets (file, GLOB, L<IO:Handle>, string, null) and formats 
+(XML, plain, normalized) are supported. The number of written records
+and fields is counted so you can also use the class as a simple counter.
+Additional statistics of fields and subfields can also be enabled.
+
+=head1 METHODS
+
+=head2 new ( [ $output ] [ format => $format ] [ %options ] )
+
+Create a new writer. See the C<output> method for possible parameters. 
+The status of the new writer is set to C<PICA::Writer::NEW> (1) or
+C<PICA::Writer::ERROR> (0). Boolean conversion is overloaded to return
+the status so you can easily check whether a writer is in error status.
+
+The writer can also be used for statistics if you set the 'stats' option.
+With stats = 1 statistics is created on field level and with stats = 2
+also on subfield level.
+
+=head2 output ( [ $output ] [ format => $format ] [ %options ] )
+
+Define the output handler for this writer. Record and field counters are
+not reset but the writer is ended with the C<end> method if it had been 
+started before. The output handler can be a filename, a GLOB, an
+L<IO:Handle> object, a string reference, or C<undef>. In addition you
+can specify the output format with the C<format> parameter (C<plain> or
+C<xml>) and some options depending on the format, for instance 'pretty =E<gt> 1'
+and 'stats =E<gt> 0|1|2'.
+
+The status of the writer is set to C<PICA::Writer::NEW> or C<PICA::Writer::ERROR>.
+This methods returns the writer itself which boolean conversion is overloaded to
+return the status so you can easily check the return value whether an error occurred.
+
+=head2 reset ( [ $output ] )
+
+Reset the writer by setting record and field counters to zero and returning
+the writer object. Optionally you can define a new output handler, so the 
+following two lines are equal:
+
+  $writer->output( $output )->reset();
+  $writer->reset( $output );
+
+The status of the writer will only be changed if you specify a new output handler.
+
+=head2 write ( [ $comment | $record | $field ]* )
+
+Write L<PICA::Field>, L<PICA::Record> objects, and comments (as strings)
+and record the writer object. The number of written records and fields is
+counted and can be queried with methods counter and fields.
+
+  $writer->write( $record );
+  $writer->write( @records );
+  $writer->write( "record number " . $writer->counter(), $record );
+  $writer->write( $field1, $field2 );
+
+Writing single fields or mixing records and fields may not be possible 
+depending on the output format and output handler. 
+
+Returns the writer object so you can chain calls:
+
+  $writer->write( $r1 )->write( $r2 )->end;
+
+=head2 start ( [ %options ] )
+
+Start writing and return the writer object. Depending on the format and 
+output handler a header is written. Afterwards the status is set to
+PICA::Writer::STARTED. You can pass optional parameters depending on the
+format.
+
+  $writer->start( ); # default
+  $writer->start( xslt => 'mystylesheet.xsl' );
+  $writer->start( nsprefix => 'pica' );
+
+This method is implicitely called the first time you write to a PICA::Writer
+that is not in status PICA::Writer::STARTED..
+
+=head2 end ( )
+
+Finish writing. Depending on the format and output handler a footer is
+written (for instance an XML end tag) and the output handler is closed. 
+Afterwards the status is set to PICA::Writer::ENDED. If the writer had
+not been started before, the start method is called first. 
+
+Ending or writing to an already ended writer will throw an error. You can
+restart an ended writer with the output method or with the start method.
+
+=head2 status ( )
+
+Return the status which can be PICA::Writer::NEW, PICA::Writer::STARTED, 
+PICA::Writer::ENDED, or PICA::Writer::ERROR.
+
+=head2 records ( )
+
+Returns the number of written records.
+
+=head2 counter ( )
+
+Alias for records().
+
+=head2 fields ( )
+
+Returns the number of written fields.
+
+=head2 statlines ( )
+
+Return a list of lines with statistics (if stats option had been set).
+
+=head1 FUNCTIONS
+
+=head2 xmlwriter ( %params )
+
+Create a new L<XML::Writer> instance and optionally write XML header
+and processing instruction. Relevant parameters include 'header' (boolean),
+'xslt', NAMESPACES, PREFIX_MAP.
+
+=head2 PRIVATE METHDOS
+
+=head2 addfieldstat ( $field )
+
+Add a field to the statistics.
+
+=head2 addrecordstat ( $record )
+
+Add a record to the statistics.
+
+=encoding utf-8
+
 =head1 AUTHOR
 
-Jakob Voss C<< <jakob.voss@gbv.de> >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

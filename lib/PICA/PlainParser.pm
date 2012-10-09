@@ -1,53 +1,15 @@
 package PICA::PlainParser;
-
-=head1 NAME
-
-PICA::PlainParser - Parse normalized PICA+
-
-=cut
-
+{
+  $PICA::PlainParser::VERSION = '0.584';
+}
+#ABSTRACT: Parse normalized PICA+
 use strict;
 
-our $VERSION = "0.52";
-
-=head1 SYNOPSIS
-
-  my $parser = PICA::PlainParser->new(
-      Field => \&field_handler,
-      Record => \&record_handler
-  );
-
-  $parser->parsefile($filename);
-
-  sub field_handler {
-      my $field = shift;
-      print $field->string;
-      # no need to save the field so do not return it
-  }
-
-  sub record_handler {
-      print "\n";
-  }
-
-=head1 DESCRIPTION
-
-This module contains a parser for normalized PICA+
-
-=cut
 
 use PICA::Field;
 use PICA::Record;
 use Carp qw(croak);
 
-=head1 PUBLIC METHODS
-
-=head2 new (params)
-
-Create a new parser. See L<PICA::Parser> for a detailed description of
-the possible parameters C<Field>, C<Record>, and C<Collection>. Errors
-are reported to STDERR.
-
-=cut
 
 sub new {
     my ($class, %params) = @_;
@@ -78,15 +40,6 @@ sub new {
     return $self;
 }
 
-=head2 parsefile ( $filename | $handle )
-
-Parses a file, specified by a filename or file handle or L<IO::Handle>.
-Additional possible parameters are handlers (C<Field>, C<Record>,
-C<Collection>) and options (C<EmptyRecords>). If you supply a filename
-with extension C<.gz> then it is extracted while reading with C<zcat>,
-if the extension is C<.zip> then C<unzip> is used to extract.
-
-=cut
 
 sub parsefile {
     my ($self, $file) = @_;
@@ -165,14 +118,6 @@ sub parsefile {
     $self;
 }
 
-=head2 parsedata ( $data )
-
-Parses PICA+ data from a string, array or function. If you supply
-a function then this function is must return scalars or arrays and
-it is called unless it returns undef. You can also supply a 
-L<PICA::Record> object to be parsed again.
-
-=cut
 
 sub parsedata {
     my ($self, $data, $additional) = @_;
@@ -206,49 +151,24 @@ sub parsedata {
 }
 
 
-=head2 records ( )
-
-Get an array of the read records (if they have been stored)
-
-=cut
 
 sub records {
     my $self = shift; 
     return @{ $self->{read_records} };
 }
 
-=head2 counter ( )
-
-Get the number of records that have been (tried to) read. This also includes
-broken records and other records that have been skipped, for instance by
-filtering out with the record handler.
-
-=cut
 
 sub counter {
     my $self = shift; 
     return $self->{read_counter};
 }
 
-=head2 finished ( )
-
-Return whether the parser will not parse any more records. This
-is the case if the number of read records is larger then the limit.
-
-=cut
 
 sub finished {
     my $self = shift; 
     return $self->{limit} && $self->counter() >= $self->{limit};
 }
 
-=head1 PRIVATE METHODS
-
-=head2 _parsedata
-
-Parses a string or an array reference.
-
-=cut
 
 sub _parsedata {
     my ($self, $data) = @_;
@@ -268,11 +188,6 @@ sub _parsedata {
     }
 }
 
-=head2 _parseline
-
-Parses a line (without trailing newline character). May throw an exception with croak.
-
-=cut
 
 sub _parseline {
     my ($self, $line) = @_;
@@ -299,15 +214,6 @@ sub _parseline {
     $self->{active} = 1;
 }
 
-=head2 broken_field ( $errormessage [, $line ] )
-
-If a line could not be parsed into a L<PICA::Field>, this method is called.
-If it returns undef, the line is ignored, if it returns a PICA::Field object,
-this field is used instead and if it returns a true value, the whole record
-will be marked as broken. This method can be used as error handler. By default
-it always returns undef and prints an error message to STDERR.
-
-=cut
 
 sub broken_field {
     my ($self, $msg, $line) = @_;
@@ -320,13 +226,6 @@ sub broken_field {
     return;
 }
 
-=head2 broken_record ( $errormessage [, $record ] )
-
-Error handler for broken records. By default
-prints the errormessage to STDERR if it is defined 
-and the record is not empty.
-
-=cut
 
 sub broken_record {
     my ($self, $msg, $record) = @_;
@@ -338,11 +237,6 @@ sub broken_record {
     return;
 }
 
-=head2 handle_record ( )
-
-Calls the record handler.
-
-=cut
 
 sub handle_record {
     my $self = shift;
@@ -393,16 +287,119 @@ sub handle_record {
 
 1;
 
+
 __END__
+=pod
+
+=head1 NAME
+
+PICA::PlainParser - Parse normalized PICA+
+
+=head1 VERSION
+
+version 0.584
+
+=head1 SYNOPSIS
+
+  my $parser = PICA::PlainParser->new(
+      Field => \&field_handler,
+      Record => \&record_handler
+  );
+
+  $parser->parsefile($filename);
+
+  sub field_handler {
+      my $field = shift;
+      print $field->string;
+      # no need to save the field so do not return it
+  }
+
+  sub record_handler {
+      print "\n";
+  }
+
+=head1 DESCRIPTION
+
+This module contains a parser for normalized PICA+
+
+=head1 PUBLIC METHODS
+
+=head2 new (params)
+
+Create a new parser. See L<PICA::Parser> for a detailed description of
+the possible parameters C<Field>, C<Record>, and C<Collection>. Errors
+are reported to STDERR.
+
+=head2 parsefile ( $filename | $handle )
+
+Parses a file, specified by a filename or file handle or L<IO::Handle>.
+Additional possible parameters are handlers (C<Field>, C<Record>,
+C<Collection>) and options (C<EmptyRecords>). If you supply a filename
+with extension C<.gz> then it is extracted while reading with C<zcat>,
+if the extension is C<.zip> then C<unzip> is used to extract.
+
+=head2 parsedata ( $data )
+
+Parses PICA+ data from a string, array or function. If you supply
+a function then this function is must return scalars or arrays and
+it is called unless it returns undef. You can also supply a 
+L<PICA::Record> object to be parsed again.
+
+=head2 records ( )
+
+Get an array of the read records (if they have been stored)
+
+=head2 counter ( )
+
+Get the number of records that have been (tried to) read. This also includes
+broken records and other records that have been skipped, for instance by
+filtering out with the record handler.
+
+=head2 finished ( )
+
+Return whether the parser will not parse any more records. This
+is the case if the number of read records is larger then the limit.
+
+=head1 PRIVATE METHODS
+
+=head2 _parsedata
+
+Parses a string or an array reference.
+
+=head2 _parseline
+
+Parses a line (without trailing newline character). May throw an exception with croak.
+
+=head2 broken_field ( $errormessage [, $line ] )
+
+If a line could not be parsed into a L<PICA::Field>, this method is called.
+If it returns undef, the line is ignored, if it returns a PICA::Field object,
+this field is used instead and if it returns a true value, the whole record
+will be marked as broken. This method can be used as error handler. By default
+it always returns undef and prints an error message to STDERR.
+
+=head2 broken_record ( $errormessage [, $record ] )
+
+Error handler for broken records. By default
+prints the errormessage to STDERR if it is defined 
+and the record is not empty.
+
+=head2 handle_record ( )
+
+Calls the record handler.
+
+=encoding utf-8
 
 =head1 AUTHOR
 
-Jakob Voss C<< <jakob.voss@gbv.de> >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

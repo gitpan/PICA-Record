@@ -1,33 +1,10 @@
 package PICA::Source;
-
-=head1 NAME
-
-PICA::Source - Data source that can be queried for PICA+ records
-
-=cut
-
+{
+  $PICA::Source::VERSION = '0.584';
+}
+#ABSTRACT: Data source that can be queried for PICA+ records
 use strict;
-our $VERSION = "0.53";
 
-=head1 SYNOPSIS
-
-  my $server = PICA::Source->new(
-      SRU => "http://my.server.org/sru-interface.cgi"
-  );
-  my $record = $server->getPPN('1234567890');
-  $server->cqlQuery("pica.tit=Hamster")->count();
-
-  # Get connection details from a config file
-  $store = PICA::Source->new( config => "myconf.conf" );
-
-  $result = $server->cqlQuery("pica.tit=Hamster", Limit => 15 );
-  $result = $server->z3950Query('@attr 1=4 microformats');
-
-  $record = $server->getPPN("1234567890");
-
-Instead or in addition to SRU you can use Z39.50, PSI, and unAPI (experimental).
-
-=cut
 
 use Carp qw(croak);
 use PICA::PlainParser;
@@ -36,19 +13,6 @@ use PICA::Store;
 use LWP::Simple;
 use Unicode::Normalize qw(NFC);
 
-=head1 METHODS
-
-=head2 new ( [ %params ] )
-
-Create a new Server. You can specify an SRU interface with C<SRU>, 
-a Z39.50 server with C<Z3950>, an unAPI base url with C<unAPI> or a
-raw PICA PSI interface with C<PSI>. Optional parameters include
-C<user> and C<password> for authentification. If you provide a C<config>
-parameter, configuration parameters will read from a file or from
-the file specified with the C<PICASOURCE> environment variable or
-from the file C<pica.conf> in the current directory.
-
-=cut
 
 sub new {
     my ($class, %params) = @_;
@@ -79,13 +43,6 @@ sub new {
     bless $self, $class;
 }
 
-=head2 getPPN ( $ppn )
-
-Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
-Only available for source APIs SRU, unAPI, and PSI. You should check whether 
-the returned object is empty or not. On error the special variable $@ is set.
-
-=cut
 
 sub getPPN {
     my ($self, $id) = @_;
@@ -137,13 +94,6 @@ sub getPPN {
     } # TODO: use z3950
 }
 
-=head2 cqlQuery ( $cql [ $parser | %params | ] )
-
-Perform a CQL query and return the L<PICA::XMLParser> object that was used to
-parse the resulting records. You can pass an existing Parser or parser 
-parameters as listed at L<PICA::Parser>. Only available for API type C<SRU>.
-
-=cut
 
 sub cqlQuery {
     my $self = shift;
@@ -188,12 +138,6 @@ sub cqlQuery {
     }
 }
 
-=head2 z3950Query ( $query [, $plainparser | %params ] )
-
-Perform a Z39.50 query via L<ZOOM>. The resulting records are read with
-a L<PICA::PlainParser> that is returned.
-
-=cut
 
 sub z3950Query {
     my ($self, $query, %handlers) = @_;
@@ -240,12 +184,6 @@ sub z3950Query {
     return $parser;
 }
 
-=head2 iktQuery ( $ikt, $term )
-
-Search a source by IKT (search index) and search term. The current implementation
-only returns the first record. This method does only work for PSI source.
-
-=cut
 
 sub iktQuery {
     my ($self, $ikt, $term) = @_;
@@ -268,12 +206,6 @@ sub iktQuery {
     return ($record);
 }
 
-=head2 iktLink ( $ikt, $term )
-
-Returns a link to the result list of a search by IKT or undef. 
-Croaks if no PSI source has been defined.
-
-=cut
 
 sub iktLink {
     my ($self, $ikt, $term) = @_;
@@ -286,12 +218,6 @@ sub iktLink {
     return $self->{PSI} . "/CMD?ACT=SRCHA&IKT=$ikt&TRM=$term";
 }
 
-=head2 ppnLink ( $ppn )
-
-Returns a link to the record view of a record given by PPN.
-Croaks if no PSI source has been defined.
-
-=cut
 
 sub ppnLink {
     my ($self, $ppn) = @_;
@@ -301,11 +227,6 @@ sub ppnLink {
     return $self->{PSI} . "/PPNSET?PPN=$ppn";
 }
 
-=head2 baseURL
-
-Return the base URL (if specified) or the empty string.
-
-=cut
 
 sub baseURL {
     my $self = shift;
@@ -317,16 +238,6 @@ sub baseURL {
     return "";
 }
 
-=head1 UTILITY FUNCTIONS
-
-The following methods are based on L<CGI::Utils> by Don Owens.
-
-=head2 url_encode
-
-Returns the fully URL-encoded version of the given string.
-It does not convert space characters to '+' characters.
-
-=cut
 
 sub url_encode {
     my $str = shift;
@@ -334,11 +245,6 @@ sub url_encode {
     return $str;
 }
 
-=head2 url_decode
-
-Returns the fully URL-decoded version of the given string.
-
-=cut
 
 sub url_decode {
     my $str = shift;
@@ -359,14 +265,109 @@ sub url_decode {
 
 1;
 
+
+__END__
+=pod
+
+=head1 NAME
+
+PICA::Source - Data source that can be queried for PICA+ records
+
+=head1 VERSION
+
+version 0.584
+
+=head1 SYNOPSIS
+
+  my $server = PICA::Source->new(
+      SRU => "http://my.server.org/sru-interface.cgi"
+  );
+  my $record = $server->getPPN('1234567890');
+  $server->cqlQuery("pica.tit=Hamster")->count();
+
+  # Get connection details from a config file
+  $store = PICA::Source->new( config => "myconf.conf" );
+
+  $result = $server->cqlQuery("pica.tit=Hamster", Limit => 15 );
+  $result = $server->z3950Query('@attr 1=4 microformats');
+
+  $record = $server->getPPN("1234567890");
+
+Instead or in addition to SRU you can use Z39.50, PSI, and unAPI (experimental).
+
+=head1 METHODS
+
+=head2 new ( [ %params ] )
+
+Create a new Server. You can specify an SRU interface with C<SRU>, 
+a Z39.50 server with C<Z3950>, an unAPI base url with C<unAPI> or a
+raw PICA PSI interface with C<PSI>. Optional parameters include
+C<user> and C<password> for authentification. If you provide a C<config>
+parameter, configuration parameters will read from a file or from
+the file specified with the C<PICASOURCE> environment variable or
+from the file C<pica.conf> in the current directory.
+
+=head2 getPPN ( $ppn )
+
+Get a record specified by its PPN. Returns a L<PICA::Record> object or undef.
+Only available for source APIs SRU, unAPI, and PSI. You should check whether 
+the returned object is empty or not. On error the special variable $@ is set.
+
+=head2 cqlQuery ( $cql [ $parser | %params | ] )
+
+Perform a CQL query and return the L<PICA::XMLParser> object that was used to
+parse the resulting records. You can pass an existing Parser or parser 
+parameters as listed at L<PICA::Parser>. Only available for API type C<SRU>.
+
+=head2 z3950Query ( $query [, $plainparser | %params ] )
+
+Perform a Z39.50 query via L<ZOOM>. The resulting records are read with
+a L<PICA::PlainParser> that is returned.
+
+=head2 iktQuery ( $ikt, $term )
+
+Search a source by IKT (search index) and search term. The current implementation
+only returns the first record. This method does only work for PSI source.
+
+=head2 iktLink ( $ikt, $term )
+
+Returns a link to the result list of a search by IKT or undef. 
+Croaks if no PSI source has been defined.
+
+=head2 ppnLink ( $ppn )
+
+Returns a link to the record view of a record given by PPN.
+Croaks if no PSI source has been defined.
+
+=head2 baseURL
+
+Return the base URL (if specified) or the empty string.
+
+=head1 UTILITY FUNCTIONS
+
+The following methods are based on L<CGI::Utils> by Don Owens.
+
+=head2 url_encode
+
+Returns the fully URL-encoded version of the given string.
+It does not convert space characters to '+' characters.
+
+=head2 url_decode
+
+Returns the fully URL-decoded version of the given string.
+
+=encoding utf-8
+
 =head1 AUTHOR
 
-Jakob Voss C<< <jakob.voss@gbv.de> >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

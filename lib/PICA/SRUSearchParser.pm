@@ -1,39 +1,16 @@
 package PICA::SRUSearchParser;
-
-=head1 NAME
-
-PICA::SRUSearchParser - Parse a SRU response in XML and extract PICA+ records.
-
-=cut
-
+{
+  $PICA::SRUSearchParser::VERSION = '0.584';
+}
+#ABSTRACT: Parse a SRU response in XML and extract PICA+ records.
 use strict;
 
-our $VERSION = "0.49";
-
-=head1 SYNOPSIS
-
-    $parser = PICA::SRUSearchParser->new();
-    $xmlparser = $parser->parse( $sru );
-
-    print "numberOfRecords: " . $parser->numberOfRecords . "\n";
-    print "resultSetId: " . $parser->resultSetId . "\n";
-    print "result: " . $xmlparser->counter() . "\n";
-
-=cut
 
 use Carp qw(croak);
 use PICA::XMLParser;
 use XML::SAX::ParserFactory;
 use base qw(XML::SAX::Base);
 
-=head1 METHODS
-
-=head2 new ( [ $xmlparser ] )
-
-Creates a new XML parser to parse an SRU Search Response document.
-PICA Records are passed to a L<PICA::XMLParser> that must be provided.
-
-=cut
 
 sub new {
     my ($class, $xmlparser) = @_;
@@ -54,12 +31,6 @@ sub new {
     return bless $self, $class;
 }
 
-=head2 parse( $document )
-
-Parse an SRU SearchRetrieve Response (given as XML document)
-and return the L<PICA::XMLParser> object that has been used.
-
-=cut
 
 sub parse {
     my ($self, $document) = @_;
@@ -74,52 +45,24 @@ sub parse {
     return $self->{xmlparser};
 }
 
-=head2 numberOfRecords ()
-
-Get the total number of records in the SRU result set.
-The result set may be split into several chunks.
-
-=cut
 
 sub numberOfRecords {
     my $self = shift;
     return $self->{numberOfRecords};
 }
 
-=head2 currentNumber ()
-
-Get the current number of records that has been passed.
-This is equal to or less then numberOfRecords.
-
-=cut
 
 sub currentNumber {
     my $self = shift;
     return $self->{currentNumber};
 }
 
-=head2 resultSetId ()
-
-Get the SRU resultSetId that has been parsed.
-
-=cut
 
 sub resultSetId {
     my $self = shift;
     return $self->{resultSetId};
 }
 
-=head1 PRIVATE HANDLERS
-
-This methods are private SAX handlers to parse the XML.
-
-=head2 start_element
-
-SAX handler for XML start tag. On PICA+ records this calls 
-the start handler of L<PICA::XMLParser>, outside of records
-it parses the SRU response.
-
-=cut
 
 sub start_element {
     my ($self, $el) = @_;
@@ -148,12 +91,6 @@ sub _sru_element {
     return $el->{LocalName} eq $name and $el->{NamespaceURI} eq 'http://www.loc.gov/zing/srw/';
 }
 
-=head2 end_element
-
-SAX handler for XML end tag. On PICA+ records this calls 
-the end handler of L<PICA::XMLParser>.
-
-=cut
 
 sub end_element {
     my ($self, $el) = @_;
@@ -178,12 +115,6 @@ sub end_element {
     }
 }
 
-=head2 characters
-
-SAX handler for XML character data. On PICA+ records this calls 
-the character data handler of L<PICA::XMLParser>.
-
-=cut
 
 sub characters {
     my ($self, $data) = @_;
@@ -198,14 +129,85 @@ sub characters {
 
 1;
 
+
+__END__
+=pod
+
+=head1 NAME
+
+PICA::SRUSearchParser - Parse a SRU response in XML and extract PICA+ records.
+
+=head1 VERSION
+
+version 0.584
+
+=head1 SYNOPSIS
+
+    $parser = PICA::SRUSearchParser->new();
+    $xmlparser = $parser->parse( $sru );
+
+    print "numberOfRecords: " . $parser->numberOfRecords . "\n";
+    print "resultSetId: " . $parser->resultSetId . "\n";
+    print "result: " . $xmlparser->counter() . "\n";
+
+=head1 METHODS
+
+=head2 new ( [ $xmlparser ] )
+
+Creates a new XML parser to parse an SRU Search Response document.
+PICA Records are passed to a L<PICA::XMLParser> that must be provided.
+
+=head2 parse( $document )
+
+Parse an SRU SearchRetrieve Response (given as XML document)
+and return the L<PICA::XMLParser> object that has been used.
+
+=head2 numberOfRecords ()
+
+Get the total number of records in the SRU result set.
+The result set may be split into several chunks.
+
+=head2 currentNumber ()
+
+Get the current number of records that has been passed.
+This is equal to or less then numberOfRecords.
+
+=head2 resultSetId ()
+
+Get the SRU resultSetId that has been parsed.
+
+=head1 PRIVATE HANDLERS
+
+This methods are private SAX handlers to parse the XML.
+
+=head2 start_element
+
+SAX handler for XML start tag. On PICA+ records this calls 
+the start handler of L<PICA::XMLParser>, outside of records
+it parses the SRU response.
+
+=head2 end_element
+
+SAX handler for XML end tag. On PICA+ records this calls 
+the end handler of L<PICA::XMLParser>.
+
+=head2 characters
+
+SAX handler for XML character data. On PICA+ records this calls 
+the character data handler of L<PICA::XMLParser>.
+
+=encoding utf-8
+
 =head1 AUTHOR
 
-Jakob Voss C<< <jakob.voss@gbv.de> >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

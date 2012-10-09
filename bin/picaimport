@@ -1,69 +1,10 @@
 #!/usr/bin/perl
-
-=head1 NAME
-
-picaimport - Import or delete PICA+ records in a L<PICA::Store>
-
-=cut
+#PODNAME: picaimport
+#ABSTRACT: Import or delete PICA+ records in a L<PICA::Store>
 
 use strict;
 use warnings;
 
-our $VERSION = '0.27';
-
-=head1 SYNOPSIS
-
-  picaimport [options] [file]*
-
-=head1 OPTIONS
-
- -help          this brief help message
- -man           show detailed documentation with examples
- -config FILE   read configuration from a file (default: picastore.conf)
- -delete        delete records instead of importing them
- -force         do not ask before deleting
- -from FILE     read files to import from a file (default: - for STDIN)
- -get           download records instead of uploading (implies -write)
- -move          remove imported files on success
- -log FILE      print import information to a file (default: - for STDIN)
- -quiet         suppress additional status messages and output
- -ppn           update with the PPN of a record if no PPN is given
- -version       print version of this script and exit
- -write         write back the resulting record
-
-=head1 DESCRIPTION 
-
-This script can be used to import or delete PICA records in a L<PICA::Store>,
-for instance via webcat (L<PICA::SOAPClient>) or into a SQLite database
-(L<PICA::SQLiteStore>). By default only the first PICA record of each file
-that you specify is imported. 
-
-The PICA+ files to be imported can be specified either as command line 
-parameters or listed in another file (option -from) or you type in the
-file names on request. It is recommended to delete sucessfully imported
-files (with option -move) so you do not import them twice. If options are
-read from another file, you must specify PPN and filename seperated by 
-space (update) or just a filename on each line. To update via command line
-you must specify a PPN (with option -ppn) and a record file or state
-with option -update that the PPN is taken from the record. 
-
-On import or update picaimport prints the PPN and filename of each record
-in one line - you can use this output format as input format with option
--from to later update the records.
-
-To connect to a PICA store you must provide a config file via the -config
-parameter or the PICASTORE environment variable - or name it C<picastore.conf>
-and put it in the current directory. The config file can contain all 
-parameters that may be provided to the L<PICA::Store> constructor.
-At least there must be one of the following parameters:
-
-  webcat = URL
-  SQLite = FILE
-
-Other known configuration parameters include dbsid, userkey, password,
-and language.
-
-=cut
 
 use PICA::Record;
 use PICA::Parser;
@@ -304,6 +245,71 @@ sub timestamp {
     return strftime("%Y-%m-%dT%H:%M:%S", localtime());
 }
 
+
+
+__END__
+=pod
+
+=head1 NAME
+
+picaimport - Import or delete PICA+ records in a L<PICA::Store>
+
+=head1 VERSION
+
+version 0.584
+
+=head1 SYNOPSIS
+
+  picaimport [options] [file]*
+
+=head1 OPTIONS
+
+ -help          this brief help message
+ -man           show detailed documentation with examples
+ -config FILE   read configuration from a file (default: picastore.conf)
+ -delete        delete records instead of importing them
+ -force         do not ask before deleting
+ -from FILE     read files to import from a file (default: - for STDIN)
+ -get           download records instead of uploading (implies -write)
+ -move          remove imported files on success
+ -log FILE      print import information to a file (default: - for STDIN)
+ -quiet         suppress additional status messages and output
+ -ppn           update with the PPN of a record if no PPN is given
+ -version       print version of this script and exit
+ -write         write back the resulting record
+
+=head1 DESCRIPTION 
+
+This script can be used to import or delete PICA records in a L<PICA::Store>,
+for instance via webcat (L<PICA::SOAPClient>) or into a SQLite database
+(L<PICA::SQLiteStore>). By default only the first PICA record of each file
+that you specify is imported. 
+
+The PICA+ files to be imported can be specified either as command line 
+parameters or listed in another file (option -from) or you type in the
+file names on request. It is recommended to delete sucessfully imported
+files (with option -move) so you do not import them twice. If options are
+read from another file, you must specify PPN and filename seperated by 
+space (update) or just a filename on each line. To update via command line
+you must specify a PPN (with option -ppn) and a record file or state
+with option -update that the PPN is taken from the record. 
+
+On import or update picaimport prints the PPN and filename of each record
+in one line - you can use this output format as input format with option
+-from to later update the records.
+
+To connect to a PICA store you must provide a config file via the -config
+parameter or the PICASTORE environment variable - or name it C<picastore.conf>
+and put it in the current directory. The config file can contain all 
+parameters that may be provided to the L<PICA::Store> constructor.
+At least there must be one of the following parameters:
+
+  webcat = URL
+  SQLite = FILE
+
+Other known configuration parameters include dbsid, userkey, password,
+and language.
+
 =head1 EXAMPLES
 
 Import the first PICA+ record in C<myrecord.pica> to the store specified in 
@@ -329,10 +335,18 @@ Import all files listed in C<newrecords> and delete imported files on success
 
   picaimport -from newrecords -move
 
+=encoding utf8
+
 =head1 AUTHOR
 
-Jakob Voss C<< jakob.voss@gbv.de >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-This script is published as Public Domain. Feel free to reuse as you like!
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

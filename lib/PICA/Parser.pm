@@ -1,14 +1,11 @@
 package PICA::Parser;
-
-=head1 NAME
-
-PICA::Parser - Parse PICA+ data
-
-=cut
-
+{
+  $PICA::Parser::VERSION = '0.584';
+}
+#ABSTRACT: Parse PICA+ data
 use strict;
+
 use base qw(Exporter);
-our $VERSION = "0.50";
 
 use Carp qw(croak);
 our @EXPORT_OK = qw(parsefile parsedata);
@@ -16,6 +13,154 @@ our @CARP_NOT = qw(PICA::PlainParser PICA::XMLParser);
 
 require PICA::PlainParser;
 require PICA::XMLParser;
+
+
+sub new {
+    my $class = "PICA::Parser";
+    if (scalar(@_) % 2) { # odd
+        $class = shift;
+        $class = ref $class || $class;
+    }
+    my %params = @_;
+
+    my $self = bless {
+        defaultparams => {},
+        xmlparser => undef,
+        plainparser => undef
+    }, $class;
+
+    %{ $self->{defaultparams} } = %params if %params;
+
+    return $self;
+}
+
+
+sub parsefile {
+    my $self = shift;
+    my ($arg, $parser);
+
+    if (ref($self) eq 'PICA::Parser') { # called as a method
+        $arg = shift;
+        my %params = @_;
+        if (ref(\$arg) eq 'SCALAR' and ($arg =~ /.xml$/i or $arg =~ /.xml.gz$/i)) {
+            $params{Format} = "XML";
+        }
+        $parser = $self->_getparser( %params );
+        croak("Missing argument to parsefile") unless defined $arg;
+        $parser->parsefile( $arg );
+        $self;
+    } else { # called as a function
+        $arg = ($self eq 'PICA::Parser') ? shift : $self;
+        croak("Missing argument to parsefile") unless defined $arg;
+        $parser = PICA::Parser->new( @_ );
+        $parser->parsefile( $arg );
+        $parser;
+    }
+}
+
+
+sub parsedata {
+    my $self = shift;
+    my ( $data, $parser );
+
+    if (ref($self) eq 'PICA::Parser') { # called as a method
+        $data = shift;
+        my %params = @_;
+        $parser = $self->_getparser( %params );
+        $parser->parsedata( $data );
+        $self;
+    } else { # called as a function
+        $data = ($self eq 'PICA::Parser') ? shift : $self;
+        $parser = PICA::Parser->new( @_ );
+        $parser->parsedata( $data );
+        $parser;
+    }
+}
+
+
+sub records {
+    my $self = shift;
+    return () unless ref $self;
+
+    return $self->{plainparser}->records() if $self->{plainparser};
+    return $self->{xmlparser}->records() if $self->{xmlparser};
+
+    return ();
+}
+
+
+sub counter {
+    my $self = shift;
+    return undef if !ref $self;
+
+    my $counter = 0;
+    $counter += $self->{plainparser}->counter() if $self->{plainparser};
+    $counter += $self->{xmlparser}->counter() if $self->{xmlparser};
+    return $counter;
+}
+
+
+sub enable_binmode_encoding {
+    my $fh = shift;
+    foreach my $layer ( PerlIO::get_layers( $fh ) ) {
+        return if $layer =~ /^encoding|^utf8/;
+    }
+    binmode ($fh, ':utf8');
+}
+
+
+sub _getparser {
+    my $self = shift;
+    my %params = @_;
+    delete $params{Proceed} if defined $params{Proceed};
+
+    my $parser;
+
+    # join parameters
+    my %unionparams = ();
+    my %defaultparams = %{ $self->{defaultparams} };
+    my $key;
+    foreach $key (keys %defaultparams) {
+        $unionparams{$key} = $defaultparams{$key}
+    }
+    foreach $key (keys %params) {
+        $unionparams{$key} = $params{$key}
+    }
+    # remove format parameter
+    delete $params{Format} if defined $params{Format};
+
+    # XMLParser
+    if ( defined $unionparams{Format} and $unionparams{Format} =~ /^xml$/i ) {
+        if ( !$self->{xmlparser} or %params ) {
+            #require PICA::XMLParser; 
+            #if ($self->{xmlparser} && 
+            $self->{xmlparser} = PICA::XMLParser->new( %unionparams );
+        }
+        $parser = $self->{xmlparser};
+    } else { # PlainParser
+        if ( !$self->{plainparser} or %params ) {
+            #require PICA::PlainParser; 
+            $self->{plainparser} = PICA::PlainParser->new( %unionparams );
+        }
+        $parser = $self->{plainparser};
+    }
+
+    return $parser;
+}
+
+1;
+
+
+
+=pod
+
+=head1 NAME
+
+PICA::Parser - Parse PICA+ data
+
+=head1 VERSION
+
+version 0.584
 
 =head1 SYNOPSIS
 
@@ -162,27 +307,6 @@ will be reused without reseting counters and read record.
 
 Error handling is only implemented in L<PICA::PlainParser> by now!
 
-=cut
-
-sub new {
-    my $class = "PICA::Parser";
-    if (scalar(@_) % 2) { # odd
-        $class = shift;
-        $class = ref $class || $class;
-    }
-    my %params = @_;
-
-    my $self = bless {
-        defaultparams => {},
-        xmlparser => undef,
-        plainparser => undef
-    }, $class;
-
-    %{ $self->{defaultparams} } = %params if %params;
-
-    return $self;
-}
-
 =head1 METHODS
 
 =head2 parsefile ( $filename-or-handle [, %params ] )
@@ -197,31 +321,6 @@ L<PICA::XMLParser> is used instead.
   PICA::Parser->parsefile( "data.xml", Record => sub { ... } );
 
 See the constructor C<new> for a description of parameters.
-
-=cut
-
-sub parsefile {
-    my $self = shift;
-    my ($arg, $parser);
-
-    if (ref($self) eq 'PICA::Parser') { # called as a method
-        $arg = shift;
-        my %params = @_;
-        if (ref(\$arg) eq 'SCALAR' and ($arg =~ /.xml$/i or $arg =~ /.xml.gz$/i)) {
-            $params{Format} = "XML";
-        }
-        $parser = $self->_getparser( %params );
-        croak("Missing argument to parsefile") unless defined $arg;
-        $parser->parsefile( $arg );
-        $self;
-    } else { # called as a function
-        $arg = ($self eq 'PICA::Parser') ? shift : $self;
-        croak("Missing argument to parsefile") unless defined $arg;
-        $parser = PICA::Parser->new( @_ );
-        $parser->parsefile( $arg );
-        $parser;
-    }
-}
 
 =head2 parsedata ( $data [, %params ] )
 
@@ -239,26 +338,6 @@ unless there the C<Format> parameter set to C<xml>.
 
 See the constructor C<new> for a description of parameters.
 
-=cut
-
-sub parsedata {
-    my $self = shift;
-    my ( $data, $parser );
-
-    if (ref($self) eq 'PICA::Parser') { # called as a method
-        $data = shift;
-        my %params = @_;
-        $parser = $self->_getparser( %params );
-        $parser->parsedata( $data );
-        $self;
-    } else { # called as a function
-        $data = ($self eq 'PICA::Parser') ? shift : $self;
-        $parser = PICA::Parser->new( @_ );
-        $parser->parsedata( $data );
-        $parser;
-    }
-}
-
 =head2 records ( )
 
 Get an array of the read records (as returned by the record handler which
@@ -266,35 +345,11 @@ can thus be used as a filter). If no record handler was specified, records
 will be collected unmodified. For large record sets it is recommended not
 to collect the records but directly use them with a record handler.
 
-=cut
-
-sub records {
-    my $self = shift;
-    return () unless ref $self;
-
-    return $self->{plainparser}->records() if $self->{plainparser};
-    return $self->{xmlparser}->records() if $self->{xmlparser};
-
-    return ();
-}
-
 =head2 counter ( )
 
 Get the number of read records so far. Please note that the number
 of records as returned by the C<records> method may be lower because
 you may have filtered out some records.
-
-=cut
-
-sub counter {
-    my $self = shift;
-    return undef if !ref $self;
-
-    my $counter = 0;
-    $counter += $self->{plainparser}->counter() if $self->{plainparser};
-    $counter += $self->{xmlparser}->counter() if $self->{xmlparser};
-    return $counter;
-}
 
 =head1 INTERNAL METHODS
 
@@ -303,16 +358,6 @@ sub counter {
 Enable :utf8 layer for a given filehandle unless it or some other 
 encoding has already been enabled. You should not need this method.
 
-=cut
-
-sub enable_binmode_encoding {
-    my $fh = shift;
-    foreach my $layer ( PerlIO::get_layers( $fh ) ) {
-        return if $layer =~ /^encoding|^utf8/;
-    }
-    binmode ($fh, ':utf8');
-}
-
 =head2 _getparser ( [ %params] )
 
 Internal method to get a new parser of the internal parser of this object.
@@ -320,65 +365,28 @@ By default, gives a L<PICA:PlainParser> unless you specify the C<Format>
 parameter. Single parameters override the default parameters specified at
 the constructor (except the the C<Proceed> parameter).
 
-=cut
-
-sub _getparser {
-    my $self = shift;
-    my %params = @_;
-    delete $params{Proceed} if defined $params{Proceed};
-
-    my $parser;
-
-    # join parameters
-    my %unionparams = ();
-    my %defaultparams = %{ $self->{defaultparams} };
-    my $key;
-    foreach $key (keys %defaultparams) {
-        $unionparams{$key} = $defaultparams{$key}
-    }
-    foreach $key (keys %params) {
-        $unionparams{$key} = $params{$key}
-    }
-    # remove format parameter
-    delete $params{Format} if defined $params{Format};
-
-    # XMLParser
-    if ( defined $unionparams{Format} and $unionparams{Format} =~ /^xml$/i ) {
-        if ( !$self->{xmlparser} or %params ) {
-            #require PICA::XMLParser; 
-            #if ($self->{xmlparser} && 
-            $self->{xmlparser} = PICA::XMLParser->new( %unionparams );
-        }
-        $parser = $self->{xmlparser};
-    } else { # PlainParser
-        if ( !$self->{plainparser} or %params ) {
-            #require PICA::PlainParser; 
-            $self->{plainparser} = PICA::PlainParser->new( %unionparams );
-        }
-        $parser = $self->{plainparser};
-    }
-
-    return $parser;
-}
-
-1;
-
-__END__
-
 =head1 TODO
 
 Better logging needs to be added, for instance a status message every n records.
 This may be implemented with multiple (piped?) handlers per record. Error handling
 of broken records should also be improved.
 
+=encoding utf-8
+
 =head1 AUTHOR
 
-Jakob Voss C<< <jakob.voss@gbv.de> >>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you Ccan redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+
+
+__END__
+
+

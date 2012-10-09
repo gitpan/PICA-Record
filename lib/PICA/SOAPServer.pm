@@ -1,18 +1,157 @@
 package PICA::SOAPServer;
-
-=head1 NAME
-
-PICA::SOAPServer - provide a SOAP interface to a L<PICA::Store>
-
-=cut
-
+{
+  $PICA::SOAPServer::VERSION = '0.584';
+}
+#ABSTRACT: Provide a SOAP interface to a L<PICA::Store>
 use strict;
 use warnings;
+
 use SOAP::Lite;
 use PICA::Record;
 
 our @ISA = qw(Exporter SOAP::Server::Parameters);
-our $VERSION = "0.1";
+
+
+# private functions to wrap SOAP nightmare
+
+# die with a SOAP fault
+my $fault = sub {
+    my ($code, $string) = @_;
+    die SOAP::Fault->new( faultcode => $code, faultstring => $string );
+};
+
+# unpack a SOAP envelope with named parameters of type string
+my $unpack = sub {
+    my ($envelope, $required, $optional) = @_;
+    my %result;
+    foreach my $name ((@$required,@$optional)) { 
+        my $param = $envelope->dataof($name);
+        $result{$name} = $param->value if $param;
+    }
+    foreach my $name (@$required) {
+        $fault->("BADREQUEST", "Missing parameter $name") 
+            unless defined $result{$name};
+    }
+
+    return %result;
+};
+
+# pack a SOAP response object
+my $pack = sub {
+    my (%values) = @_;
+    return SOAP::Data->name( "response" =>
+        \SOAP::Data->value(  
+            SOAP::Data->name('dbsid'   => $values{'dbsid'})->type('string'),  
+            SOAP::Data->name('ppn'     => $values{'ppn'})->type('string'),  
+            SOAP::Data->name('record'  => $values{'record'})->type('string'),  
+            SOAP::Data->name('version' => $values{'version'})->type('string'),
+            SOAP::Data->name('format'  => 'pp')->type('string'),  
+        )  
+    );
+};
+
+
+sub new {
+    my ($class, $store) = @_;
+    my $self = bless {
+        store => $store
+    }, $class;
+    if (not UNIVERSAL::isa( $store, 'PICA::Store' ) ) {
+        $self->{error} = $store ? "$store" : 'No PICA::Store available';
+        $self->{store} = undef;
+    }
+    return $self;
+}
+
+
+sub get {
+    my $self = shift;
+    my $env = pop;
+    my %params = $unpack->($env, [qw(userkey password dbsid ppn)], [qw(language format)]);
+    $fault->(1, $self->{error}) unless $self->{store};
+
+    my %r = $self->{store}->access( %params )->get( $params{ppn} );
+    $fault->($r{errorcode}, $r{errormessage}) if defined $r{errorcode};
+    
+    return $pack->(
+        ppn => $r{id},
+        record => $r{record}->string,
+        version => $r{version},
+        dbsid => $params{dbsid}
+    );
+}
+
+
+sub create {
+    my $self = shift;
+    my %params = $unpack->(pop, [qw(userkey password dbsid record)], [qw(language format rectype)]);
+    $fault->(1, $self->{error}) unless $self->{store};
+
+    my %r = $self->{store}->access( %params )->create( PICA::Record->new($params{record}) );
+    $fault->($r{errorcode}, $r{errormessage}) unless defined $r{id};
+
+    return $pack->(
+        ppn => $r{id},
+        record => $r{record}->string,
+        version => $r{version},
+        dbsid => $params{dbsid}
+    );
+}
+
+
+sub update {
+    my $self = shift;
+    my %params = $unpack->(pop, [qw(userkey password dbsid ppn record version)], [qw(language format)]);
+    $fault->(1, $self->{error}) unless $self->{store};
+
+    my %r = $self->{store}->access( %params )
+          -> update( $params{ppn}, PICA::Record->new($params{record}), $params{version} );
+    $fault->($r{errorcode}, $r{errormessage}) unless defined $r{id};
+
+    return $pack->(
+        ppn => $r{id},
+        record => $r{record}->string,
+        version => $r{version},
+        dbsid => $params{dbsid}
+    );
+}
+
+
+sub delete {
+    my $self = shift;
+    my %params = $unpack->(pop, [qw(userkey password dbsid ppn)], [qw(language)]);
+    $fault->(1, $self->{error}) unless $self->{store};
+
+    # get the record before deleting
+    my %r = $self->{store}->access( %params )->get( $params{ppn} );
+    $fault->($r{errorcode}, $r{errormessage}) if defined $r{errorcode};
+
+    # actually delete it
+    my %r2 = $self->{store}->access( %params )->delete( $params{ppn} );
+    $fault->( $r2{errorcode}, $r2{errormessage} ) unless defined $r2{id};
+
+    return $pack->(
+        ppn => $r{id},
+        record => $r{record}->string,
+        version => $r{version},
+        dbsid => $params{dbsid}
+    );
+}
+
+1;
+
+
+
+__END__
+=pod
+
+=head1 NAME
+
+PICA::SOAPServer - Provide a SOAP interface to a L<PICA::Store>
+
+=head1 VERSION
+
+version 0.584
 
 =head1 SYNOPSIS
 
@@ -64,46 +203,6 @@ The record format which is always 'pp' for PICA+.
 
 =back
 
-=cut
-
-# private functions to wrap SOAP nightmare
-
-# die with a SOAP fault
-my $fault = sub {
-    my ($code, $string) = @_;
-    die SOAP::Fault->new( faultcode => $code, faultstring => $string );
-};
-
-# unpack a SOAP envelope with named parameters of type string
-my $unpack = sub {
-    my ($envelope, $required, $optional) = @_;
-    my %result;
-    foreach my $name ((@$required,@$optional)) { 
-        my $param = $envelope->dataof($name);
-        $result{$name} = $param->value if $param;
-    }
-    foreach my $name (@$required) {
-        $fault->("BADREQUEST", "Missing parameter $name") 
-            unless defined $result{$name};
-    }
-
-    return %result;
-};
-
-# pack a SOAP response object
-my $pack = sub {
-    my (%values) = @_;
-    return SOAP::Data->name( "response" =>
-        \SOAP::Data->value(  
-            SOAP::Data->name('dbsid'   => $values{'dbsid'})->type('string'),  
-            SOAP::Data->name('ppn'     => $values{'ppn'})->type('string'),  
-            SOAP::Data->name('record'  => $values{'record'})->type('string'),  
-            SOAP::Data->name('version' => $values{'version'})->type('string'),
-            SOAP::Data->name('format'  => 'pp')->type('string'),  
-        )  
-    );
-};
-
 =head1 METHODS
 
 =head2 new ( $store )
@@ -117,66 +216,15 @@ be run this way:
     -> dispatch_with( { 'http://www.gbv.de/schema/webcat-1.0' => $server } )
     -> handle;
 
-=cut
-
-sub new {
-    my ($class, $store) = @_;
-    my $self = bless {
-        store => $store
-    }, $class;
-    if (not UNIVERSAL::isa( $store, 'PICA::Store' ) ) {
-        $self->{error} = $store ? "$store" : 'No PICA::Store available';
-        $self->{store} = undef;
-    }
-    return $self;
-}
-
 =head2 get
 
 Retrieve a PICA+ record by its id (ppn). Mandatory SOAP parameters are ppn,
 userkey, password, and dbsid. Optional parameters are language and format.
 
-=cut
-
-sub get {
-    my $self = shift;
-    my $env = pop;
-    my %params = $unpack->($env, [qw(userkey password dbsid ppn)], [qw(language format)]);
-    $fault->(1, $self->{error}) unless $self->{store};
-
-    my %r = $self->{store}->access( %params )->get( $params{ppn} );
-    $fault->($r{errorcode}, $r{errormessage}) if defined $r{errorcode};
-    
-    return $pack->(
-        ppn => $r{id},
-        record => $r{record}->string,
-        version => $r{version},
-        dbsid => $params{dbsid}
-    );
-}
-
 =head2 create
 
 Create a new PICA+ record. Mandatory SOAP parameters are record, userkey,
 password, and dbsid. Optional parameters are language, format, and rectype.
-
-=cut
-
-sub create {
-    my $self = shift;
-    my %params = $unpack->(pop, [qw(userkey password dbsid record)], [qw(language format rectype)]);
-    $fault->(1, $self->{error}) unless $self->{store};
-
-    my %r = $self->{store}->access( %params )->create( PICA::Record->new($params{record}) );
-    $fault->($r{errorcode}, $r{errormessage}) unless defined $r{id};
-
-    return $pack->(
-        ppn => $r{id},
-        record => $r{record}->string,
-        version => $r{version},
-        dbsid => $params{dbsid}
-    );
-}
 
 =head2 update
 
@@ -184,67 +232,27 @@ Modify an existing PICA+ record. Mandatory SOAP parameters are ppn, record,
 version, userkey, password, and dbsid. Optional parameters are language 
 and format.
 
-=cut
-
-sub update {
-    my $self = shift;
-    my %params = $unpack->(pop, [qw(userkey password dbsid ppn record version)], [qw(language format)]);
-    $fault->(1, $self->{error}) unless $self->{store};
-
-    my %r = $self->{store}->access( %params )
-          -> update( $params{ppn}, PICA::Record->new($params{record}), $params{version} );
-    $fault->($r{errorcode}, $r{errormessage}) unless defined $r{id};
-
-    return $pack->(
-        ppn => $r{id},
-        record => $r{record}->string,
-        version => $r{version},
-        dbsid => $params{dbsid}
-    );
-}
-
 =head2 delete
 
 Delete a PICA+ record. Mandatory SOAP parameters are ppn, userkey, password,
 and dbsid. The only optional parameter is language.
 
-=cut
-
-sub delete {
-    my $self = shift;
-    my %params = $unpack->(pop, [qw(userkey password dbsid ppn)], [qw(language)]);
-    $fault->(1, $self->{error}) unless $self->{store};
-
-    # get the record before deleting
-    my %r = $self->{store}->access( %params )->get( $params{ppn} );
-    $fault->($r{errorcode}, $r{errormessage}) if defined $r{errorcode};
-
-    # actually delete it
-    my %r2 = $self->{store}->access( %params )->delete( $params{ppn} );
-    $fault->( $r2{errorcode}, $r2{errormessage} ) unless defined $r2{id};
-
-    return $pack->(
-        ppn => $r{id},
-        record => $r{record}->string,
-        version => $r{version},
-        dbsid => $params{dbsid}
-    );
-}
-
-1;
-
 =head1 SEE ALSO
 
 See L<PICA::Store>, L<PICA::SOAPClient> and L<SOAP::Lite>.
 
+=encoding utf-8
+
 =head1 AUTHOR
 
-Jakob Voss <jakob.voss@gbv.de>
+Jakob Voß <voss@gbv.de>
 
-=head1 LICENSE
+=head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007-2009 by Verbundzentrale Goettingen (VZG) and Jakob Voss
+This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
-This library is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself, either Perl version 5.8.8 or, at
-your option, any later version of Perl 5 you may have available.
+This is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
+=cut
+

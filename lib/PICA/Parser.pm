@@ -1,6 +1,6 @@
 package PICA::Parser;
 {
-  $PICA::Parser::VERSION = '0.584';
+  $PICA::Parser::VERSION = '0.585';
 }
 #ABSTRACT: Parse PICA+ data
 use strict;
@@ -150,9 +150,11 @@ sub _getparser {
 
 1;
 
-
+__END__
 
 =pod
+
+=encoding utf-8
 
 =head1 NAME
 
@@ -160,7 +162,7 @@ PICA::Parser - Parse PICA+ data
 
 =head1 VERSION
 
-version 0.584
+version 0.585
 
 =head1 SYNOPSIS
 
@@ -371,22 +373,15 @@ Better logging needs to be added, for instance a status message every n records.
 This may be implemented with multiple (piped?) handlers per record. Error handling
 of broken records should also be improved.
 
-=encoding utf-8
-
 =head1 AUTHOR
 
 Jakob Voß <voss@gbv.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+This software is copyright (c) 2014 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-
-
-__END__
-
-

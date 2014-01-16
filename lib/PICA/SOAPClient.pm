@@ -1,6 +1,6 @@
 package PICA::SOAPClient;
 {
-  $PICA::SOAPClient::VERSION = '0.584';
+  $PICA::SOAPClient::VERSION = '0.585';
 }
 #ABSTRACT: PICA::Store via SOAP access (aka 'webcat')
 use strict;
@@ -164,9 +164,11 @@ sub _soap_query {
 
 1;
 
-
 __END__
+
 =pod
+
+=encoding utf-8
 
 =head1 NAME
 
@@ -174,7 +176,7 @@ PICA::SOAPClient - PICA::Store via SOAP access (aka 'webcat')
 
 =head1 VERSION
 
-version 0.584
+version 0.585
 
 =head1 SYNOPSIS
 
@@ -270,18 +272,15 @@ a hash with 'errorcode' and 'errormessage' or a hash with 'dbsid', 'id',
 'record', and 'version' depending on the type of query. Do not directly
 call this method!
 
-=encoding utf-8
-
 =head1 AUTHOR
 
 Jakob Voß <voss@gbv.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+This software is copyright (c) 2014 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-

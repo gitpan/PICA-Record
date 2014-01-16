@@ -1,6 +1,6 @@
 package PICA::SQLiteStore;
 {
-  $PICA::SQLiteStore::VERSION = '0.584';
+  $PICA::SQLiteStore::VERSION = '0.585';
 }
 #ABSTRACT: Store L<PICA::Record>s in a SQLite database with versioning
 use strict;
@@ -349,9 +349,11 @@ sub DESTROY {
 
 1;
 
-
 __END__
+
 =pod
+
+=encoding utf-8
 
 =head1 NAME
 
@@ -359,7 +361,7 @@ PICA::SQLiteStore - Store L<PICA::Record>s in a SQLite database with versioning
 
 =head1 VERSION
 
-version 0.584
+version 0.585
 
 =head1 METHODS
 
@@ -433,18 +435,15 @@ Get a list of deleted records.
 Disconnect the database before exit. This method is only called 
 automatically as destructor, so don't call it explicitely!
 
-=encoding utf-8
-
 =head1 AUTHOR
 
 Jakob Voß <voss@gbv.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+This software is copyright (c) 2014 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-

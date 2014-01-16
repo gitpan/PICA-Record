@@ -1,6 +1,6 @@
 package PICA::SRUSearchParser;
 {
-  $PICA::SRUSearchParser::VERSION = '0.584';
+  $PICA::SRUSearchParser::VERSION = '0.585';
 }
 #ABSTRACT: Parse a SRU response in XML and extract PICA+ records.
 use strict;
@@ -129,9 +129,11 @@ sub characters {
 
 1;
 
-
 __END__
+
 =pod
+
+=encoding utf-8
 
 =head1 NAME
 
@@ -139,7 +141,7 @@ PICA::SRUSearchParser - Parse a SRU response in XML and extract PICA+ records.
 
 =head1 VERSION
 
-version 0.584
+version 0.585
 
 =head1 SYNOPSIS
 
@@ -196,18 +198,15 @@ the end handler of L<PICA::XMLParser>.
 SAX handler for XML character data. On PICA+ records this calls 
 the character data handler of L<PICA::XMLParser>.
 
-=encoding utf-8
-
 =head1 AUTHOR
 
 Jakob Voß <voss@gbv.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+This software is copyright (c) 2014 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-

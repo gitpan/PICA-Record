@@ -9,7 +9,7 @@ build_requires:
 configure_requires:
   ExtUtils::MakeMaker: 6.30
 dynamic_config: 0
-generated_by: 'Dist::Zilla version 4.300023, CPAN::Meta::Converter version 2.120921'
+generated_by: 'Dist::Zilla version 5.006, CPAN::Meta::Converter version 2.132830'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -52,4 +52,4 @@ resources:
   bugtracker: https://github.com/gbv/PICA-Record/issues
   homepage: https://github.com/gbv/PICA-Record
   repository: https://github.com/gbv/PICA-Record.git
-version: 0.584
+version: 0.585

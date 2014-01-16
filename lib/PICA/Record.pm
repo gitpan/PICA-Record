@@ -1,6 +1,6 @@
 package PICA::Record;
 {
-  $PICA::Record::VERSION = '0.584';
+  $PICA::Record::VERSION = '0.585';
 }
 #ABSTRACT: Perl module for handling PICA+ records
 use strict;
@@ -668,10 +668,11 @@ sub picarecord {
 
 1;
 
-
-
 __END__
+
 =pod
+
+=encoding utf-8
 
 =head1 NAME
 
@@ -679,7 +680,7 @@ PICA::Record - Perl module for handling PICA+ records
 
 =head1 VERSION
 
-version 0.584
+version 0.585
 
 =head1 SYNOPSIS
 
@@ -1142,18 +1143,15 @@ L<Net::Z3950::Record> also had a subclass L<Net::Z3950::Record::MAB> for MAB
 records. You should now better use L<Net::Z3950::ZOOM> which is also needed
 if you query Z39.50 servers with L<PICA::Source>.
 
-=encoding utf-8
-
 =head1 AUTHOR
 
 Jakob Voß <voss@gbv.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+This software is copyright (c) 2014 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-

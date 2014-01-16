@@ -294,10 +294,11 @@ sub record_handler {
     }
 }
 
-
-
 __END__
+
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -305,7 +306,7 @@ parsepica - fetch, parse and transform PICA+ data
 
 =head1 VERSION
 
-version 0.584
+version 0.585
 
 =head1 SYNOPSIS
 
@@ -394,18 +395,15 @@ The limit parameter should also be implemented for other sources but SRU and
 an offset parameter would be useful. Fetching records via other protocols but
 SRU has not been tested. The statistics method can be improved a lot.
 
-=encoding utf8
-
 =head1 AUTHOR
 
 Jakob Voß <voss@gbv.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+This software is copyright (c) 2014 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-

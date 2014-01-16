@@ -10,20 +10,16 @@ use ExtUtils::MakeMaker 6.30;
 
 my %WriteMakefileArgs = (
   "ABSTRACT" => "Perl module for handling PICA+ records",
-  "AUTHOR" => "Jakob Vo\303\237 <voss\@gbv.de>",
-  "BUILD_REQUIRES" => {
-    "File::Temp" => 0,
-    "SOAP::Transport::HTTP" => 0,
-    "Test::More" => 0
-  },
+  "AUTHOR" => "Jakob Vo\x{df} <voss\@gbv.de>",
+  "BUILD_REQUIRES" => {},
   "CONFIGURE_REQUIRES" => {
     "ExtUtils::MakeMaker" => "6.30"
   },
   "DISTNAME" => "PICA-Record",
   "EXE_FILES" => [
     "bin/parsepica",
-    "bin/picaimport",
-    "bin/winibw2pica"
+    "bin/winibw2pica",
+    "bin/picaimport"
   ],
   "LICENSE" => "perl",
   "NAME" => "PICA::Record",
@@ -60,24 +56,60 @@ my %WriteMakefileArgs = (
     "utf8" => 0,
     "warnings" => 0
   },
-  "VERSION" => "0.584",
+  "TEST_REQUIRES" => {
+    "File::Temp" => 0,
+    "SOAP::Transport::HTTP" => 0,
+    "Test::More" => 0
+  },
+  "VERSION" => "0.585",
   "test" => {
     "TESTS" => "t/*.t"
   }
 );
 
 
-unless ( eval { ExtUtils::MakeMaker->VERSION(6.56) } ) {
-  my $br = delete $WriteMakefileArgs{BUILD_REQUIRES};
-  my $pp = $WriteMakefileArgs{PREREQ_PM};
-  for my $mod ( keys %$br ) {
-    if ( exists $pp->{$mod} ) {
-      $pp->{$mod} = $br->{$mod} if $br->{$mod} > $pp->{$mod};
-    }
-    else {
-      $pp->{$mod} = $br->{$mod};
-    }
-  }
+my %FallbackPrereqs = (
+  "Carp" => 0,
+  "Config::Simple" => 0,
+  "Cwd" => 0,
+  "DBD::SQLite" => 0,
+  "DBI" => 0,
+  "Data::Dumper" => 0,
+  "Encode" => 0,
+  "Exporter" => 0,
+  "File::Temp" => 0,
+  "Getopt::Long" => 0,
+  "IO::File" => 0,
+  "IO::Handle" => 0,
+  "IO::Scalar" => 0,
+  "LWP::Simple" => 0,
+  "POSIX" => 0,
+  "PerlIO" => 0,
+  "Pod::Usage" => 0,
+  "SOAP::Lite" => 0,
+  "SOAP::Transport::HTTP" => 0,
+  "Scalar::Util" => 0,
+  "String::Escape" => 0,
+  "Test::More" => 0,
+  "URI::Escape" => 0,
+  "Unicode::Normalize" => 0,
+  "XML::SAX::Base" => 0,
+  "XML::SAX::ParserFactory" => "1.01",
+  "XML::Writer" => 0,
+  "base" => 0,
+  "constant" => 0,
+  "overload" => 0,
+  "sort" => 0,
+  "strict" => 0,
+  "utf8" => 0,
+  "warnings" => 0
+);
+
+
+unless ( eval { ExtUtils::MakeMaker->VERSION(6.63_03) } ) {
+  delete $WriteMakefileArgs{TEST_REQUIRES};
+  delete $WriteMakefileArgs{BUILD_REQUIRES};
+  $WriteMakefileArgs{PREREQ_PM} = \%FallbackPrereqs;
 }
 
 delete $WriteMakefileArgs{CONFIGURE_REQUIRES}

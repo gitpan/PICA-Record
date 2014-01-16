@@ -245,10 +245,11 @@ sub timestamp {
     return strftime("%Y-%m-%dT%H:%M:%S", localtime());
 }
 
-
-
 __END__
+
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -256,7 +257,7 @@ picaimport - Import or delete PICA+ records in a L<PICA::Store>
 
 =head1 VERSION
 
-version 0.584
+version 0.585
 
 =head1 SYNOPSIS
 
@@ -335,18 +336,15 @@ Import all files listed in C<newrecords> and delete imported files on success
 
   picaimport -from newrecords -move
 
-=encoding utf8
-
 =head1 AUTHOR
 
 Jakob Voß <voss@gbv.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+This software is copyright (c) 2014 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-

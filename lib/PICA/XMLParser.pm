@@ -1,6 +1,6 @@
 package PICA::XMLParser;
 {
-  $PICA::XMLParser::VERSION = '0.584';
+  $PICA::XMLParser::VERSION = '0.585';
 }
 #ABSTRACT: Parse PICA+ XML
 use strict;
@@ -288,9 +288,11 @@ sub _getPosition {
 
 1;
 
-
 __END__
+
 =pod
+
+=encoding utf-8
 
 =head1 NAME
 
@@ -298,7 +300,7 @@ PICA::XMLParser - Parse PICA+ XML
 
 =head1 VERSION
 
-version 0.584
+version 0.585
 
 =head1 SYNOPSIS
 
@@ -400,18 +402,15 @@ Called for character data.
 
 Get the current position (file name and line number). This method is deprecated.
 
-=encoding utf-8
-
 =head1 AUTHOR
 
 Jakob Voß <voss@gbv.de>
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
+This software is copyright (c) 2014 by Verbundzentrale Goettingen (VZG) and Jakob Voss.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-
